@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stargate-sgc"
+version = "0.1.0"
+description = "Ambient Stargate SG-1 dialing computer for the terminal"
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = ["pillow>=10"]
+
+[project.optional-dependencies]
+dev = ["pytest", "soundfile"]
+
+[project.scripts]
+sgc = "sgc.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+sgc = ["data/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

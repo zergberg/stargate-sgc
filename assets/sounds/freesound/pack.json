@@ -1,0 +1,11 @@
+{
+ "ring_spin":    {"file": "ring__182345__stone-mechanisem-loop-01.ogg", "start": 0, "end": 4.8, "fade_in": 0, "fade_out": 0, "gain": 0.9, "loop": true},
+ "chevron_lock": {"file": "chevron__94127__clank1.ogg", "start": 0, "end": 0.67, "fade_in": 0, "fade_out": 0.05, "gain": 1.0, "loop": false},
+ "kawoosh":      {"file": "kawoosh__322059__sci-fi-portal.ogg", "start": 0, "end": 2.6, "fade_in": 0, "fade_out": 0.4, "gain": 1.0, "loop": false},
+ "wormhole_hum": {"file": "hum__861430__evil-space-ship-warp-core.ogg", "start": 0, "end": 8.0, "fade_in": 0, "fade_out": 0, "gain": 0.9, "loop": true},
+ "shutdown":     {"file": "shutdown__443465__sci-fi-device-powers-down.ogg", "start": 0, "end": 1.52, "fade_in": 0, "fade_out": 0.1, "gain": 1.0, "loop": false},
+ "iris_close":   {"file": "iris__543058__as-ab-os-door-servo.ogg", "start": 0, "end": 1.6, "fade_in": 0, "fade_out": 0.15, "gain": 1.0, "loop": false},
+ "iris_open":    {"file": "iris__543058__as-ab-os-door-servo.ogg", "start": 1.6, "end": 3.2, "fade_in": 0.02, "fade_out": 0.15, "gain": 1.0, "loop": false},
+ "iris_impact":  {"file": "iris-impact__244983__ani-big-pipe-hit.ogg", "start": 0, "end": 1.0, "fade_in": 0, "fade_out": 0.1, "gain": 1.0, "loop": false},
+ "klaxon":       {"file": "klaxon__420650__red-alert-klaxon-3.ogg", "start": 0, "end": 3.0, "fade_in": 0, "fade_out": 0, "gain": 0.9, "loop": true}
+}
