@@ -81,3 +81,48 @@ def test_no_player_is_silent(monkeypatch):
     import sgc.audio.players as pl
     monkeypatch.setattr(pl.shutil, "which", lambda _: None)
     assert pl.find_player() is None
+
+
+def _only(monkeypatch, pl, exe):
+    monkeypatch.setattr(pl.shutil, "which", lambda name: f"/usr/bin/{name}" if name == exe else None)
+
+
+def test_pwcat_gets_explicit_raw_format_on_old_pipewire(monkeypatch):
+    # PipeWire 1.0.x pw-cat has no --raw: stdin is always raw, the WAV header is ignored and the
+    # default 48 kHz stereo is assumed, so the real format must be passed and no header sent.
+    import sgc.audio.players as pl
+    _only(monkeypatch, pl, "pw-cat")
+    monkeypatch.setattr(pl, "_pwcat_supports_raw", lambda: False)
+    cmd = pl.find_player()
+    assert cmd[0] == "pw-cat" and "--raw" not in cmd
+    assert cmd[cmd.index("--rate") + 1] == "44100"
+    assert cmd[cmd.index("--channels") + 1] == "1"
+    assert cmd[cmd.index("--format") + 1] == "s16"
+    assert not pl.wants_header(cmd)
+
+
+def test_pwcat_uses_raw_flag_when_supported(monkeypatch):
+    import sgc.audio.players as pl
+    _only(monkeypatch, pl, "pw-cat")
+    monkeypatch.setattr(pl, "_pwcat_supports_raw", lambda: True)
+    cmd = pl.find_player()
+    assert "--raw" in cmd and cmd[-1] == "-"
+    assert cmd[cmd.index("--rate") + 1] == "44100"
+    assert not pl.wants_header(cmd)
+
+
+def test_aplay_still_gets_wav_header(monkeypatch):
+    import sgc.audio.players as pl
+    _only(monkeypatch, pl, "aplay")
+    assert pl.wants_header(pl.find_player())
+
+
+def test_stream_is_named_sgc_not_the_player(monkeypatch):
+    # Per-application volume memory must not hand sgc another tool's volume.
+    import sgc.audio.players as pl
+    monkeypatch.setattr(pl, "_pwcat_supports_raw", lambda: False)
+    _only(monkeypatch, pl, "pw-cat")
+    cmd = pl.find_player()
+    assert 'application.name = "sgc"' in cmd[cmd.index("-P") + 1]
+    _only(monkeypatch, pl, "paplay")
+    assert "--client-name=sgc" in pl.find_player()

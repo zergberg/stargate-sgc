@@ -19,7 +19,7 @@ from .audio.mixer import Mixer, NullMixer
 from .config import Config, load_config
 from .director import Director
 from .events import REGISTRY
-from .glyphs import find_font
+from .glyphs import find_font, install_font
 from .layout import compute_layout
 from .panels import draw_panels
 from .render.addressbar import AddressBarRenderer
@@ -286,11 +286,21 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--event", choices=sorted(REGISTRY), help="play this event first")
     p.add_argument("--duration", type=float, help="run this many seconds, then shut down")
     p.add_argument("--exit-duration", type=float, help="length of the animated exit in seconds")
+    p.add_argument("--install-font", nargs="?", const="", metavar="PATH",
+                   help="install the downloaded glyph font (.ttf or .zip; default: look in ~/Downloads)")
     return p.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.install_font is not None:
+        try:
+            dest = install_font(Path(args.install_font) if args.install_font else None)
+        except ValueError as e:
+            print(f"sgc: {e}", file=sys.stderr)
+            return 1
+        print(f"Glyph font installed at {dest}")
+        return 0
     cfg, warnings = load_config(Path(args.config) if args.config else None)
     changes = {}
     if args.graphics:

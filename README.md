@@ -26,7 +26,14 @@ python3 -m venv .venv            # add --without-pip and bootstrap pip if ensure
 ln -sf "$PWD/.venv/bin/sgc" ~/.local/bin/sgc
 ```
 
-**Glyph font (recommended).** Put *Stargate SG-1 Address Glyphs* by Joy Anne Baker at `~/.local/share/fonts/stargate_sg1_adress_glyphs.ttf`. It isn't bundled, because its licence was never stated. Without it, the gate shows glyph numbers instead.
+**Glyph font (recommended).** Download *Stargate SG-1 Address Glyphs* by Joy Anne Baker from [The Scifi World's font page](https://www.thescifiworld.net/fonts.htm), then run:
+
+```sh
+sgc --install-font            # finds the .ttf or .zip in ~/Downloads
+sgc --install-font PATH       # or point it at the file
+```
+
+This installs it as `~/.local/share/fonts/stargate_sg1_adress_glyphs.ttf`. The font isn't bundled or downloaded automatically: its licence was never stated, and the site forbids redistribution and direct links to its files. Without it, the gate shows glyph numbers instead.
 
 ## Run
 
@@ -36,6 +43,7 @@ sgc --pack freesound      # the other sound pack
 sgc --event code_red      # start with a specific event
 sgc --graphics blocks     # force a graphics mode: kitty | sixel | iterm | blocks
 sgc --no-sound
+sgc --install-font        # install the glyph font you downloaded (see Install)
 ```
 
 | Key | Action |
@@ -85,7 +93,15 @@ To override any sound, drop your own file in `~/.config/stargate-sgc/sounds/`. U
 - `iris_close`, `iris_open`, `iris_impact`
 - `klaxon`, `dial_fail`, `idc_accept`
 
-Playback goes through `pw-cat` (PipeWire), `paplay` (PulseAudio, including WSLg) or `aplay`. If none is found, it runs silently.
+Playback goes through `pw-cat` (PipeWire), `paplay` (PulseAudio, including WSLg) or `aplay`, in that order. If none is found, it runs silently.
+
+- **Format:** audio is streamed as 16-bit mono at 44.1 kHz. `pw-cat` and `paplay` are given that format explicitly, which works with every PipeWire version, including the 1.0.x in Ubuntu 24.04 (its `pw-cat` ignores WAV headers). `aplay` gets a WAV header instead.
+- **Volume:** the stream shows up as **sgc** ("Stargate SGC") in your system's sound settings, and has its own volume there. The `+` / `-` keys change sgc's own mix on top of that.
+
+**No sound?**
+1. Check that a player is installed: `which pw-cat paplay aplay`.
+2. Look for **sgc** in your sound settings (or `wpctl status` under *Streams*). Make sure it isn't muted or turned down, and that it's going to the output you're listening on.
+3. Try `sgc --event kawoosh_hazard`: the kawoosh is one of the loudest cues.
 
 ## Terminal support
 
