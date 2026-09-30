@@ -156,3 +156,48 @@ def test_muzzle_flash_intensity_dims_the_glow():
         return sum(im.getpixel((px, py)))
 
     assert channel_sum(0.2) < channel_sum(1.0)
+
+
+from PIL import ImageChops
+
+from sgc import sequences as sq
+from sgc.model import Feed
+
+
+def test_figures_have_altitude_and_facing_and_both_change_the_frame_key():
+    f = Figure("uav", 0.5)
+    assert f.alt == 0.0 and f.facing == "away"
+    g = GateRenderer(200, None)
+    keys = {g.frame_key(Scene(figures=[fig]), 0.0)
+            for fig in (Figure("uav", 0.5), Figure("uav", 0.5, alt=0.4), Figure("uav", 0.5, facing="toward"))}
+    assert len(keys) == 3
+
+
+def test_the_feed_monitor_sits_bottom_right_and_is_skipped_under_160_pixels():
+    g = GateRenderer(200, None)
+    x0, y0, x1, y1 = g.feed_rect()
+    assert x0 > 100 and y0 > 120 and x1 <= 200 and y1 <= 200
+    assert abs((x1 - x0) - 200 * 0.42) <= 6 and abs((y1 - y0) - 200 * 0.30) <= 6
+    bbox = ImageChops.difference(g.render(Scene(), 0.0), g.render(Scene(feed=Feed(seed=1)), 0.0)).getbbox()
+    assert bbox is not None and bbox[0] >= x0 and bbox[1] >= y0 and bbox[2] <= x1 + 1 and bbox[3] <= y1 + 1
+    small = GateRenderer(150, None)
+    assert small.render(Scene(), 0.0).tobytes() == small.render(Scene(feed=Feed(seed=1)), 0.0).tobytes()
+    assert small.frame_key(Scene(), 0.0) == small.frame_key(Scene(feed=Feed(seed=1)), 0.0)
+
+
+def test_the_frame_key_follows_the_feed_scroll_and_its_lost_level():
+    g = GateRenderer(200, None)
+
+    def key(t=0.0, **kw):
+        return g.frame_key(Scene(feed=Feed(seed=1, **kw)), t)
+    assert key(p=0.0) == key(p=0.001)                     # the scroll is quantized
+    assert key(p=0.0) != key(p=0.5)
+    assert key(lost=0.0) != key(lost=0.5)
+    assert key(lost=1.0) != key(0.3, lost=1.0)            # SIGNAL LOST flashes
+    assert key(p=0.0) == key(0.3, p=0.0)                  # a live feed doesn't redraw on time alone
+
+
+def test_resetting_the_scene_clears_the_feed():
+    s = Scene(feed=Feed(seed=1))
+    sq.reset_scene(s)
+    assert s.feed is None

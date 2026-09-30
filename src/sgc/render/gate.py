@@ -8,12 +8,16 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 from ..glyphs import glyph_char, load_glyph_font
-from ..model import Figure, Scene
+from ..model import Feed, Figure, Scene
 
 LIT = (255, 140, 30)
 UNLIT = (110, 60, 30)
 HOUSING = (58, 60, 66)
 N_HORIZON_FRAMES = 16
+UAV_LIFT = 0.30          # a uav at alt 1 flies this fraction of the image above its point on the ramp
+FEED_MIN = 160           # gate images smaller than this skip the feed monitor (the side panel still reads out)
+FEED_W, FEED_H = 0.42, 0.30        # the monitor's size, as fractions of the image
+FEED_SCROLL = 48         # terrain rows that scroll past over a whole report; the frame key's quantum
 _LABEL_FONTS = ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
                 "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf", "DejaVuSans-Bold.ttf")
 
@@ -222,7 +226,8 @@ class GateRenderer:
         return (
             round(scene.ring_angle, 2), frozenset(scene.lit), round(scene.clamp, 3), scene.horizon,
             round(scene.horizon_p, 3), round(scene.iris, 3),
-            tuple((f.kind, round(f.pos, 3), f.lane, round(f.alpha, 2)) for f in scene.figures),
+            tuple((f.kind, round(f.pos, 3), f.lane, round(f.alpha, 2), round(f.alt, 3), f.facing)
+                  for f in scene.figures),
             tuple(tuple(round(v, 3) for v in sp) for sp in scene.splashes),
             tuple(tuple(round(v, 3) for v in im) for im in scene.impacts),
             round(scene.vaporize, 3), scene.alert, round(scene.dim, 3), round(scene.collapse_line, 3),
@@ -230,6 +235,7 @@ class GateRenderer:
             round(math.sin(t * math.tau * 2), 1) if scene.alert == "red" else None,   # alarm pulse
             round(t * 12) if people or scene.horizon == "kawoosh" else None,         # strides, plume wobble
             tuple(tuple(round(v, 2) for v in m) for m in scene.muzzle),
+            self._feed_key(scene.feed, t),
         )
 
     def render(self, scene: Scene, t: float) -> Image.Image:
@@ -264,6 +270,8 @@ class GateRenderer:
             self._draw_muzzle(rgba, scene.muzzle)
         if scene.vaporize > 0:
             self._draw_vaporize(rgba, scene.vaporize)
+        if scene.feed is not None and S >= FEED_MIN:
+            self._draw_feed(rgba, scene.feed, t)
         if scene.alert == "red":
             self._draw_alert(rgba, t)
         out = rgba.convert("RGB")
@@ -433,3 +441,32 @@ class GateRenderer:
             w = S * (1 - (k - 0.8) / 0.2)
             d.line([(S / 2 - w / 2, S / 2), (S / 2 + w / 2, S / 2)], fill=(200, 220, 255), width=max(1, S // 200))
         return out
+
+    # ------------------------------------------------------------ the UAV feed monitor
+
+    def feed_rect(self) -> tuple[int, int, int, int]:
+        """The feed monitor's box (x0, y0, x1, y1): bottom right, about 42% of the image wide and 30% high."""
+        S = self.S
+        m = max(2, S // 40)
+        return S - m - int(S * FEED_W), S - m - int(S * FEED_H), S - m, S - m
+
+    def _feed_key(self, feed: Feed | None, t: float) -> tuple | None:
+        if feed is None or self.S < FEED_MIN:
+            return None
+        return (feed.seed, feed.tint, int(feed.p * FEED_SCROLL), round(feed.lost, 2), feed.hud, feed.contact,
+                int(t * 4) if feed.lost >= 1 else None)             # SIGNAL LOST flashes at 2 Hz
+
+    def _draw_feed(self, im: Image.Image, feed: Feed, t: float) -> None:
+        """A control-room monitor inset bottom right, showing the UAV's camera."""
+        x0, y0, x1, y1 = self.feed_rect()
+        bezel = max(2, (x1 - x0) // 24)
+        d = ImageDraw.Draw(im)
+        d.rectangle([x0, y0, x1, y1], fill=(34, 36, 42, 255), outline=(96, 100, 110, 255), width=max(1, bezel // 2))
+        w, h = x1 - x0 - 2 * bezel, y1 - y0 - 2 * bezel
+        if w < 4 or h < 4:
+            return
+        im.paste(self._feed_screen(feed, t, w, h), (x0 + bezel, y0 + bezel))
+
+    def _feed_screen(self, feed: Feed, t: float, w: int, h: int) -> Image.Image:
+        """The monitor's picture."""
+        return Image.new("RGB", (w, h), (8, 12, 10))

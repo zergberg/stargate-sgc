@@ -166,7 +166,7 @@ def reset_scene(scene: Scene) -> None:
     scene.spinning, scene.clamp, scene.lit, scene.locked = False, 0.0, set(), 0
     scene.horizon, scene.horizon_p, scene.open_elapsed, scene.iris = "off", 0.0, 0.0, 0.0
     scene.figures, scene.splashes, scene.impacts, scene.vaporize = [], [], [], 0.0
-    scene.muzzle = []
+    scene.muzzle, scene.feed = [], None
     scene.alert, scene.address, scene.incoming, scene.identified = "normal", None, False, True
     scene.panel_title, scene.panel_rows, scene.panel_trace = "SENSORS", [], []
     scene.status = "STANDING BY"

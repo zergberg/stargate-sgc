@@ -9,10 +9,23 @@ from .addresses import Address
 
 @dataclass
 class Figure:
-    kind: str            # "person" | "malp" | "crate"
+    kind: str            # "person" | "malp" | "crate" | "uav" | "rail"
     pos: float           # 0 = front of the ramp (near the viewer) .. 1 = at the event horizon
     lane: float = 0.0    # -1..1 sideways offset on the ramp
     alpha: float = 1.0
+    alt: float = 0.0     # uav only: 0..1 of a fixed height above the ramp
+    facing: str = "away"     # "away" (heading for the gate) | "toward" (coming home)
+
+
+@dataclass
+class Feed:
+    """A UAV's camera feed, inset on the gate image while its report plays."""
+    seed: int                            # the world's terrain: the same world always looks the same
+    tint: str = "neutral"                # neutral | desert | ice | forest | toxic | ocean | volcanic
+    p: float = 0.0                       # 0..1 through the report; scrolls the terrain
+    lost: float = 0.0                    # 0 = live .. 1 = all static
+    hud: str = ""                        # "UAV  ALT 1240M  HDG 047"
+    contact: bool = False                # the readings name a settlement or a structure: box a contact
 
 
 def _teams() -> dict[str, str]:
@@ -61,6 +74,7 @@ class Scene:
     view_p: float = 1.0                  # 0 = briefing room, 1 = gate room; between = walking
     muzzle: list[list[float]] = field(default_factory=list)      # [lane -1..1, ramp pos 0..1, intensity 0..1]
     prompt: Prompt | None = None
+    feed: Feed | None = None             # a UAV's camera feed on the gate image's monitor
 
 
 @dataclass
