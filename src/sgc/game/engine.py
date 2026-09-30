@@ -38,6 +38,8 @@ UPLINK_ODDS = {                      # an uplink's (full, partial, lost) %, by d
     "uav": {"calm": (75, 20, 5), "jaffa": (60, 20, 20), "goauld": (45, 20, 35)},
 }
 HARSH = ("radiation", "extreme")     # a world this harsh moves 10 more points from full to lost
+SALVAGE = {"crashed": 60, "shot_down": 30}     # % chance a team can bring a UAV wreck home for repair
+REPAIR = economy.PRICES["uav"] // 2  # funding to repair a salvaged UAV
 UAV_RAIL = 0.12                      # the UAV's launch rail stands here, at the foot of the ramp
 UAV_CRUISE = 0.8                     # the UAV's altitude as it reaches the horizon (0..1)
 DESTROYED = {"normal": 3, "toxic": 8, "radiation": 12, "extreme": 25, "no_lock": 0}
@@ -1192,7 +1194,24 @@ class Engine:
 
     def _bring_home(self, m: Mission, w: World) -> list[str]:
         """What a team brings home from the world: a parked drone, with an extended report's data if its uplink
-        hadn't come yet (a full return). A report already rolled for this same minute (the team lands the very
+        hadn't come yet (a full return), and a UAV wreck, if it can be salvaged and repaired."""
+        return self._bring_drone(m, w) + self._salvage(w)
+
+    def _salvage(self, w: World) -> list[str]:
+        c = self.c
+        if not w.wreck:
+            return []
+        salvaged = self.rng.random() * 100 < SALVAGE[w.wreck]
+        w.wreck = None
+        if not salvaged:
+            return ["UAV WRECK WRITTEN OFF"]
+        if c.funding < REPAIR:
+            return ["UAV WRECK WRITTEN OFF — NO FUNDS FOR REPAIR"]
+        c.funding -= REPAIR
+        return [f"UAV WRECK SALVAGED — REPAIRED FOR {REPAIR}", *rules.stow(c, "uav")]
+
+    def _bring_drone(self, m: Mission, w: World) -> list[str]:
+        """A report already rolled for this same minute (the team lands the very
         minute the uplink's gate shuts) plays as it landed — the team never overrules it."""
         c = self.c
         if not w.drone:

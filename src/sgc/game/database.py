@@ -122,7 +122,7 @@ class Database:
                         ("L" if _lead(w) else "")
                 out.append(Row(w.id, (name, w.glyph_text, w.status.upper(),
                                       short(w.last_visit) if w.last_visit is not None else "—", flags,
-                                      (w.drone or "").upper())))
+                                      (w.drone or ("wreck" if w.wreck else "")).upper())))
             return out
         if self.tab == "missions":
             ms = sorted(c.missions, key=lambda m: (m.team, -m.start))
@@ -228,6 +228,8 @@ class Database:
         lines += [f"  {k.upper()}: {v}" for k, v in w.seen.items()] or ["  no readings"]
         if w.drone:
             lines.append(f"  {w.drone.upper()} ON SITE")
+        if w.wreck:
+            lines.append("  UAV WRECK ON SITE")
         held = [n for n in team_names(self.c)
                 if self.c.teams[n].status == "captured" and self.c.teams[n].where == w.id]
         drones = [d.drone for d in self.c.captured_drones if d.world == w.id and d.located]

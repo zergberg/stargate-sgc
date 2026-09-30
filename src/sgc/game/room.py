@@ -124,12 +124,17 @@ class Room:
         return rows
 
     def _type_label(self, mtype: str) -> str:
+        """The mission, and the tandem task any team there does too: bringing home a drone or a UAV wreck."""
         target = self.e.mission_target(self.world_id, mtype) if mtype in ("rescue", "recover") else None
         if mtype == "rescue" and target:
-            return f"RESCUE {target}"
-        if mtype == "recover" and target:
-            return f"RECOVER THE {target.upper()}"
-        return mtype.upper()
+            label = f"RESCUE {target}"
+        elif mtype == "recover" and target:
+            label = f"RECOVER THE {target.upper()}"
+        else:
+            label = mtype.upper()
+        w = self.c.worlds[self.world_id]
+        tandem = ([f"RECOVER {w.drone.upper()}"] if w.drone else []) + (["SALVAGE UAV WRECK"] if w.wreck else [])
+        return " · ".join([label, *tandem])
 
     def _start_assign(self) -> None:
         self._go("team_pick")
