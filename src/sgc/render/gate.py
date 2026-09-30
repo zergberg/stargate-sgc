@@ -264,7 +264,7 @@ class GateRenderer:
         rgba.alpha_composite(self.ramp_layer)
         if scene.horizon == "kawoosh":
             self._draw_kawoosh(rgba, scene.horizon_p, t)
-        for f in sorted(scene.figures, key=lambda f: -f.pos):
+        for f in sorted(scene.figures, key=lambda f: (f.kind != "rail", -f.pos)):   # a drone sits on its rail
             self._draw_figure(rgba, f, t)
         if scene.muzzle:
             self._draw_muzzle(rgba, scene.muzzle)
@@ -385,12 +385,62 @@ class GateRenderer:
             d.line([(x, y - h * 1.9), (x, y - h * 3.3)], fill=(125, 125, 120, a), width=max(1, int(h * 0.18)))
             d.rectangle([x - w * 0.14, y - h * 3.75, x + w * 0.14, y - h * 3.2], fill=(90, 90, 88, a))
             d.ellipse([x - w * 0.05, y - h * 3.6, x + w * 0.05, y - h * 3.35], fill=(40, 60, 90, a))
+        elif f.kind == "uav":
+            self._draw_uav(im, x, y - f.alt * S * UAV_LIFT, s, a, f.facing)
+        elif f.kind == "rail":
+            self._draw_rail(d, x, y, s, a)
         else:  # crate
             w = S * 0.13 * s
             d.rectangle([x - w / 2, y - w * 0.8, x + w / 2, y], fill=(122, 96, 60, a), outline=(80, 62, 38, a),
                         width=max(1, int(w / 14)))
             d.line([(x - w / 2, y - w * 0.8), (x + w / 2, y)], fill=(90, 70, 44, a), width=max(1, int(w / 16)))
             d.line([(x + w / 2, y - w * 0.8), (x - w / 2, y)], fill=(90, 70, 44, a), width=max(1, int(w / 16)))
+
+    def _draw_uav(self, im: Image.Image, x: float, y: float, s: float, a: int, facing: str) -> None:
+        """A small straight-wing pusher drone: from behind, its propeller a blurred ring, or nose on coming home.
+        Port light red, starboard green: so red is on our left from behind and on our right nose on."""
+        w = self.S * 0.24 * s                    # wingspan
+        th = max(1, int(w * 0.035))
+        wy = y - w * 0.22                        # the wing, above its point on the ramp
+        d = ImageDraw.Draw(im)
+        pale, boom, dark = (196, 200, 204, a), (170, 174, 180, a), (46, 50, 56, a)
+        by = wy + w * 0.12 if facing == "away" else wy - w * 0.05     # tail booms run toward the tailplane
+        for side in (-1, 1):
+            bx = x + side * w * 0.17
+            d.line([(bx, wy), (bx, by)], fill=boom, width=th)
+            d.line([(bx, by), (bx, by - w * 0.1)], fill=boom, width=th)        # the fins
+        d.line([(x - w * 0.17, by), (x + w * 0.17, by)], fill=pale, width=th)  # the tailplane
+        d.rectangle([x - w / 2, wy - th, x + w / 2, wy + th], fill=pale)       # the wing
+        r = w * 0.07
+        d.ellipse([x - r, wy - r, x + r, wy + r], fill=dark)                   # the fuselage, end on
+        if facing == "away":
+            rr = w * 0.13
+            size = int(rr * 2) + 8
+            x0, y0 = int(x - size / 2), int(wy - size / 2)
+            if x0 >= 0 and y0 >= 0 and x0 + size <= im.width and y0 + size <= im.height:
+                ring = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+                ImageDraw.Draw(ring).ellipse([4, 4, size - 4, size - 4], outline=(210, 214, 220, int(a * 0.55)),
+                                             width=max(1, int(rr * 0.35)))
+                im.alpha_composite(ring.filter(ImageFilter.GaussianBlur(max(0.5, rr * 0.12))), (x0, y0))
+            left, right = (230, 40, 30), (60, 230, 90)
+        else:
+            n = r * 0.45
+            d.ellipse([x - n, wy - n, x + n, wy + n], fill=(20, 22, 26, a))      # the nose
+            left, right = (60, 230, 90), (230, 40, 30)
+        lr = max(1.0, w * 0.025)
+        for side, col in ((-1, left), (1, right)):
+            lx = x + side * w / 2
+            d.ellipse([lx - lr, wy - lr, lx + lr, wy + lr], fill=col + (a,))
+
+    def _draw_rail(self, d: ImageDraw.ImageDraw, x: float, y: float, s: float, a: int) -> None:
+        """The launch rail: a short ramp on a trestle at the foot of the gate ramp, pointing up at the gate."""
+        w = self.S * 0.16 * s
+        top = y - w * 0.3
+        for side in (-1, 1):                                   # trestle legs
+            d.line([(x + side * w * 0.3, y), (x + side * w * 0.12, top)], fill=(112, 116, 124, a),
+                   width=max(1, int(w * 0.04)))
+        d.polygon([(x - w * 0.14, top + w * 0.06), (x + w * 0.14, top + w * 0.06),
+                   (x + w * 0.07, top - w * 0.3), (x - w * 0.07, top - w * 0.3)], fill=(74, 78, 86, a))
 
     def _draw_muzzle(self, im: Image.Image, flashes) -> None:
         over = Image.new("RGBA", im.size, (0, 0, 0, 0))
