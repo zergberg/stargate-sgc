@@ -243,7 +243,7 @@ kind = "arc"
 arc = "thor"
 arc_stage = 1
 [node.start]
-text.full = "The Asgard have what they need."
+text.full = "Thor has what he needs."
 default = "done"
 [[node.start.choice]]
 key = "done"

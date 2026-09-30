@@ -199,3 +199,20 @@ def test_the_reserve_cannot_be_set_after_the_campaign_ends():
     r.c.over, r.c.ending = "Done.", "fallen"
     r.e.ended = True
     assert r.e.set_reserve("malp", 3) == "THE CAMPAIGN IS OVER" and r.c.reserve["malp"] != 3
+
+
+def test_only_rescue_debriefs_can_be_drawn_for_a_rescue():
+    """On an ally world a generic debrief used to compete with the rescue's own, and never freed the captive."""
+    from sgc.game import content
+    scenarios, _ = content.load(user=None)
+    r = Rig()
+    r.e.scenarios = scenarios
+    w = probed(r, inhabitants="ally")
+    rules.apply_all([rules.parse_effect("team {team} captured")], r.c, {"team": "SG-2", "world_id": w.id,
+                                                                       "world": w.name})
+    w.options.append("rescue")
+    r.e.assign(w.id, "SG-3", "rescue")
+    bind = r.e._mbind(r.c.mission(1))
+    pool = [sc.id for sc in scenarios.values() if sc.kind == "debrief" and sc.mission_type in (None, "rescue")
+            and r.e._binding(sc, bind) is not None]
+    assert pool == ["debrief_rescue"]

@@ -1,5 +1,6 @@
 id = "debrief_ally"
 kind = "debrief"
+mission_type = "survey"
 weight = 4
 when = ["world {world} inhabitants ally"]
 
