@@ -13,8 +13,8 @@ from .state import Campaign, Mission, team_names
 @dataclass(frozen=True)
 class QueueItem:
     id: str                          # "dial:<op>:<world>", "dial:depart:<mission>", "dial:search:<mission>:<by>",
-                                     # "drone:<world>", "mission:<id>" or "team:<name>"
-    kind: str                        # "dial_out" | "drone" | "mission" | "team"
+                                     # "drone:<world>", "mission:<id>", "team:<name>" or "deal:<id>"
+    kind: str                        # "dial_out" | "drone" | "mission" | "team" | "delivery"
     when: str
     what: str
     status: str
@@ -37,7 +37,8 @@ NOT_MOVABLE = "ONLY DIAL-OUTS WAITING FOR THE GATE CAN BE MOVED"
 SOON = "REPORT EXPECTED ANY MINUTE"
 WAIT_HOURS = 12                              # a withdrawn search leaves the team to the 12-hour wait
 TEAM_WORDS = {"base": ("STOOD DOWN", "BACK"), "injured": ("INJURED", "BACK"),
-              "captured": ("CAPTURED", "PRESUMED LOST"), "lost": ("RE-FORMING", "READY")}
+              "captured": ("CAPTURED", "PRESUMED LOST"), "lost": ("RE-FORMING", "READY"),
+              "forming": ("FORMING", "READY"), "training": ("TRAINING", "BACK")}
 
 
 def at(minute: float, now: float) -> str:
@@ -147,6 +148,11 @@ def view(c: Campaign, travel: Travel) -> list[QueueItem]:
             items.append(QueueItem(f"team:{name}", "team", at(t.until, c.now), f"{name} {label}",
                                    f"{word} {short(t.until)}", (1, t.until),
                                    reason=f"NOTHING TO CANCEL: {name} IS {label}"))
+    for d in c.deals:                                # announced when made; the disruption odds never show
+        if d.state == "active":
+            items.append(QueueItem(f"deal:{d.id}", "delivery", at(d.next, c.now), f"DELIVERY FROM {_name(c, d.world)}",
+                                   f"{d.amount} {d.goods.upper()} · {d.left} TO COME", (1, d.next),
+                                   reason="NOTHING TO CANCEL: A TRADE PARTNER'S DELIVERY"))
     # every key is public: the event heap's order (the rolled times) must never decide a tie
     return sorted(items, key=lambda i: (i.sort, i.id))
 
@@ -166,8 +172,9 @@ def _undo(c: Campaign, d: dict) -> list[str]:
     if op in ("malp", "uav"):
         return rules.stow(c, op)                     # back into stores
     if op == "recall":
-        c.funding += d.get("wear", 0)                # the drone stays where it is; its wear wasn't spent
-        return []
+        wear = d.get("wear", 0)                      # the drone stays where it is; its wear wasn't spent
+        c.funding += wear
+        return [f"RECALL WEAR REFUNDED ({wear})"] if wear else []
     m = c.mission(d["mission"])
     if op == "depart":                               # it never left: no mission at all
         tm = c.teams.get(m.team)

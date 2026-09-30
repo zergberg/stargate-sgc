@@ -4,6 +4,7 @@ from sgc.game import clock
 from sgc.game import engine as eng
 from sgc.game import rules
 from sgc.game import schedule
+from sgc.game import trade
 from sgc.game.schedule import QueueItem
 from sgc.game.state import Mission, Team, available_teams, from_dict, to_dict
 from tests.test_game_engine import UNKNOWN, Rig
@@ -319,3 +320,52 @@ def test_a_disbanded_team_s_old_missions_never_break_the_queue():
     r.c.missions.append(Mission(91, "SG-7", w.id, "survey", r.c.now - 60, r.c.now + 600, state="lost"))
     del r.c.teams["SG-7"]                                  # a lost SG-5+ team is disbanded
     assert not any("SG-7" in i.what for i in view(r))
+
+
+# ---------------------------------------------------------------- Stage 2 rows
+
+def test_forming_and_training_teams_show_when_they_are_ready():
+    r = Rig()
+    r.c.teams["SG-5"] = Team("medical", status="forming", until=r.c.now + 2 * clock.DAY)
+    r.c.teams["SG-3"].status, r.c.teams["SG-3"].until = "training", r.c.now + clock.DAY
+    rows = {i.id: i for i in view(r)}
+    assert rows["team:SG-5"].what == "SG-5 FORMING" and rows["team:SG-5"].status.startswith("READY D3")
+    assert rows["team:SG-3"].what == "SG-3 TRAINING" and rows["team:SG-3"].status.startswith("BACK D2")
+    assert not rows["team:SG-5"].cancellable
+    assert r.e.cancel("team:SG-5", confirm=True) == "NOTHING TO CANCEL: SG-5 IS FORMING"
+
+
+def test_a_trade_delivery_is_listed_but_a_faction_action_never_is():
+    r = Rig()
+    w = r.world(5, status="contact", env="normal", inhabitants="human", owner=None)
+    trade.new_deal(r.c, w.id, "naquadah", 2)
+    r.c.events.push(r.c.now + 60, "faction_action", {"faction": "sokar"})
+    rows = view(r)
+    [row] = [i for i in rows if i.kind == "delivery"]
+    assert row.what == f"DELIVERY FROM {w.name.upper()}" and row.status == "2 NAQUADAH · 6 TO COME"
+    assert row.when == schedule.at(r.c.now + trade.EVERY, r.c.now)
+    assert not row.cancellable and not row.movable
+    assert all("SOKAR" not in i.what and i.kind != "faction_action" for i in rows)
+    assert r.e.cancel(row.id, confirm=True).startswith("NOTHING TO CANCEL")
+
+
+def test_a_delivery_shows_no_disruption_odds_and_leaves_once_the_deal_ends():
+    r = Rig()
+    w = r.world(5, status="contact", env="normal", inhabitants="human", owner=None)
+    trade.new_deal(r.c, w.id, "naquadah", 2)
+    row = next(i for i in view(r) if i.kind == "delivery")
+    assert "%" not in row.status and "RISK" not in row.status
+    r.c.deals[0].state = "cut"
+    assert not any(i.kind == "delivery" for i in view(r))
+
+
+def test_cancelling_a_queued_recall_refunds_its_wear():
+    r = Rig()
+    w = r.world(5, env="normal", drone="uav")
+    r.c.funding = 500
+    r.e.recall_drone(w.id)
+    assert r.c.funding == 485
+    r.e.cancel(view(r)[0].id, confirm=True)
+    assert r.c.funding == 500 and "RECALL WEAR REFUNDED (15)" in r.logs
+    r.e.advance(60)
+    assert r.c.funding == 500                             # refunded once, never again later
