@@ -204,12 +204,17 @@ class App:
         if e.ended:
             return e.key(k)
         if self.view == "database":
-            if k in ("m", "+", "-") and not self.db.text_mode:
-                return False
-            if k == "?" and not self.db.text_mode:
+            if k in ("?", "m", "+", "-") and not self.db.text_mode:
+                self.db.disarm()                  # any key but x disarms a cancel, even one the app handles
+                if k != "?":
+                    return False
                 self._cycle_legend()
-            elif self.db.key(k) == ("close",):
+                return True
+            act = self.db.key(k)
+            if act == ("close",):
                 self._close_database()
+            elif act is not None:
+                self._queue_action(act)
             return True
         if self._text_mode():
             self.room.key(k)
@@ -255,7 +260,8 @@ class App:
         save_setting("legend", self.legend, self.config_path)
 
     def _open_database(self) -> None:
-        self.db, self._kept_db = self._kept_db or Database(self.engine.c), None
+        self.db, self._kept_db = self._kept_db or Database(self.engine.c, self.engine.schedule_view), None
+        self.db.armed = None                      # a cancel is confirmed in one sitting
         self._db_from, self.view = self.view, "database"
         self.canvas.set_holes([])
         self.canvas.invalidate()
@@ -264,6 +270,15 @@ class App:
     def _close_database(self) -> None:
         self.view, self.db = self._db_from, None
         self._resized = True                      # relayout: the gate and the address bar come back
+
+    def _queue_action(self, act: tuple) -> None:
+        """The QUEUE tab asked to cancel or move a dial-out: the engine answers, and the reply shows on the tab."""
+        kind, item = act[0], act[1]
+        if kind == "cancel":
+            self.db.message = self.engine.cancel(item, confirm=act[2])
+        elif kind == "move":
+            self.db.message = self.engine.move(item, act[2])
+        self.db.select(item)                      # the selection follows a moved row
 
     def _walk(self, to: str) -> None:
         """Walk between the rooms. Only an idle gate is interrupted; otherwise the walk waits for

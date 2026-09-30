@@ -781,3 +781,81 @@ def test_the_full_legend_names_every_gate_room_key():
         assert k in keys, k
     labels = " ".join(label for _, label in screens.KEYS_HELP).lower()
     assert "pause" in labels and "recruit" in labels and "cancel" in labels
+
+
+def queue_tab(app):
+    app._handle_keys(["d", "left"])                   # QUEUE is the last tab: left from Addresses wraps to it
+    assert app.view == "database" and app.db.tab == "queue"
+
+
+def test_the_queue_tab_cancels_a_dial_out_after_x_twice(tmp_path):
+    app = start(tmp_path)
+    c = app.engine.c
+    w = list(c.worlds.values())[1]
+    app.engine.probe(w.id)
+    queue_tab(app)
+    assert [r.cells[1] for r in app.db.rows()] == [f"MALP → {w.name.upper()}"]
+    app._handle_keys(["x"])
+    assert app.db.message == f"CANCEL THE MALP TO {w.name.upper()}?  x AGAIN TO CONFIRM" and c.stock["malp"] == 3
+    app._handle_keys(["x"])
+    assert app.db.message == f"CANCELLED: MALP TO {w.name.upper()}" and c.stock["malp"] == 4
+    assert app.db.rows() == [] and not c.events.find(lambda e: e.kind == "dial_out")
+    assert app.logs[-1].endswith(f"CANCELLED: MALP TO {w.name.upper()}")
+
+
+def test_the_queue_tab_moves_a_dial_out_and_the_selection_follows_it(tmp_path):
+    app = start(tmp_path)
+    c = app.engine.c
+    a, b = list(c.worlds.values())[1:3]
+    app.engine.probe(a.id)
+    app.engine.probe(b.id)
+    queue_tab(app)
+    app._handle_keys(["down", "["])
+    assert app.db.message == f"MALP TO {b.name.upper()}: NOW 1 IN THE GATE QUEUE"
+    assert [i.what for i in app.engine.schedule_view()] == [f"MALP → {b.name.upper()}", f"MALP → {a.name.upper()}"]
+    assert app.db.sel == 0 and app.db.selected().key == f"dial:malp:{b.id}"
+    app._handle_keys(["["])
+    assert app.db.message == "ALREADY FIRST IN THE GATE QUEUE"
+
+
+def test_x_on_a_row_that_cannot_be_cancelled_shows_why(tmp_path):
+    app = start(tmp_path)
+    c = app.engine.c
+    t = c.teams["SG-3"]
+    t.status, t.until = "injured", c.now + 600
+    queue_tab(app)
+    app._handle_keys(["x"])
+    assert app.db.message == "NOTHING TO CANCEL: SG-3 IS INJURED" and t.status == "injured"
+    app_mod.screens.draw_database(app.canvas, app.layout, app.db, app.legend)   # what _frame draws
+    assert "NOTHING TO CANCEL: SG-3 IS INJURED" in app.canvas.text()
+
+
+def test_the_database_keys_the_app_handles_disarm_a_cancel(tmp_path):
+    app = start(tmp_path)
+    c = app.engine.c
+    app.engine.probe(list(c.worlds.values())[1].id)
+    queue_tab(app)
+    for k in ("?", "m", "+", "-"):
+        app._handle_keys(["x"])
+        assert app.db.armed is not None and app.db.message.startswith("CANCEL THE MALP")
+        app._handle_keys([k])
+        assert app.db.armed is None and app.db.message == ""
+    app._handle_keys(["x"])
+    assert app.db.message.startswith("CANCEL THE MALP") and c.stock["malp"] == 3
+
+
+def test_reopening_the_database_disarms_a_half_made_cancel(tmp_path):
+    app = start(tmp_path)
+    c = app.engine.c
+    app.engine.probe(list(c.worlds.values())[1].id)
+    queue_tab(app)
+    app._handle_keys(["x"])
+    kept = app.db
+    app._back_to_the_gate_room()                      # as an alarm does: the Database is kept
+    app._handle_keys(["d"])
+    assert app.db is kept and app.db.armed is None and app.db.tab == "queue"
+    assert [r.cells[1] for r in app.db.rows()]        # the kept Database still reads the engine's schedule
+    app._handle_keys(["x"])
+    assert app.db.message.startswith("CANCEL THE MALP") and c.stock["malp"] == 3
+    app._handle_keys(["x"])
+    assert app.db.message.startswith("CANCELLED: MALP") and c.stock["malp"] == 4
