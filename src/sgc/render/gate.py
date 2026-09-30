@@ -229,6 +229,7 @@ class GateRenderer:
             int(t * 10) if live else None,                                           # ripple frame
             round(math.sin(t * math.tau * 2), 1) if scene.alert == "red" else None,   # alarm pulse
             round(t * 12) if people or scene.horizon == "kawoosh" else None,         # strides, plume wobble
+            tuple(tuple(round(v, 2) for v in m) for m in scene.muzzle),
         )
 
     def render(self, scene: Scene, t: float) -> Image.Image:
@@ -259,6 +260,8 @@ class GateRenderer:
             self._draw_kawoosh(rgba, scene.horizon_p, t)
         for f in sorted(scene.figures, key=lambda f: -f.pos):
             self._draw_figure(rgba, f, t)
+        if scene.muzzle:
+            self._draw_muzzle(rgba, scene.muzzle)
         if scene.vaporize > 0:
             self._draw_vaporize(rgba, scene.vaporize)
         if scene.alert == "red":
@@ -380,6 +383,17 @@ class GateRenderer:
                         width=max(1, int(w / 14)))
             d.line([(x - w / 2, y - w * 0.8), (x + w / 2, y)], fill=(90, 70, 44, a), width=max(1, int(w / 16)))
             d.line([(x + w / 2, y - w * 0.8), (x - w / 2, y)], fill=(90, 70, 44, a), width=max(1, int(w / 16)))
+
+    def _draw_muzzle(self, im: Image.Image, flashes) -> None:
+        over = Image.new("RGBA", im.size, (0, 0, 0, 0))
+        d = ImageDraw.Draw(over)
+        for lane, pos, k in flashes:
+            x, y, s = self.figure_point(pos, lane)
+            y -= self.S * 0.12 * s                                    # at chest height
+            r = self.S * 0.018 * s * (0.6 + 0.8 * k)
+            d.ellipse([x - r * 2.2, y - r * 2.2, x + r * 2.2, y + r * 2.2], fill=(255, 150, 40, int(90 * k)))
+            d.ellipse([x - r, y - r, x + r, y + r], fill=(255, 240, 200, int(255 * k)))
+        im.alpha_composite(over)
 
     def _draw_vaporize(self, im: Image.Image, k: float) -> None:
         x, y, s = self.figure_point(0.93, 0.25)

@@ -1,0 +1,60 @@
+id = "tokra_envoy"
+kind = "incoming"
+weight = 2
+when = ["not ally.tokra", "cycles >= 3"]
+visual = "incoming"
+
+[node.start]
+text.full = "Incoming. A Tok'ra recognition code: the resistance wants to talk."
+text.partial = "Incoming. An unfamiliar recognition code."
+text.minimal = "Incoming. Unknown recognition code."
+default = "hold"
+
+[[node.start.choice]]
+key = "open"
+label = "Open the iris"
+[node.start.choice.outcome.roll]
+odds = 70
+mods = ["intel >= 20 +10"]
+[node.start.choice.outcome.roll.win]
+visual = "arrival"
+effects = ["gain ally.tokra", "intel +10"]
+end = true
+[node.start.choice.outcome.roll.lose]
+visual = "arrival"
+goto = "ashrak"
+
+[[node.start.choice]]
+key = "verify"
+label = "Demand proof before opening"
+requires = ["intel >= 15"]
+outcome = { visual = "arrival", effects = ["intel -5", "gain ally.tokra"], end = true }
+
+[[node.start.choice]]
+key = "hold"
+label = "Keep the iris closed"
+outcome = { visual = "iris_hold", end = true }
+
+[node.ashrak]
+text.full = "It's an ashrak, a Goa'uld assassin wearing a Tok'ra face!"
+default = "lockdown"
+
+[[node.ashrak.choice]]
+key = "security"
+label = "Security teams on the ramp"
+[node.ashrak.choice.outcome.roll]
+odds = 60
+mods = ["tech.zat +20"]
+[node.ashrak.choice.outcome.roll.win]
+visual = "firefight_win"
+effects = ["personnel -5"]
+end = true
+[node.ashrak.choice.outcome.roll.lose]
+visual = "firefight"
+effects = ["personnel -15", "breach 15"]
+end = true
+
+[[node.ashrak.choice]]
+key = "lockdown"
+label = "Lock down the level"
+outcome = { effects = ["breach 20"], end = true }

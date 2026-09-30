@@ -1,0 +1,32 @@
+id = "unknown_probe"
+kind = "incoming"
+weight = 2
+visual = "incoming"
+
+[node.start]
+text.full = "An alien probe drifted through the event horizon and settled on the ramp. It's scanning the room."
+text.minimal = "Object on the ramp."
+default = "close"
+
+[[node.start.choice]]
+key = "study"
+label = "Bring it to the lab"
+[node.start.choice.outcome.roll]
+odds = 70
+mods = ["intel >= 30 +10"]
+[node.start.choice.outcome.roll.win]
+effects = ["intel +15"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["breach 10", "personnel -5"]
+end = true
+
+[[node.start.choice]]
+key = "send"
+label = "Push it back through the gate"
+outcome = { effects = ["intel +5"], end = true }
+
+[[node.start.choice]]
+key = "close"
+label = "Close the iris and let the wormhole drop"
+outcome = { visual = "iris_hold", end = true }

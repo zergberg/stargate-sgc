@@ -6,7 +6,9 @@ import time
 PENDING_TIMEOUT = 0.1        # seconds an unfinished escape sequence may wait for its end
 _ABORT = (0x03, 0x18, 0x1a)  # Ctrl+C, CAN, SUB cancel a pending sequence
 _KEYS = {"q": "q", "Q": "q", "m": "m", "M": "m", "p": "p", "P": "p", "+": "+", "=": "+",
-         "-": "-", "_": "-", " ": "space", "\x03": "ctrl-c"}
+         "-": "-", "_": "-", " ": "space", "\x03": "ctrl-c", "r": "r", "R": "r", "\r": "enter", "\n": "enter",
+         **{str(d): str(d) for d in range(1, 10)}}
+_SEQ_KEYS = {b"\x1b[A": "up", b"\x1b[B": "down", b"\x1bOA": "up", b"\x1bOB": "down"}
 
 
 class KeyParser:
@@ -37,6 +39,9 @@ class KeyParser:
                 if self._pending_since is None:
                     self._pending_since = now
                 break
+            name = _SEQ_KEYS.get(bytes(buf[i:end]))
+            if name:
+                keys.append(name)
             i = end
         self._buf = buf[i:]
         if not self._buf:

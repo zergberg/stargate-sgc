@@ -1,0 +1,33 @@
+id = "artifact_zat"
+kind = "incoming"
+weight = 2
+when = ["not tech.zat", "cycles >= 2"]
+
+[node.start]
+text.full = "An SG team brought back a Goa'uld hand weapon, folded like a snake. Dr. Jackson wants to study it."
+text.minimal = "An SG team brought back an unknown device."
+default = "store"
+
+[[node.start.choice]]
+key = "study"
+label = "Let Dr. Jackson study it"
+[node.start.choice.outcome.roll]
+odds = 60
+mods = ["intel >= 30 +20", "ally.tokra +10"]
+[node.start.choice.outcome.roll.win]
+effects = ["gain tech.zat"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["intel +5"]
+end = true
+
+[[node.start.choice]]
+key = "store"
+label = "Lock it in storage"
+outcome = { end = true }
+
+[[node.start.choice]]
+key = "trade"
+label = "Trade it to the Tok'ra for intel"
+requires = ["ally.tokra"]
+outcome = { effects = ["intel +15"], end = true }

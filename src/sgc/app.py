@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import random
 import signal
@@ -13,16 +14,27 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
+from PIL import Image
+
+from . import sequences as sq
 from .addresses import AddressPicker, load_canon
 from .audio.bank import SoundBank
 from .audio.mixer import Mixer, NullMixer
 from .config import Config, load_config
 from .director import Director
 from .events import REGISTRY
+from .game import content as game_content
+from .game import screens
+from .game.engine import Engine
+from .game.menu import Menu
+from .game.save import Saves
+from .game.state import Campaign, new_campaign
 from .glyphs import find_font, install_font
 from .layout import compute_layout
+from .model import Step, _teams
 from .panels import draw_panels
 from .render.addressbar import AddressBarRenderer
+from .render.briefing import BriefingRenderer, render_transition
 from .render.gate import GateRenderer
 from .term.canvas import Canvas
 from .term.detect import detect
@@ -41,7 +53,8 @@ class Terminated(Exception):
 
 class App:
     def __init__(self, term: Terminal, cfg: Config, mixer, rng: random.Random, event: str | None = None,
-                 duration: float | None = None, warnings: list[str] | None = None):
+                 duration: float | None = None, warnings: list[str] | None = None, start: str = "ambient",
+                 saves: Saves | None = None):
         self.term, self.cfg, self.mixer, self.rng = term, cfg, mixer, rng
         self.event, self.duration = event, duration
         self.logs: deque[str] = deque(maxlen=60)
@@ -60,6 +73,15 @@ class App:
         self._over_since: float | None = None
         self._under_since: float | None = None
         self._gate_key = None
+        self.start = start                    # "menu" | "missions" | "ambient"
+        self.saves = saves or Saves()
+        self.mode = "ambient"                 # "menu" | "ambient" | "game"
+        self.menu: Menu | None = None
+        self.engine: Engine | None = None
+        self.briefing: BriefingRenderer | None = None
+        self._records: list[dict] = []
+        self._prompt_seen = None
+        self._last_tick: int | None = None
 
     # ------------------------------------------------------------------ helpers
     def log(self, line: str) -> None:
@@ -85,9 +107,17 @@ class App:
     def _handle_keys(self, keys: list[str]) -> None:
         for k in keys:
             if k in ("q", "ctrl-c"):
+                if k == "q" and self.mode == "menu" and self.menu.screen != "main" and not self.director.exiting:
+                    self.menu.back()
+                    continue
+                if self.engine is not None:
+                    self.engine.save_now()
                 if self.director.exiting:
                     self._quit = True
                 else:
+                    if self._paused:                  # let the exit animation play
+                        self._paused = False
+                        self.mixer.pause(False)
                     self.director.begin_exit()
             elif k == "m":
                 muted = self.mixer.toggle_mute()
@@ -95,12 +125,19 @@ class App:
             elif k in ("+", "-"):
                 self.mixer.set_volume(self.mixer.volume + (0.1 if k == "+" else -0.1))
                 self.log(f"VOLUME {round(self.mixer.volume * 100)}%")
+            elif self.mode == "menu":
+                if not self.director.exiting:
+                    self._menu_action(self.menu.key(k))
+            elif k == "p" and (self.mode == "ambient" or self.engine.campaign.difficulty == "recruit"):
+                if not self.director.exiting:
+                    self._paused = not self._paused
+                    self.mixer.pause(self._paused)
+                    self.log("PAUSED" if self._paused else "RESUMED")
+            elif self.mode == "game":
+                if not self.director.exiting:
+                    self.engine.key(k)
             elif k == "space":
                 self.director.skip()
-            elif k == "p":
-                self._paused = not self._paused
-                self.mixer.pause(self._paused)
-                self.log("PAUSED" if self._paused else "RESUMED")
 
     def _play(self, cues: list[str]) -> None:
         for cue in cues:
@@ -113,6 +150,78 @@ class App:
                 self.mixer.play(name, loop=True, gain=CUE_GAIN.get(name, 1.0))
             else:
                 self.mixer.play(cue, gain=CUE_GAIN.get(cue, 1.0))
+
+    # ------------------------------------------------------------------ modes
+    def _menu_action(self, action: tuple | None) -> None:
+        if not action:
+            return
+        if action[0] == "quit":
+            self.director.begin_exit()
+        elif action[0] == "ambient":
+            self.mode = "ambient"
+            self.log("AMBIENCE · KEYS q quit  m mute  +/- vol  space skip  p pause")
+            self.director.cut_to(sq.to_gateroom(self.cfg.transition_seconds), auto=True)
+        elif action[0] == "continue":
+            c, notice = self.saves.load()
+            if c is None:
+                self.menu.has_save, self.menu.sel = False, 0
+                self.menu.notice = notice or "NO SAVED GAME"
+            else:
+                self._start_game(c)
+        elif action[0] == "new":
+            self._start_game(new_campaign(action[1], action[2], self.rng.randrange(2 ** 31)))
+
+    def _start_game(self, c: Campaign) -> None:
+        try:
+            scenarios, warnings = game_content.load()
+        except game_content.ContentError as e:
+            self.menu.notice = f"SCENARIO ERROR: {e}"
+            return
+        for w in warnings:
+            self.log(w.upper())
+        engine = Engine(self.director, c, scenarios, self.cfg.transition_seconds, self.cfg.decision_countdown,
+                        save=self.saves.save, on_end=self._game_ended, log=self.log)
+        self.engine, self.mode = engine, "game"
+        engine.save_now()
+        self.log(f"{c.mode.upper()} · {c.difficulty.upper()} · KEYS 1-4 orders  r review IDCs  q save & quit")
+        self.director.cut_to([*sq.to_gateroom(self.cfg.transition_seconds), Step(0, lambda s, p: engine.begin())],
+                             auto=False)
+
+    def _game_ended(self, c: Campaign) -> None:
+        self.saves.add_record(c, "victory" if c.won else "overrun")
+        self.saves.delete()
+
+    def _to_menu(self) -> None:
+        self.engine = None
+        self.director.scene.prompt = None
+        self.director.scene.teams = _teams()
+        self.mode = "menu"
+        self.menu = Menu(self.saves.exists())
+        self._records = self.saves.records()
+        self.director.cut_to(sq.to_briefing(self.cfg.transition_seconds), auto=True)
+
+    def _prompt_sounds(self) -> None:
+        p = self.director.scene.prompt
+        if p is not self._prompt_seen:
+            self._prompt_seen, self._last_tick = p, None
+            if p is not None:
+                self.mixer.play("decision")
+        if p is not None and p.total and p.remaining <= 5:
+            sec = math.ceil(p.remaining)
+            if sec > 0 and sec != self._last_tick:
+                self._last_tick = sec
+                self.mixer.play("countdown_tick")
+
+    def _room(self, gate_img, p: float):
+        size = gate_img.size[0]
+        if self.briefing is None or self.briefing.S != size:
+            self.briefing = BriefingRenderer(size)
+        room = self.briefing.render(gate_img)
+        if p <= 0.001:
+            return room
+        if self.backend.name == "blocks" or self.layout.mode != "full":
+            return Image.blend(room, gate_img, p)
+        return render_transition(room, gate_img, p, self.briefing.zoom_box)
 
     def _adapt(self, cost: float, now: float) -> bytes:
         """Step the frame rate, then the image scale, down while frames overrun their budget for 2 s;
@@ -196,10 +305,12 @@ class App:
             if self.gate is None or self.gate.S != size:
                 self.gate = GateRenderer(size, self.font)
                 self._gate_key = None
-            key = self.gate.frame_key(scene, t)
+            key = (self.gate.frame_key(scene, t), round(scene.view_p, 3))
             if key != self._gate_key:
                 self._gate_key = key
                 img = self.gate.render(scene, t)
+                if scene.view_p < 0.999:
+                    img = self._room(img, scene.view_p)
                 if img.size != (w, h):
                     img = img.resize((w, h))
                 out += self.backend.show(1, img, L.gate)
@@ -216,6 +327,11 @@ class App:
                     bar = bar.point(lambda v: int(v * max(0.0, 1 - scene.dim)))
                 out += self.backend.show(2, bar, L.bar)
         draw_panels(self.canvas, L, scene, list(self.logs), datetime.now(), t)
+        if self.mode == "menu" and self.menu is not None:
+            screens.draw_menu(self.canvas, L, self.menu, self._records)
+        elif self.mode == "game" and self.engine is not None:
+            screens.draw_game(self.canvas, L, scene, self.engine.campaign, t)
+        screens.draw_room_label(self.canvas, L, scene)
         out += self.canvas.render(self.caps.truecolor)
         out += b"\x1b[?2026l"
         return bytes(out)
@@ -233,11 +349,18 @@ class App:
                                      REGISTRY)
             if self.event:
                 self.director.queue_event(self.event)
+            if self.start != "ambient":
+                self.mode = "menu"
+                self.director.scene.view_p = 0.0
+                self.menu = Menu(self.saves.exists(), "missions" if self.start == "missions" else "main")
+                self._records = self.saves.records()
             self.mixer.start()
             self.log("SGC DIALING COMPUTER ONLINE")
             self.log(f"DISPLAY {self.backend.name.upper()} · GLYPHS {'FONT' if self.font else 'NUMBERS (font missing)'}")
             sound = "OFF" if self.mixer.dead else f"{self.cfg.sound_pack.upper()} PACK · VOL {round(self.mixer.volume * 100)}%"
-            self.log(f"AUDIO {sound} · KEYS q quit  m mute  +/- vol  space skip  p pause")
+            keys = ("KEYS q quit  m mute  +/- vol  space skip  p pause" if self.mode == "ambient"
+                    else "KEYS 1-9 or ↑↓ enter  q back/quit  m mute")
+            self.log(f"AUDIO {sound} · {keys}")
             for w in self._startup_warnings:
                 self.log(w.upper())
             start = last = time.monotonic()
@@ -258,6 +381,11 @@ class App:
                     for line in new_logs:
                         self.log(line)
                     self._play(cues)
+                    if self.engine is not None and not self.director.exiting:
+                        self.engine.update(dt * self.cfg.speed)
+                        if self.engine.finished:
+                            self._to_menu()
+                self._prompt_sounds()
                 if self.director.finished:
                     break
                 if self.duration is not None and now - start >= self.duration and not self.director.exiting:
@@ -288,6 +416,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--exit-duration", type=float, help="length of the animated exit in seconds")
     p.add_argument("--install-font", nargs="?", const="", metavar="PATH",
                    help="install the downloaded glyph font (.ttf or .zip; default: look in ~/Downloads)")
+    start = p.add_mutually_exclusive_group()
+    start.add_argument("--ambient", action="store_true", help="skip the menu and run the ambient dialing computer")
+    start.add_argument("--missions", action="store_true", help="skip to the missions menu")
     return p.parse_args(argv)
 
 
@@ -324,7 +455,9 @@ def main(argv: list[str] | None = None) -> int:
     signal.signal(signal.SIGHUP, terminate)
 
     mixer = Mixer(SoundBank(cfg.sound_pack), cfg.volume) if cfg.sound else NullMixer()
-    app = App(Terminal(), cfg, mixer, random.Random(args.seed), args.event, args.duration, warnings)
+    start = "ambient" if args.ambient or args.event else "missions" if args.missions else "menu"
+    app = App(Terminal(), cfg, mixer, random.Random(args.seed), args.event, args.duration, warnings,
+              start=start)
     try:
         return app.run()
     except (Terminated, KeyboardInterrupt):

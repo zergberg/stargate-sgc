@@ -18,7 +18,8 @@ from pathlib import Path
 
 RATE = 44100
 CUES = ("ring_spin", "chevron_lock", "kawoosh", "wormhole_hum", "shutdown", "iris_close",
-        "iris_open", "iris_impact", "klaxon", "dial_fail", "idc_accept")
+        "iris_open", "iris_impact", "klaxon", "dial_fail", "idc_accept",
+        "door", "footsteps", "staff_blast", "zat", "countdown_tick", "decision")
 LOOPS = {"ring_spin", "wormhole_hum", "klaxon"}
 TAU = 2 * math.pi
 
@@ -318,6 +319,49 @@ def idc_accept(rng: random.Random) -> list[float]:
     place(out, beep, 0.0)
     place(out, beep, 0.15)
     return normalize(out)
+
+
+def door(rng: random.Random) -> list[float]:
+    out = gain(mul(lowpass(noise(0.9, rng, "brown"), 300), env(0.9, 0.08, 0.0, hold=0.45, release=0.35)), 0.7)
+    place(out, thump(0.35, 110, 70, 12), 0.72, 1.0)
+    place(out, metal(0.3, ((620, 0.1), (1480, 0.05)), 14), 0.72)
+    return normalize(reverb(out, 0.2, 0.3))
+
+
+def footsteps(rng: random.Random) -> list[float]:
+    out = silence(2.6)
+    for k in range(6):
+        step = mul(lowpass(noise(0.14, rng), 900), env(0.14, 0.002, 30.0))
+        place(out, step, 0.15 + 0.4 * k, 0.9 if k % 2 == 0 else 0.7)
+        place(out, thump(0.12, 90, 60, 30), 0.15 + 0.4 * k, 0.4)
+    return normalize(reverb(out, 0.25, 0.4))
+
+
+def staff_blast(rng: random.Random) -> list[float]:
+    out = lowpass(gain(mul(osc(0.5, sweep(900, 180, 0.35), "saw"), env(0.5, 0.004, 7.0)), 0.6), 3000)
+    place(out, burst(0.25, rng, 2500, 14), 0, 0.8)
+    place(out, thump(0.4, 80, 40, 9), 0.02, 0.9)
+    return normalize(reverb(out, 0.3, 0.5))
+
+
+def zat(rng: random.Random) -> list[float]:
+    buzz = [a + 0.5 * b for a, b in zip(osc(0.6, 190, "square", (38, 0.2)), osc(0.6, 1140, "saw", (23, 0.1)))]
+    out = mul(bandpass(buzz, 1400, 1.2), env(0.6, 0.01, 4.0))
+    place(out, burst(0.08, rng, 6000, 60), 0, 0.5)
+    return normalize(reverb(out, 0.2, 0.3))
+
+
+def countdown_tick(rng: random.Random) -> list[float]:
+    out = silence(0.4)
+    place(out, mul(osc(0.05, 1800), env(0.05, 0.001, 0.0, release=0.02)), 0.0)
+    return normalize(out)
+
+
+def decision(rng: random.Random) -> list[float]:
+    out = silence(0.6)
+    for i, f in enumerate((660, 880)):
+        place(out, mul(osc(0.12, f), env(0.12, 0.004, 0.0, release=0.05)), 0.12 * i)
+    return normalize(reverb(out, 0.15, 0.2))
 
 
 def synth(cue: str) -> list[float]:

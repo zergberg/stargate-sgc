@@ -1,0 +1,54 @@
+id = "strike"
+kind = "mission"
+mission_type = "strike"
+weight = 6
+goauld = "weakest"
+risk = "high"
+when = ["goauld {goauld} strength <= 1", "intel >= 30"]
+brief = "Strike at {goauld} directly on {destination}"
+
+[node.start]
+text.full = "{team} is inside {goauld}'s palace. The System Lord is within reach."
+default = "abort"
+
+[[node.start.choice]]
+key = "strike"
+label = "Take the shot"
+[node.start.choice.outcome.roll]
+odds = 45
+mods = ["ally.jaffa +15", "ally.tokra +10", "tech.zat +10", "ally.asgard +15"]
+[node.start.choice.outcome.roll.win]
+visual = "team_return"
+effects = ["goauld {goauld} strength -1", "intel -30"]
+end = true
+[node.start.choice.outcome.roll.lose]
+goto = "escape"
+
+[[node.start.choice]]
+key = "abort"
+label = "Not today; pull out"
+outcome = { visual = "team_return", end = true }
+
+[node.escape]
+text.full = "{goauld}'s guards have {team} pinned down."
+default = "run"
+
+[[node.escape.choice]]
+key = "run"
+label = "Fight back to the gate"
+[node.escape.choice.outcome.roll]
+odds = 50
+mods = ["tech.zat +15"]
+[node.escape.choice.outcome.roll.win]
+visual = "team_return"
+effects = ["goauld {goauld} aggression +20"]
+end = true
+[node.escape.choice.outcome.roll.lose]
+effects = ["team {team} lost", "goauld {goauld} aggression +20"]
+end = true
+
+[[node.escape.choice]]
+key = "beam"
+label = "Call the Asgard for a beam-out"
+requires = ["ally.asgard"]
+outcome = { visual = "team_return", effects = ["use ally.asgard"], end = true }

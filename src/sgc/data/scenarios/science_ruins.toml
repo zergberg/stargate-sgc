@@ -1,0 +1,29 @@
+id = "science_ruins"
+kind = "mission"
+mission_type = "science"
+weight = 3
+risk = "low"
+brief = "Survey Ancient ruins on {destination}"
+
+[node.start]
+text.full = "{team} found Ancient writing on {destination}. Dr. Jackson is asking for more time."
+default = "home"
+
+[[node.start.choice]]
+key = "stay"
+label = "Give him another day"
+[node.start.choice.outcome.roll]
+odds = 80
+[node.start.choice.outcome.roll.win]
+visual = "team_return"
+effects = ["intel +10"]
+end = true
+[node.start.choice.outcome.roll.lose]
+visual = "team_return"
+effects = ["team {team} injured"]
+end = true
+
+[[node.start.choice]]
+key = "home"
+label = "Photograph everything and come home"
+outcome = { visual = "team_return", effects = ["intel +5"], end = true }

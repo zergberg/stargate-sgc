@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 
 from .addresses import Address
-from .model import Scene, Step
+from .model import Figure, Scene, Step
 
 LOCK_ORDER = {7: [1, 2, 3, 6, 7, 8, 0], 8: [1, 2, 3, 6, 7, 8, 4, 0], 9: [1, 2, 3, 6, 7, 8, 4, 5, 0]}
 SPIN, LOCK = 1.8, 0.6
@@ -115,11 +115,58 @@ def idle(seconds: float) -> Step:
     return Step(seconds, update)
 
 
+def _walk(seconds: float, start: float, end: float, log: str) -> list[Step]:
+    def update(scene: Scene, p: float) -> None:
+        scene.view_p = start + (end - start) * _smooth(p)
+    return [Step(0, None, log, ("door",)), Step(seconds, update, cues=("footsteps",))]
+
+
+def to_gateroom(seconds: float) -> list[Step]:
+    return _walk(seconds, 0.0, 1.0, "HEADING DOWN TO THE CONTROL ROOM")
+
+
+def to_briefing(seconds: float) -> list[Step]:
+    return _walk(seconds, 1.0, 0.0, "HEADING UP TO THE BRIEFING ROOM")
+
+
+def firefight(seconds: float, rng, win: bool | None) -> list[Step]:
+    """Staff and zat fire on the ramp. win=True ends it with the room secured; None leaves it hot."""
+    shots = sorted(rng.uniform(0, seconds) for _ in range(max(2, int(seconds * 4))))
+    spots = [(rng.uniform(-0.8, 0.8), rng.uniform(0.15, 0.9)) for _ in shots]
+
+    def update(scene: Scene, p: float) -> None:
+        t = p * seconds
+        scene.alert, scene.status = "red", "WEAPONS FIRE IN THE GATE ROOM"
+        scene.muzzle = [[x, pos, 1 - (t - s) / 0.25] for (x, pos), s in zip(spots, shots) if 0 <= t - s < 0.25]
+        if p >= 1:
+            scene.muzzle = []
+            if win:
+                scene.alert, scene.status = "normal", "GATE ROOM SECURE"
+
+    steps = [Step(0, None, "FIREFIGHT IN THE GATE ROOM", ("loop:klaxon",))]
+    for i in range(4):
+        def quarter(scene: Scene, p: float, i=i) -> None:
+            update(scene, (i + p) / 4)
+        steps.append(Step(seconds / 4, quarter, cues=("staff_blast" if i % 2 == 0 else "zat",)))
+    if win:
+        steps.append(Step(0, None, "GATE ROOM SECURE", ("stop:klaxon",)))
+    return steps
+
+
+def bomb(seconds: float) -> list[Step]:
+    def arrive(scene: Scene, p: float) -> None:
+        scene.alert, scene.status = "red", "DEVICE ON THE RAMP"
+        scene.figures = [Figure("crate", 1 - 0.35 * _smooth(p), 0.0)]
+    return [Step(0, None, "OBJECT THROUGH THE GATE", ("loop:klaxon",)),
+            Step(seconds, arrive, "UNKNOWN DEVICE — POSSIBLE NAQUADAH BOMB")]
+
+
 def reset_scene(scene: Scene) -> None:
     """Return the gate to rest (keeps team statuses)."""
     scene.spinning, scene.clamp, scene.lit, scene.locked = False, 0.0, set(), 0
     scene.horizon, scene.horizon_p, scene.open_elapsed, scene.iris = "off", 0.0, 0.0, 0.0
     scene.figures, scene.splashes, scene.impacts, scene.vaporize = [], [], [], 0.0
+    scene.muzzle = []
     scene.alert, scene.address, scene.incoming, scene.identified = "normal", None, False, True
     scene.panel_title, scene.panel_rows, scene.panel_trace = "SENSORS", [], []
     scene.status = "STANDING BY"

@@ -1,0 +1,21 @@
+id = "asgard_contact"
+kind = "incoming"
+weight = 1
+when = ["not ally.asgard", "intel >= 20"]
+visual = "incoming"
+
+[node.start]
+text.full = "No IDC, but the signal carries Asgard markings. Thor wishes to speak with you."
+text.partial = "No IDC. The signal isn't Goa'uld."
+text.minimal = "Unscheduled activation. No IDC."
+default = "hold"
+
+[[node.start.choice]]
+key = "open"
+label = "Open the iris"
+outcome = { visual = "arrival", effects = ["gain ally.asgard"], end = true }
+
+[[node.start.choice]]
+key = "hold"
+label = "Keep the iris closed"
+outcome = { visual = "iris_hold", end = true }

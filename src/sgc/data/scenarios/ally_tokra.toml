@@ -1,0 +1,37 @@
+id = "ally_tokra"
+kind = "mission"
+mission_type = "ally"
+weight = 3
+risk = "medium"
+when = ["not ally.tokra"]
+brief = "Find the Tok'ra resistance at {destination}"
+
+[node.start]
+text.full = "{team} has made contact with a Tok'ra operative. She wants proof that Earth can be trusted."
+default = "leave"
+
+[[node.start.choice]]
+key = "share"
+label = "Share our intel on the System Lords"
+requires = ["intel >= 10"]
+outcome = { visual = "team_return", effects = ["intel -10", "gain ally.tokra"], end = true }
+
+[[node.start.choice]]
+key = "help"
+label = "Help her escape a Jaffa patrol"
+[node.start.choice.outcome.roll]
+odds = 60
+mods = ["tech.zat +15"]
+[node.start.choice.outcome.roll.win]
+visual = "team_return"
+effects = ["gain ally.tokra"]
+end = true
+[node.start.choice.outcome.roll.lose]
+visual = "team_return"
+effects = ["team {team} injured"]
+end = true
+
+[[node.start.choice]]
+key = "leave"
+label = "Thank her and come home"
+outcome = { visual = "team_return", end = true }

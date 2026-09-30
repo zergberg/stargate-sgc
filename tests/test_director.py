@@ -120,3 +120,39 @@ def test_skip_moves_to_a_new_cycle():
     for _ in range(100):
         d.advance(0.1)
     assert d.scene.address is None or d.scene.address != first
+
+
+def _director():
+    return Director(Config(), random.Random(1), AddressPicker(load_canon(), 0.6, random.Random(1)), REGISTRY)
+
+
+def test_auto_off_runs_given_steps_then_goes_idle():
+    d = _director()
+    d.auto = False
+    d.advance(1.0)
+    assert d.idle
+    d.run_steps([sq.hold(0.5, log="A"), sq.hold(0.5, log="B")])
+    assert not d.idle
+    logs, _ = d.advance(0.6)
+    assert logs == ["A", "B"]
+    d.advance(1.0)
+    assert d.idle
+
+
+def test_time_keeps_running_while_idle():
+    d = _director()
+    d.auto = False
+    d.scene.horizon = "open"
+    d.advance(5.0)
+    assert d.idle and d.scene.open_elapsed == 5.0
+
+
+def test_cut_to_abandons_the_cycle_then_plays_steps():
+    d = _director()
+    d.advance(3.0)                        # an ambient cycle is playing
+    d.cut_to([sq.hold(0.1, log="GAME")], auto=False)
+    logs = []
+    for _ in range(100):
+        logs += d.advance(0.1)[0]
+    assert "GAME" in logs and "SEQUENCE OVERRIDDEN" not in logs
+    assert d.idle and not d.auto

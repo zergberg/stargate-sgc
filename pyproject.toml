@@ -20,7 +20,7 @@ sgc = "sgc.app:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-sgc = ["data/*.json"]
+sgc = ["data/*.json", "data/scenarios/*.toml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

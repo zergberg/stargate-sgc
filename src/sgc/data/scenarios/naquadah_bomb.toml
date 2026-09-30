@@ -1,0 +1,37 @@
+id = "naquadah_bomb"
+kind = "incoming"
+weight = 2
+hostile = true
+goauld = "aggressor"
+when = ["cycles >= 6"]
+visual = ["incoming", "bomb"]
+
+[node.start]
+text.full = "A device came through before the iris closed: a naquadah bomb with {goauld}'s mark on the casing. It's armed."
+text.partial = "A device came through before the iris closed. Possibly a naquadah bomb."
+text.minimal = "Unknown device on the ramp."
+countdown = 8
+default = "bury"
+
+[[node.start.choice]]
+key = "send"
+label = "Dial out and push it back through"
+[node.start.choice.outcome.roll]
+odds = 55
+mods = ["personnel >= 50 +10", "tech.naquadah_generator +10"]
+[node.start.choice.outcome.roll.win]
+effects = ["goauld {goauld} aggression +10"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["game_over The device detonated in the gate room. Cheyenne Mountain is gone."]
+
+[[node.start.choice]]
+key = "asgard"
+label = "Ask the Asgard to beam it away"
+requires = ["ally.asgard"]
+outcome = { visual = "asgard_beam", effects = ["use ally.asgard"], end = true }
+
+[[node.start.choice]]
+key = "bury"
+label = "Evacuate the level and seal the blast doors"
+outcome = { effects = ["breach 35", "personnel -15"], end = true }

@@ -1,0 +1,70 @@
+id = "recon"
+kind = "mission"
+mission_type = "recon"
+weight = 3
+goauld = "any"
+risk = "low"
+brief = "Recon {goauld}'s territory at {destination}"
+
+[node.start]
+text.full = "{team} reports from {destination}: Jaffa patrols, and a supply depot bearing {goauld}'s mark."
+text.partial = "{team} reports Jaffa patrols on {destination}."
+text.minimal = "{team} reports hostile activity."
+default = "watch"
+
+[[node.start.choice]]
+key = "watch"
+label = "Observe from cover"
+[node.start.choice.outcome.roll]
+odds = 80
+mods = ["ally.tokra +10"]
+[node.start.choice.outcome.roll.win]
+visual = "team_return"
+effects = ["intel +15"]
+end = true
+[node.start.choice.outcome.roll.lose]
+goto = "spotted"
+
+[[node.start.choice]]
+key = "closer"
+label = "Get inside the depot"
+[node.start.choice.outcome.roll]
+odds = 50
+mods = ["ally.tokra +15"]
+[node.start.choice.outcome.roll.win]
+visual = "team_return"
+effects = ["intel +25"]
+end = true
+[node.start.choice.outcome.roll.lose]
+goto = "spotted"
+
+[node.spotted]
+text.full = "A patrol has spotted {team}! They're cut off from the gate."
+default = "run"
+
+[[node.spotted.choice]]
+key = "run"
+label = "Make a run for the gate"
+[node.spotted.choice.outcome.roll]
+odds = 60
+mods = ["tech.zat +15"]
+[node.spotted.choice.outcome.roll.win]
+visual = "team_return"
+end = true
+[node.spotted.choice.outcome.roll.lose]
+effects = ["team {team} captured"]
+end = true
+
+[[node.spotted.choice]]
+key = "fight"
+label = "Fight their way out"
+[node.spotted.choice.outcome.roll]
+odds = 45
+mods = ["tech.zat +15", "ally.jaffa +15"]
+[node.spotted.choice.outcome.roll.win]
+visual = "team_return"
+effects = ["personnel -5", "goauld {goauld} aggression +5"]
+end = true
+[node.spotted.choice.outcome.roll.lose]
+effects = ["team {team} lost"]
+end = true

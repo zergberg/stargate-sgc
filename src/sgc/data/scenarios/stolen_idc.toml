@@ -1,0 +1,53 @@
+id = "stolen_idc"
+kind = "incoming"
+weight = 4
+hostile = true
+team = "compromised"
+goauld = "aggressor"
+when = ["any_compromised_idc"]
+visual = "incoming"
+
+[node.start]
+text.full = "Incoming wormhole. IDC received: {team}'s code. {team} was captured on {captured_at} and hasn't been recovered."
+text.partial = "Incoming wormhole. IDC received: {team}."
+text.minimal = "Incoming wormhole. IDC received."
+default = "hold"
+
+[[node.start.choice]]
+key = "open"
+label = "Open the iris"
+outcome = { goto = "breach" }
+
+[[node.start.choice]]
+key = "hold"
+label = "Keep the iris closed"
+outcome = { visual = "iris_hold", effects = ["goauld {goauld} aggression +5"], end = true }
+
+[[node.start.choice]]
+key = "revoke"
+label = "Keep it closed and revoke that code"
+requires = ["intel >= 10"]
+outcome = { visual = "iris_hold", effects = ["idc {team} revoke", "intel -10"], end = true }
+
+[node.breach]
+text.full = "It isn't {team}. Jaffa in the gate room: {goauld}'s warriors are coming through!"
+default = "fall_back"
+
+[[node.breach.choice]]
+key = "hold"
+label = "Hold the gate room"
+[node.breach.choice.outcome.roll]
+odds = 45
+mods = ["ally.jaffa +20", "tech.zat +15", "personnel < 40 -15"]
+[node.breach.choice.outcome.roll.win]
+visual = "firefight_win"
+effects = ["personnel -10", "breach 10"]
+end = true
+[node.breach.choice.outcome.roll.lose]
+visual = "firefight"
+effects = ["game_over {goauld}'s Jaffa took the gate room, and the SGC fell."]
+
+[[node.breach.choice]]
+key = "fall_back"
+label = "Seal the level and fall back"
+outcome = { visual = "firefight", effects = ["breach 30", "personnel -5"], end = true }

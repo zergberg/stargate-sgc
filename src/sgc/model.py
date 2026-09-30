@@ -20,6 +20,16 @@ def _teams() -> dict[str, str]:
 
 
 @dataclass
+class Prompt:
+    """A decision on the side screen: options are numbered 1..n; total 0 means no countdown."""
+    title: str
+    text: str
+    options: list[tuple[str, bool]]      # (label, enabled)
+    total: float = 0.0
+    remaining: float = 0.0
+
+
+@dataclass
 class Scene:
     ring_angle: float = 0.0              # degrees, clockwise
     spinning: bool = False
@@ -48,6 +58,9 @@ class Scene:
     dim: float = 0.0                     # exit fade 0..1
     blank_panels: int = 0                # exit: side screens blanked so far
     collapse_line: float = 0.0           # exit CRT collapse 0..1
+    view_p: float = 1.0                  # 0 = briefing room, 1 = gate room; between = walking
+    muzzle: list[list[float]] = field(default_factory=list)      # [lane -1..1, ramp pos 0..1, intensity 0..1]
+    prompt: Prompt | None = None
 
 
 @dataclass

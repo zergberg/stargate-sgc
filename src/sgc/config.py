@@ -23,6 +23,8 @@ class Config:
     exit_duration: float = 6.0
     font_path: str | None = None
     graphics: str = "auto"
+    transition_seconds: float = 10.0     # walking between the briefing room and the gate room
+    decision_countdown: float = 12.0     # seconds to give an order before standing procedure applies
     event_weights: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
 
 
@@ -41,6 +43,8 @@ _VALIDATORS = {
     "exit_duration": _num(0, 60),
     "font_path": lambda v: isinstance(v, str),
     "graphics": lambda v: v in ("auto", "kitty", "sixel", "iterm", "blocks"),
+    "transition_seconds": _num(2, 30),
+    "decision_countdown": _num(5, 30),
 }
 
 

@@ -18,7 +18,13 @@ def test_key_parser_split_sequences():
 
 def test_key_parser_arrows_and_plus_minus():
     kp = KeyParser()
-    assert kp.feed(b"\x1b[A+-=_pQ") == ["+", "-", "+", "-", "p", "q"]
+    assert kp.feed(b"\x1b[A+-=_pQ") == ["up", "+", "-", "+", "-", "p", "q"]
+
+
+def test_key_parser_game_keys():
+    kp = KeyParser()
+    assert kp.feed(b"1239rR\r\n") == ["1", "2", "3", "9", "r", "r", "enter", "enter"]
+    assert kp.feed(b"\x1b[B\x1bOA\x1b[C") == ["down", "up"]
 
 
 def test_detect_timeout_falls_back():

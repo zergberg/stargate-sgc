@@ -1,0 +1,55 @@
+id = "jaffa_incursion"
+kind = "incoming"
+weight = 3
+hostile = true
+goauld = "aggressor"
+when = ["cycles >= 4"]
+visual = "incoming"
+
+[node.start]
+text.full = "Unscheduled activation, no IDC. Sensors show movement at the event horizon: {goauld}'s Jaffa are about to come through."
+text.partial = "Unscheduled activation, no IDC. Movement at the event horizon."
+text.minimal = "Unscheduled activation. No IDC."
+countdown = 8
+default = "iris"
+
+[[node.start.choice]]
+key = "iris"
+label = "Close the iris now"
+[node.start.choice.outcome.roll]
+odds = 75
+mods = ["tech.lrs +15", "security < 30 -20"]
+[node.start.choice.outcome.roll.win]
+visual = "iris_hold"
+effects = ["goauld {goauld} aggression +5"]
+end = true
+[node.start.choice.outcome.roll.lose]
+goto = "fight"
+
+[[node.start.choice]]
+key = "positions"
+label = "Leave it open; defensive positions"
+outcome = { goto = "fight" }
+
+[node.fight]
+text.full = "Jaffa through the gate before the iris closed! Staff weapon fire on the ramp."
+default = "fall_back"
+
+[[node.fight.choice]]
+key = "hold"
+label = "Hold the gate room"
+[node.fight.choice.outcome.roll]
+odds = 50
+mods = ["ally.jaffa +20", "tech.zat +15", "personnel < 40 -15"]
+[node.fight.choice.outcome.roll.win]
+visual = "firefight_win"
+effects = ["personnel -10", "goauld {goauld} aggression +5"]
+end = true
+[node.fight.choice.outcome.roll.lose]
+visual = "firefight"
+effects = ["game_over The Jaffa held the gate room long enough for {goauld}'s army to follow."]
+
+[[node.fight.choice]]
+key = "fall_back"
+label = "Seal level 28 and fall back"
+outcome = { visual = "firefight", effects = ["breach 25", "personnel -5"], end = true }

@@ -23,6 +23,7 @@ class Director:
         self._last_kind: str | None = None
         self._exiting = False
         self._finished = False
+        self.auto = True                  # False: only play what run_steps() queues (game mode)
 
     @property
     def finished(self) -> bool:
@@ -31,6 +32,22 @@ class Director:
     @property
     def exiting(self) -> bool:
         return self._exiting
+
+    @property
+    def idle(self) -> bool:
+        """Nothing playing and nothing queued (with auto off, the gate just rests)."""
+        return self._cur is None and not self._queue
+
+    def run_steps(self, steps: list[Step]) -> None:
+        self._queue.extend(steps)
+
+    def cut_to(self, steps: list[Step], auto: bool) -> None:
+        """Abandon whatever is playing (shutting the gate quickly), then play `steps`."""
+        if self._exiting:
+            return
+        self.skip(log=None)
+        self._queue.extend(steps)
+        self.auto = auto
 
     def queue_event(self, name: str, addr: Address | None = None) -> None:
         if name not in self.registry:
@@ -77,6 +94,8 @@ class Director:
                     if self._exiting:
                         self._finished = True
                         break
+                    if not self.auto:
+                        break
                     self._queue.extend(self._build_cycle())
                 self._cur, self._cur_t = self._queue.popleft(), 0.0
                 if self._cur.log:
@@ -98,14 +117,14 @@ class Director:
                 self._cur = None
         return logs, cues
 
-    def skip(self) -> None:
+    def skip(self, log: str | None = "SEQUENCE OVERRIDDEN") -> None:
         """Abandon the current cycle: shut the gate quickly and move on."""
         if self._exiting:
             return
 
         def abort(scene: Scene, p: float) -> None:
             scene.spinning, scene.clamp = False, 0.0
-        steps = [Step(0, abort, "SEQUENCE OVERRIDDEN", ("stop:ring_spin", "stop:klaxon"))]
+        steps = [Step(0, abort, log, ("stop:ring_spin", "stop:klaxon"))]
         if self.scene.horizon != "off" or self.scene.locked:
             steps += sq.shutdown(2.0)
         steps += [Step(0, lambda s, p: sq.reset_scene(s), cues=("stopall",)), sq.idle(1.0)]

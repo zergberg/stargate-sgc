@@ -38,9 +38,11 @@ This installs it as `~/.local/share/fonts/stargate_sg1_adress_glyphs.ttf`. The f
 ## Run
 
 ```sh
-sgc                       # auto-detects graphics and sound
+sgc                       # briefing-room menu: Ambience or Missions
+sgc --ambient             # straight to the ambient dialing computer
+sgc --missions            # straight to the missions menu (continue or new game)
 sgc --pack freesound      # the other sound pack
-sgc --event code_red      # start with a specific event
+sgc --event code_red      # ambient, starting with a specific event
 sgc --graphics blocks     # force a graphics mode: kitty | sixel | iterm | blocks
 sgc --no-sound
 sgc --install-font        # install the glyph font you downloaded (see Install)
@@ -53,6 +55,48 @@ sgc --install-font        # install the glyph font you downloaded (see Install)
 | `+` / `-` | volume |
 | `space` | skip to the next dial |
 | `p` | pause |
+
+## Missions (the game)
+
+You command the SGC. Incoming activations stop for your orders, SG teams go out on missions from the briefing room, and your goal is to bring down the Goa'uld System Lords.
+
+- **Modes:**
+  - **Campaign:** defeat 3 System Lords, then get General Hammond's debrief and rating.
+  - **Endless:** play until the base falls. A new System Lord rises whenever one is defeated.
+- **Difficulty:** Recruit, Officer or Commander. Harder difficulties mean costlier mistakes and less information: on Commander, an incoming signal may only say "IDC received".
+- **Orders:** press `1`–`4` before the countdown runs out. If you don't, the SGC follows standing procedure, usually the cautious option.
+- **Base meters:** Security, Personnel and Intel. Quiet cycles let Security and Personnel recover a little.
+- **Losing:** if the base is overrun, the game is over. That only happens through your own calls:
+  - trusting an IDC you shouldn't have
+  - losing a firefight in the gate room
+  - not dealing with a bomb sent through the gate
+- **Stand-downs:** an injured team is out for 2 cycles, and a lost team re-forms after 3. A captured team not rescued within 5 cycles is presumed lost. Press `r` to review and revoke IDC codes between cycles; revoking one stands that team down for the next cycle.
+- **Allies and technology:** the Tok'ra, Tollan and Free Jaffa, zat'nik'tels, naquadah generators and long-range sensors give a lasting advantage. The Asgard and the Nox can each be called in once before you need to earn them again.
+- **Pacing:** walking between the briefing room and the control room takes `transition_seconds` (default 10) and can't be skipped. Things take time. Pause (`p`) is only available on Recruit.
+- **Saving:** progress saves automatically to `~/.local/share/stargate-sgc/campaign.json`, and `q` saves and quits. A saved game resumes at the start of the next cycle; a mission still in progress when you quit is called off. Starting a new game over a save asks you to confirm first. Finished runs go into the hall of records on the menu.
+
+### Writing scenarios
+
+Gate-room scenarios and missions are TOML files in `src/sgc/data/scenarios/`. Add your own in `~/.config/stargate-sgc/scenarios/`; a file with the same `id` replaces the built-in one. A scenario is a small graph of nodes. Each node has text (`full`, plus optional `partial`/`minimal` for harder difficulties), a `default` choice for when the countdown runs out, and 1–4 choices. Each choice's outcome can `goto` another node, play a `visual`, apply `effects`, `end`, or `roll` odds with modifiers.
+
+A node's text can only use a `{placeholder}` the scenario actually binds: `{team}` needs `team = "compromised" | "captured" | "base" | "any"` (or being a mission), `{captive}` needs `captive = true`, `{goauld}` needs `goauld = "aggressor" | "any" | "weakest"`, and `{destination}` is always available. Format specs like `{team:>5}` aren't allowed. A node's `default` choice must always be able to reach an end, so a stalled countdown can never dead-end.
+
+Effects:
+- meters: `security -10`, `personnel +5`, `intel +15`
+- `breach 20`: a security breach. If Security is already 0, the base falls.
+- teams: `team {team} captured`, `idc {team} revoke`
+- Goa'uld: `goauld {goauld} strength -1`, `goauld {goauld} aggression +10`
+- allies and technology: `gain ally.tokra`; `use` only works on the single-use allies, `ally.asgard` and `ally.nox`
+- `game_over <text>`
+- any effect can end with `unless <flag>` (except `game_over`)
+
+Conditions (used in `when`, `requires` and roll `mods`):
+- meters and cycles: `intel >= 30`, `cycles >= 5`
+- flags: `ally.tokra`, `not tech.zat`
+- teams: `any_compromised_idc`, `any_captured`, `team SG-1 base`
+- Goa'uld: `goauld {goauld} strength <= 1`
+
+A scenario with a mistake is skipped with a log line that names the file and the problem. The built-in scenarios are good examples to copy.
 
 ## Config
 
@@ -69,6 +113,8 @@ canon_ratio = 0.6         # share of canon vs random addresses
 exit_duration = 6.0       # seconds of the animated shutdown
 graphics = "auto"         # auto | kitty | sixel | iterm | blocks
 # font_path = "/path/to/stargate_sg1_adress_glyphs.ttf"
+transition_seconds = 10   # walking between the briefing room and the control room (2-30)
+decision_countdown = 12   # seconds to give an order (5-30)
 
 [event_weights]           # relative frequency of each event
 science = 1.0

@@ -1,0 +1,39 @@
+id = "rescue"
+kind = "mission"
+mission_type = "rescue"
+weight = 5
+captive = true
+goauld = "aggressor"
+risk = "high"
+when = ["any_captured"]
+brief = "Rescue {captive} from {goauld}'s prison at {destination}"
+
+[node.start]
+text.full = "{team} has eyes on the prison. {captive} is held in the lower cells; the guard changes in minutes."
+text.minimal = "{team} has found the prison."
+default = "withdraw"
+
+[[node.start.choice]]
+key = "storm"
+label = "Storm the cells"
+[node.start.choice.outcome.roll]
+odds = 50
+mods = ["ally.tokra +20", "tech.zat +10", "ally.jaffa +10"]
+[node.start.choice.outcome.roll.win]
+visual = "team_return"
+effects = ["team {captive} base", "goauld {goauld} aggression +15"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["team {team} captured", "goauld {goauld} aggression +5"]
+end = true
+
+[[node.start.choice]]
+key = "bribe"
+label = "Buy them out through a Tok'ra contact"
+requires = ["ally.tokra", "intel >= 20"]
+outcome = { visual = "team_return", effects = ["intel -20", "team {captive} base"], end = true }
+
+[[node.start.choice]]
+key = "withdraw"
+label = "Pull out and try again later"
+outcome = { visual = "team_return", end = true }

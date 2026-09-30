@@ -1,0 +1,32 @@
+id = "malp_telemetry"
+kind = "incoming"
+weight = 2
+goauld = "any"
+visual = "malp"
+
+[node.start]
+text.full = "The MALP's telemetry shows {goauld}'s Jaffa massing around the far gate."
+text.minimal = "The MALP picked up Jaffa near the far gate."
+default = "file"
+
+[[node.start.choice]]
+key = "strike"
+label = "Send a naquadah-enhanced MALP back"
+[node.start.choice.outcome.roll]
+odds = 50
+[node.start.choice.outcome.roll.win]
+effects = ["goauld {goauld} aggression +15", "intel +10"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["goauld {goauld} aggression +10"]
+end = true
+
+[[node.start.choice]]
+key = "file"
+label = "File the intel"
+outcome = { effects = ["intel +10"], end = true }
+
+[[node.start.choice]]
+key = "alert"
+label = "Put the base on alert"
+outcome = { effects = ["security +10"], end = true }

@@ -128,3 +128,31 @@ def test_malp_is_seen_from_behind():
     left = sum(1 for px_, _ in pts if px_ < x - 1)
     right = sum(1 for px_, _ in pts if px_ > x + 1)
     assert pts and abs(left - right) <= 0.1 * max(left, right)     # symmetric rear view, not a side profile
+
+
+def test_muzzle_flashes_draw_and_change_the_frame_key():
+    from PIL import ImageChops
+    from sgc.model import Scene
+    from sgc.render.gate import GateRenderer
+    g = GateRenderer(160, None)
+    calm, hot = Scene(), Scene()
+    hot.muzzle = [[0.0, 0.5, 1.0], [0.4, 0.3, 0.6]]
+    assert g.frame_key(calm, 0.0) != g.frame_key(hot, 0.0)
+    assert ImageChops.difference(g.render(calm, 0.0), g.render(hot, 0.0)).getbbox() is not None
+
+
+def test_muzzle_flash_intensity_dims_the_glow():
+    from sgc.model import Scene
+    from sgc.render.gate import GateRenderer
+    g = GateRenderer(160, None)
+    x, y, s = g.figure_point(0.5, 0.0)
+    y -= g.S * 0.12 * s
+    px, py = int(x), int(y)
+
+    def channel_sum(k):
+        scene = Scene()
+        scene.muzzle = [[0.0, 0.5, k]]
+        im = g.render(scene, 0.0).convert("RGB")
+        return sum(im.getpixel((px, py)))
+
+    assert channel_sum(0.2) < channel_sum(1.0)

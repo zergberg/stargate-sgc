@@ -1,0 +1,29 @@
+id = "science_naquadah"
+kind = "mission"
+mission_type = "science"
+weight = 3
+risk = "low"
+brief = "Survey a naquadah deposit on {destination}"
+
+[node.start]
+text.full = "{team} confirms a rich naquadah vein. Mining it would take time, and draw attention."
+default = "sample"
+
+[[node.start.choice]]
+key = "mine"
+label = "Start a mining operation"
+[node.start.choice.outcome.roll]
+odds = 70
+[node.start.choice.outcome.roll.win]
+visual = "team_return"
+effects = ["security +15", "intel +5"]
+end = true
+[node.start.choice.outcome.roll.lose]
+visual = "team_return"
+effects = ["personnel -5"]
+end = true
+
+[[node.start.choice]]
+key = "sample"
+label = "Take samples and come home"
+outcome = { visual = "team_return", effects = ["intel +5"], end = true }

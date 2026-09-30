@@ -29,3 +29,9 @@ def test_writes_wavs(tmp_path):
     for cue in ms.CUES:
         with wave.open(str(tmp_path / f"{cue}.wav")) as w:
             assert w.getframerate() == 44100 and w.getnchannels() == 1 and w.getsampwidth() == 2
+
+
+def test_game_cues_present():
+    for cue in ("door", "footsteps", "staff_blast", "zat", "countdown_tick", "decision"):
+        assert cue in ms.CUES
+        assert (pathlib.Path(__file__).parents[1] / "assets" / "sounds" / "synth" / f"{cue}.wav").is_file()

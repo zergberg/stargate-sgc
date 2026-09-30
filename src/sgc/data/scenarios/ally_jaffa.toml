@@ -1,0 +1,61 @@
+id = "ally_jaffa"
+kind = "mission"
+mission_type = "ally"
+weight = 2
+goauld = "any"
+risk = "high"
+when = ["not ally.jaffa", "cycles >= 5"]
+brief = "Meet rebel Jaffa defecting from {goauld} on {destination}"
+
+[node.start]
+text.full = "{team} is at the meeting point. The rebels are nervous; {goauld}'s patrols are close."
+default = "leave"
+
+[[node.start.choice]]
+key = "meet"
+label = "Walk out and meet them"
+[node.start.choice.outcome.roll]
+odds = 55
+mods = ["ally.tokra +10", "ally.tollan +15"]
+[node.start.choice.outcome.roll.win]
+visual = "team_return"
+effects = ["gain ally.jaffa", "goauld {goauld} aggression +5"]
+end = true
+[node.start.choice.outcome.roll.lose]
+goto = "ambush"
+
+[[node.start.choice]]
+key = "leave"
+label = "Call it off and come home"
+outcome = { visual = "team_return", end = true }
+
+[node.ambush]
+text.full = "It was a trap! {goauld}'s Jaffa have the meeting point surrounded."
+default = "run"
+
+[[node.ambush.choice]]
+key = "run"
+label = "Run for the gate"
+[node.ambush.choice.outcome.roll]
+odds = 55
+mods = ["tech.zat +15"]
+[node.ambush.choice.outcome.roll.win]
+visual = "team_return"
+end = true
+[node.ambush.choice.outcome.roll.lose]
+effects = ["team {team} captured"]
+end = true
+
+[[node.ambush.choice]]
+key = "fight"
+label = "Fight it out"
+[node.ambush.choice.outcome.roll]
+odds = 40
+mods = ["tech.zat +15"]
+[node.ambush.choice.outcome.roll.win]
+visual = "team_return"
+effects = ["personnel -5"]
+end = true
+[node.ambush.choice.outcome.roll.lose]
+effects = ["team {team} lost"]
+end = true

@@ -1,0 +1,20 @@
+id = "false_alarm"
+kind = "incoming"
+weight = 3
+visual = "incoming"
+
+[node.start]
+text.full = "Incoming. The IDC is garbled; it could be a damaged GDO on a returning team."
+text.partial = "Incoming. The IDC is garbled."
+text.minimal = "Incoming. Garbled IDC."
+default = "hold"
+
+[[node.start.choice]]
+key = "open"
+label = "Open the iris"
+outcome = { visual = "arrival", effects = ["intel +5"], end = true }
+
+[[node.start.choice]]
+key = "hold"
+label = "Keep it closed until they re-send"
+outcome = { visual = "iris_hold", end = true }

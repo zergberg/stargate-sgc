@@ -28,3 +28,13 @@ def test_unparseable_file(tmp_path):
     p.write_text("volume = = 1")
     cfg, warns = load_config(p)
     assert cfg == Config() and len(warns) == 1
+
+
+def test_game_timing_defaults_and_validation(tmp_path):
+    from sgc.config import Config, load_config
+    assert Config().transition_seconds == 10.0 and Config().decision_countdown == 12.0
+    p = tmp_path / "c.toml"
+    p.write_text("transition_seconds = 15\ndecision_countdown = 3\n")
+    cfg, warns = load_config(p)
+    assert cfg.transition_seconds == 15 and cfg.decision_countdown == 12.0
+    assert any("decision_countdown" in w for w in warns)
