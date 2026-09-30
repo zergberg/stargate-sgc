@@ -5,7 +5,7 @@ from sgc.game import engine as eng
 from sgc.game import rules
 from sgc.game import schedule
 from sgc.game.schedule import QueueItem
-from sgc.game.state import available_teams, from_dict, to_dict
+from sgc.game.state import Mission, Team, available_teams, from_dict, to_dict
 from tests.test_game_engine import UNKNOWN, Rig
 from tests.test_game_missions import CHECKIN, missed, probed
 
@@ -309,3 +309,13 @@ def test_an_older_save_without_the_dial_out_time_still_shows_a_window():
     r.c.events.push(r.c.now + 200, "malp_return", {"world": w.id, "drone": "uav"})
     b = Rig(campaign=from_dict(json.loads(json.dumps(to_dict(r.c)))))
     assert next(i for i in view(b) if i.kind == "drone").status == "REPORT EXPECTED 08:00–09:30"
+
+
+def test_a_disbanded_team_s_old_missions_never_break_the_queue():
+    r = Rig()
+    w = r.world(3)
+    r.c.teams["SG-7"] = Team("medical")
+    r.c.missions.append(Mission(90, "SG-7", w.id, "survey", r.c.now - 600, r.c.now - 60, state="complete"))
+    r.c.missions.append(Mission(91, "SG-7", w.id, "survey", r.c.now - 60, r.c.now + 600, state="lost"))
+    del r.c.teams["SG-7"]                                  # a lost SG-5+ team is disbanded
+    assert not any("SG-7" in i.what for i in view(r))

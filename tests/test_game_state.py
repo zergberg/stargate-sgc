@@ -395,3 +395,24 @@ def test_a_stage_1_save_is_upgraded_with_nothing_in_flight_lost():
     assert old["version"] == 2                                  # the input is left alone
     with pytest.raises(ValueError):
         upgrade_v2({"version": 3})
+
+
+def test_the_upgrade_never_drops_vorash():
+    with open("tests/data/stage1_save.json") as f:
+        old = json.load(f)
+    used = {m["world"] for m in old["missions"]} | {e["data"].get("world") for e in old["events"]} \
+        | {t["where"] for t in old["teams"].values()}
+    spare = next(w for w in old["worlds"] if w["id"] not in used)
+    spare["id"] = world.place_id("Vorash")          # a forced collision: no Stage 1 world can have this id
+    up = upgrade_v2(old)
+    assert [w["id"] for w in up["unlisted"]] == [world.place_id("Vorash")]
+    with pytest.raises(ValueError):
+        from_dict(up)                               # a damaged save, set aside rather than losing Vorash
+
+
+@pytest.mark.parametrize("path", [("teams", "SG-6", "secondary"), ("missions", 0, "target")])
+def test_version_3_saves_carry_every_team_and_mission_key(path):
+    d = to_dict(stage2_campaign()[0])
+    del d[path[0]][path[1]][path[2]]
+    with pytest.raises(ValueError):
+        from_dict(d)

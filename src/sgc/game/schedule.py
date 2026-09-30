@@ -135,9 +135,10 @@ def view(c: Campaign, travel: Travel) -> list[QueueItem]:
                        cancellable=True, movable=True) for i, ev in enumerate(dials)]
     items += [_drone(c, ev, travel) for ev in c.events.find(lambda e: e.kind == "malp_return")]
     for m in c.missions:
-        tm = c.teams[m.team]
-        if m.state in ("active", "aborted") and tm.status == "offworld" and tm.mission == m.id \
-                and m.id not in departing:
+        if m.state not in ("active", "aborted"):
+            continue                                 # history, perhaps of a team since disbanded
+        tm = c.teams.get(m.team)
+        if tm is not None and tm.status == "offworld" and tm.mission == m.id and m.id not in departing:
             items.append(_mission(c, m))
     for name in team_names(c):
         t = c.teams[name]
@@ -168,8 +169,9 @@ def _undo(c: Campaign, d: dict) -> list[str]:
         return []                                    # the drone stays where it is
     m = c.mission(d["mission"])
     if op == "depart":                               # it never left: no mission at all
-        tm = c.teams[m.team]
-        tm.status, tm.where, tm.mission = "base", "", None
+        tm = c.teams.get(m.team)
+        if tm is not None:
+            tm.status, tm.where, tm.mission = "base", "", None
         m.state = "cancelled"
         c.record["missions"] -= 1
         return [f"{m.team} STANDING BY AT BASE"]

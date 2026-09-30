@@ -365,7 +365,7 @@ def _team(d: dict) -> Team:
 
 
 def _mission(d: dict) -> Mission:
-    target = d.get("target")
+    target = d["target"]
     return Mission(id=_int(d["id"], "mission id"), team=_one_of(d["team"], ALL_TEAMS, "team"),
                    world=_str(d["world"], "mission world"), type=_one_of(d["type"], MISSION_TYPES, "mission type"),
                    start=_int(d["start"], "start"), end=_int(d["end"], "end"),
@@ -446,7 +446,7 @@ def _event(e, world_ids: set[str], mission_ids: set[int], deal_ids: set[int] = f
         mission()
         searcher()
     elif kind == "team_return" and "mission" not in d:       # a reinforcement heading home, not a mission
-        _one_of(_one_of(need("team"), ALL_TEAMS, "returning team"), team_ids, "returning team")
+        _one_of(need("team"), team_ids, "returning team")
     elif kind in ("checkin", "team_return", "overdue"):
         mission()
         if "since" in d:
@@ -609,14 +609,13 @@ def upgrade_v2(d: dict) -> dict:
                           and isinstance(e.get("seq"), int))])
         d["events"] = [*events, {"due": due, "seq": seq, "kind": "funding_review", "data": {}}]
         d["event_seq"] = seq + 1
-    listed = {w.get("id") for w in d.get("worlds", []) if isinstance(w, dict)}
     unlisted = [place(n) for n in ARC_UNLISTED] if mode == "campaign" else []
     d.update({
         "funding": 500, "naquadah": 0, "upgrades": ["uav_program"], "reserve": {"malp": 2, "uav": 0},
         "factions": {fid: asdict(f) for fid, f in _factions().items()},
         "arcs": {a: asdict(ArcState()) for a in ARC_IDS} if mode == "campaign" else {},
         "deals": [], "captured_drones": [], "ledger": _ledger(), "reviews": [],
-        "unlisted": [world_to_dict(w) for w in unlisted if w.id not in listed],
+        "unlisted": [world_to_dict(w) for w in unlisted],     # P1 designations: no v2 world has one
         "won": None, "ending": None, "hints": [],
     })
     return d

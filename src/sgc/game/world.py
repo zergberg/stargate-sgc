@@ -45,7 +45,8 @@ CANON = {
 }
 CAMPAIGN_CANON = ("Chulak", "Cimmeria", "Kheb", "K'tau", "Langara", "Tollana", "Juna")
 # Worlds the arcs need that data/addresses.json doesn't have: glyphs, environment, inhabitants, features,
-# owner and hidden names. The glyphs are placeholders until the SG-1 content pack supplies canon ones.
+# owner and hidden names. The glyphs are placeholders until the SG-1 content pack supplies canon ones. Their
+# designations are P1 (arc_designation), which designation() never gives, so no other world can already hold one.
 ARC_WORLDS = {
     "Vorash": ((11, 27, 3, 19, 36, 8), "normal", "ally", (), None, {"allies": "Vorash"}),
 }
@@ -99,6 +100,12 @@ def designation(glyphs: tuple[int, ...]) -> str:
     for g in glyphs:
         h = (h * 41 + g) % 1_000_003
     return f"P{2 + h % 8}{_LETTERS[(h // 8) % len(_LETTERS)]}-{100 + (h // 72) % 900}"
+
+
+def arc_designation(glyphs: tuple[int, ...]) -> str:
+    """An arc world's placeholder designation: P1X-866 where designation() would give P3X-866. designation()
+    only gives P2 to P9, so a generated or Stage 1 world can never hold it."""
+    return "P1" + designation(glyphs)[2:]
 
 
 def set_status(w: World, status: str) -> bool:
@@ -184,7 +191,7 @@ def place(name: str) -> World:
     if name in CANON:
         return canon_world(name)
     glyphs, env, inhabitants, features, owner, names = ARC_WORLDS[name]
-    return World(designation(glyphs), glyphs, env, inhabitants, features, owner, dict(names), canon=True)
+    return World(arc_designation(glyphs), glyphs, env, inhabitants, features, owner, dict(names), canon=True)
 
 
 @cache                                  # rules resolve @Name tokens often; load_canon reads a file
@@ -192,7 +199,7 @@ def place_id(name: str) -> str:
     """The designation of a named canon or arc world, e.g. place_id("Chulak")."""
     if name in CANON:
         return designation(next(a.glyphs for a in load_canon() if a.name == name))
-    return designation(ARC_WORLDS[name][0])
+    return arc_designation(ARC_WORLDS[name][0])
 
 
 def cartouche(mode: str, seed: int, minute: int, reserved: set[str] = frozenset()) -> dict[str, World]:

@@ -117,6 +117,16 @@ def test_places_are_canon_or_arc_worlds_with_stable_unique_designations():
     assert len(ids) == len(set(ids))
 
 
+def test_an_arc_world_designation_is_one_no_address_can_have():
+    # designation() always gives P2..P9; an arc world is P1, so no Stage 1 or generated world can hold it
+    rng = random.Random(3)
+    made = {world.designation(tuple(rng.sample(range(1, 40), rng.choice((6, 7))))) for _ in range(20000)}
+    assert {d[1] for d in made} == set("23456789")
+    for name in world.ARC_WORLDS:
+        assert world.place_id(name).startswith("P1") and world.place_id(name) not in made
+        assert world.place(name).id == world.place_id(name)
+
+
 def test_the_cartouche_never_uses_a_reserved_designation():
     reserved = {world.place_id("Vorash")}
     for seed in range(40):
