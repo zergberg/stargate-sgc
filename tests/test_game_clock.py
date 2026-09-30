@@ -68,3 +68,23 @@ def test_gate_is_one_resource():
     assert not hasattr(clock, "gate_free_at") and not hasattr(Scheduler, "pop_due")      # the engine never used them
     assert max(clock.GATE_MINUTES.values()) <= 30          # so a check-in waits 30 game minutes at most
     assert Event(1, 0, "a") < Event(1, 1, "b") < Event(2, 0, "c")
+
+
+def test_remove_takes_matching_events_and_returns_them():
+    s = Scheduler()
+    a = s.push(10, "dial_out", {"n": 1})
+    s.push(20, "checkin")
+    assert s.remove(lambda e: e is a) == [a]
+    assert [e.kind for e in s] == ["checkin"] and s.remove(lambda e: False) == []
+
+
+def test_swap_trades_two_events_places_in_place_and_survives_a_save():
+    s = Scheduler()
+    a, b, c = s.push(10, "a"), s.push(10, "b"), s.push(30, "c")
+    s.swap(a, c)
+    assert [(e.kind, e.due, e.seq) for e in s] == [("c", 10, 0), ("b", 10, 1), ("a", 30, 2)] and s.seq == 3
+    t = Scheduler.from_list(json.loads(json.dumps(s.to_list())), s.seq)
+    assert t == s and [t.pop().kind for _ in range(3)] == ["c", "b", "a"]
+    assert [s.pop().kind for _ in range(3)] == ["c", "b", "a"]
+    with pytest.raises(ValueError):
+        s.swap(a, Event(1, 99, "stray"))

@@ -88,6 +88,22 @@ class Scheduler:
     def find(self, match: Callable[[Event], bool]) -> list[Event]:
         return sorted(e for e in self._heap if match(e))
 
+    def remove(self, match: Callable[[Event], bool]) -> list[Event]:
+        """Take out the matching events and return them, soonest first."""
+        gone = sorted(e for e in self._heap if match(e))
+        self._heap = [e for e in self._heap if not match(e)]
+        heapq.heapify(self._heap)
+        return gone
+
+    def swap(self, a: Event, b: Event) -> None:
+        """Re-key two queued events in place: each takes the other's (due, seq), so they trade places in the
+        queue and nothing else moves."""
+        if not any(e is a for e in self._heap) or not any(e is b for e in self._heap):
+            raise ValueError("can only swap events that are queued")
+        a.due, b.due = b.due, a.due
+        a.seq, b.seq = b.seq, a.seq
+        heapq.heapify(self._heap)
+
     def __len__(self) -> int:
         return len(self._heap)
 
