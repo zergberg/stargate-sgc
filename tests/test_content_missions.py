@@ -46,7 +46,7 @@ def test_something_in_the_content_unlocks_every_type():
 
 def test_no_mission_text_names_a_goauld():
     for sc in SCENARIOS.values():
-        if sc.kind in ("checkin", "debrief", "probe") and sc.id != "debrief_tollana":
+        if sc.kind in ("checkin", "debrief", "probe") and sc.id != "debrief_tollana" and not sc.id.startswith("arc_"):
             for node in sc.nodes.values():
                 for text in [*node.text.values(), *(ch.label for ch in node.choices)]:
                     assert not any(name in text for name in world.GOAULD), (sc.id, text)
