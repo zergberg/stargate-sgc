@@ -468,3 +468,56 @@ def test_the_queue_tab_on_a_small_terminal():
     db.message = "CANCELLED: UAV TO P3X-774"
     screens.draw_database(cv, layout, db, "bar")
     assert "CANCELLED: UAV TO P3X-774" in cv.text().split("\n")[-1]
+
+
+DAY100 = [
+    QueueItem("dial:uav:P3X-774", "dial_out", "1", "UAV → P3X-774", "WAITING FOR THE GATE", (0, 0), True, True),
+    QueueItem("dial:search:3:SG-1", "dial_out", "2", "SG-1 → P3X-774 FOR SG-3", "WAITING FOR THE GATE", (0, 1),
+              True, True),
+    QueueItem("drone:P2A-018", "drone", "D100 23:40", "MALP AT P2A-018", "REPORT EXPECTED D100 23:40–D101 00:40",
+              (1, 1)),
+    QueueItem("mission:3", "mission", "D100 02:00", "SG-2 CONTACT OF P3X-774",
+              "CHECK-IN D100 02:00 · DUE HOME D101 09:00", (1, 2)),
+    QueueItem("team:SG-4", "team", "D101 18:00", "SG-4 RE-FORMING", "READY D101 18:00", (1, 3)),
+]
+
+
+@pytest.mark.parametrize("cols,rows", [(80, 22), (120, 36)])
+def test_the_queue_tab_fits_rows_past_day_100(cols, rows):
+    layout, cv = small(cols, rows)
+    db = Database(db_campaign()[0], lambda: DAY100)
+    db.tab = "queue"
+    screens.draw_database(cv, layout, db, "bar")
+    text = cv.text()
+    for item in DAY100:
+        for cell in item.cells:
+            assert cell in text, cell
+    assert "…" not in text
+
+
+def test_the_full_database_legend_only_lists_keys_that_do_something_on_the_tab():
+    layout, cv = small(80, 22)
+    db = Database(db_campaign()[0], lambda: WIDEST)
+    db.tab = "queue"
+    screens.draw_database(cv, layout, db, "full")
+    text = cv.text()
+    assert "search the schedule" in text
+    for bit in ("search names, ids and glyphs", "sort by status or name", "filter by status",
+                "open a world's file"):
+        assert bit not in text, bit
+    db.tab = "addresses"
+    screens.draw_database(cv, layout, db, "full")
+    text = cv.text()
+    assert "search names, ids and glyphs" in text and "search the schedule" not in text
+
+
+def test_the_engines_reply_is_clipped_never_silently_cut():
+    layout, cv = small(80, 22)
+    db = Database(db_campaign()[0], lambda: WIDEST)
+    db.tab = "queue"
+    db.message = "CANCEL THE UAV TO P3X-774?  x AGAIN TO CONFIRM"
+    screens.draw_database(cv, layout, db, "bar")
+    assert db.message in cv.text().split("\n")[1]        # never cut at 80 columns
+    db.message = "X" * 200
+    screens.draw_database(cv, layout, db, "bar")
+    assert "…" in cv.text().split("\n")[1]                # a truly oversized reply is clipped visibly, not cut

@@ -21,7 +21,7 @@ METER_W = 10
 STATUS_H = 6
 LEGENDS = ("bar", "full", "off")
 WIDTHS = {"addresses": (0, 18, 10, 10, 5, 5), "missions": (5, 16, 8, 10, 9, 4, 0),
-          "teams": (5, 10, 9, 17, 16, 0), "intel": (5, 22, 8, 0), "queue": (9, 0, 39)}
+          "teams": (5, 10, 9, 17, 16, 0), "intel": (5, 22, 8, 0), "queue": (10, 0, 41)}
 KEYS_HELP = (("b", "briefing room"), ("d", "SGC Database"), ("1-9", "give an order"), ("↑↓ ⏎", "choose"),
              ("←→", "Database tabs"), ("/", "search"), ("s f", "sort, filter"), ("?", "legend"),
              ("m + -", "mute, volume"), ("p", "pause (Recruit)"), ("^C Esc", "cancel typing"),
@@ -66,15 +66,24 @@ def _db_keys(tab: str) -> list[tuple[str, str]]:
     return keys
 
 
-DB_HELP = (("←→", "switch tabs"), ("↑↓", "select, or scroll a world file"),
-           ("⏎", "open a world's file"), ("/", "search names, ids and glyphs"), ("s", "sort by status or name"),
-           ("f", "filter by status"), ("?", "legend: bar, full, off"), ("q", "close the Database"))
-DB_QUEUE_HELP = (("x", "cancel a dial-out, x to confirm"), ("[ ]", "move a dial-out up, down"))
+def _db_help_entries(tab: str) -> list[tuple[str, str]]:
+    """The full Database legend for this tab, mirroring _db_keys: only the keys that do something, explained."""
+    entries = [("←→", "switch tabs"), ("↑↓", "select, or scroll a world file")]
+    if tab in ("addresses", "missions", "intel"):
+        entries.append(("⏎", "open a world's file"))
+    if tab == "addresses":
+        entries += [("/", "search names, ids and glyphs"), ("s", "sort by status or name"),
+                    ("f", "filter by status")]
+    if tab == "queue":
+        entries += [("/", "search the schedule"), ("x", "cancel a dial-out, x to confirm"),
+                    ("[ ]", "move a dial-out up, down")]
+    entries += [("?", "legend: bar, full, off"), ("q", "close the Database")]
+    return entries
 
 
 def _db_help_rows(cols: int, tab: str = "addresses") -> list[str]:
     """The full Database legend: every key with what it does, in two columns when there's room."""
-    entries = [f"{k:<3} {label}" for k, label in DB_HELP + (DB_QUEUE_HELP if tab == "queue" else ())]
+    entries = [f"{k:<3} {label}" for k, label in _db_help_entries(tab)]
     colw = max(len(e) for e in entries) + 3
     per = 2 if 2 * colw + 1 <= cols else 1
     rows = [entries[i:i + per] for i in range(0, len(entries), per)]
@@ -391,7 +400,7 @@ def _draw_database_compact(canvas: Canvas, layout: Layout, db: Database) -> None
         if not table:
             canvas.put(0, y, ("NOTHING SCHEDULED" if db.tab == "queue" else "NOTHING ON FILE")[:cols], DIM)
     hint = f" {db.message} " if db.tab == "queue" and db.message else _db_hint(db.tab)
-    canvas.put(0, bottom, hint[:cols], AMBER, HEADER_BG, bold=True)
+    canvas.put(0, bottom, _clip(hint, cols), AMBER, HEADER_BG, bold=True)
 
 
 def draw_database(canvas: Canvas, layout: Layout, db: Database, legend: str) -> None:
@@ -424,8 +433,13 @@ def draw_database(canvas: Canvas, layout: Layout, db: Database, legend: str) -> 
         line = f"SORT {db.sort.upper()} · FILTER {(db.filter or 'all').upper()} · SEARCH: {db.query}"
         canvas.put(1, 1, (line + ("_" if db.searching else ""))[:max(0, cols - len(clock_text) - 2)], CYAN)
     if db.tab == "queue":
-        line = f"SEARCH: {db.query}_" if db.searching else db.message or (f"SEARCH: {db.query}" if db.query else "")
-        canvas.put(1, 1, line[:max(0, cols - len(clock_text) - 2)], CYAN)
+        if db.searching:
+            canvas.put(1, 1, _clip(f"SEARCH: {db.query}_", max(0, cols - len(clock_text) - 2)), CYAN)
+        elif db.message:
+            # the engine's reply takes priority over the clock, and is always clipped visibly, never silently
+            canvas.put(1, 1, _clip(db.message, max(0, cols - 2)), CYAN)
+        elif db.query:
+            canvas.put(1, 1, _clip(f"SEARCH: {db.query}", max(0, cols - len(clock_text) - 2)), CYAN)
     if db.tab == "world":
         _draw_world_file(canvas, 2, top, bottom, max(1, cols - 4), db)
     else:

@@ -154,6 +154,10 @@ class Database:
                 self.sel = i
                 return
 
+    def disarm(self) -> None:
+        """Clear the armed cancel and any showing reply. The app calls this before ?, m, + and -."""
+        self.armed, self.message = None, ""
+
     # ------------------------------------------------------------------ the world file
     def detail(self) -> list[str]:
         w = self.c.worlds.get(self.world_id)
@@ -202,13 +206,15 @@ class Database:
                 return ("cancel", row.key, confirm)
             self.armed = None
             return ("move", row.key, -1 if k == "[" else 1)
-        self.armed, self.message = None, ""
+        self.disarm()
         if k == "q":
             return ("close",)
         if k in ("right", "tab", "left"):
             step = -1 if k == "left" else 1
             self.tab, self.sel = TABS[(TABS.index(self.tab) + step) % len(TABS)], 0
-            if self.tab == "world":
+            if self.tab in SEARCHABLE:
+                self.query, self.searching = "", False   # arriving at a search tab starts it fresh, not the
+            if self.tab == "world":                      # other search tab's leftover query
                 self.scroll = 0
         elif k in ("up", "down") and self.tab == "world":
             self.scroll = max(0, self.scroll + (-1 if k == "up" else 1))

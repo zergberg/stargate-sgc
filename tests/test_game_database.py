@@ -247,3 +247,24 @@ def test_the_world_file_header_names_an_unnamed_world_once():
     assert db.detail()[0] == f"{ws[1].id} · PROBED"
     db.world_id = ws[2].id
     assert db.detail()[0] == f"HA'SHEK · {ws[2].id} · SURVEYED"
+
+
+def test_switching_tabs_clears_the_search():
+    db = queue_db()
+    db.tab = "addresses"
+    db.key("/")
+    for ch in "toxic":
+        db.key(f"ch:{ch}")
+    db.key("enter")
+    assert db.query == "toxic" and not db.searching
+    for _ in range(5):
+        db.key("right")                            # addresses -> ... -> queue: a search doesn't follow
+    assert db.tab == "queue" and db.query == "" and not db.searching
+    assert [r.key for r in db.rows()] == [i.id for i in QUEUE]     # not still filtered by the old search
+
+
+def test_disarm_clears_armed_and_the_message():
+    db = queue_db()
+    db.armed, db.message = "dial:uav:P3X-774", "CANCEL THE UAV TO P3X-774?  x AGAIN TO CONFIRM"
+    db.disarm()
+    assert db.armed is None and db.message == ""
