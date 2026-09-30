@@ -133,10 +133,23 @@ def _place(tok: str, text: str) -> str:
     return tok[1:]
 
 
-def _faction_tok(tok: str, text: str) -> str:
-    if tok in wd.FACTION_IDS or tok in FACTION_SLOTS:
+_KIND_WORDS = {"goauld": "a Goa'uld", "ally": "an ally"}
+
+
+def _faction_tok(tok: str, text: str, kind: str | None = None) -> str:
+    """A faction id or slot; a literal id must be of `kind` ("goauld" or "ally") when one is given."""
+    if tok in FACTION_SLOTS:
         return tok
-    raise RuleError(f'"{text}": unknown faction "{tok}"')
+    if tok not in wd.FACTION_IDS:
+        raise RuleError(f'"{text}": unknown faction "{tok}"')
+    if kind is not None and wd.FACTION_KIND[tok] != kind:
+        raise RuleError(f'"{text}": "{tok}" isn\'t {_KIND_WORDS[kind]}')
+    return tok
+
+
+def _kind_for(what: str) -> str:
+    """Trust belongs to allies; attention and stage to the Goa'uld."""
+    return "ally" if what == "trust" else "goauld"
 
 
 def _fid(c: Campaign, tok: str, bind: dict) -> str | None:
@@ -157,8 +170,9 @@ def held(c: Campaign, wid: str) -> bool:
 def hidden(text: str) -> bool:
     """A condition on something the SGC may not know: it picks which scenario plays, so only `when` may use it."""
     t = text.split()
-    return (len(t) >= 3 and t[0] == "world" and t[2] in _HIDDEN_WORLD) or (bool(t) and t[0] in
-                                                                             ("attention", "stage", "is"))
+    return ((len(t) >= 3 and t[0] == "world" and t[2] in _HIDDEN_WORLD)
+            or (bool(t) and t[0] in ("attention", "stage", "is"))
+            or "{owner}" in t)                                  # who holds a world is itself hidden
 
 
 def attention(c: Campaign, fid: str | None, n: int) -> list[str]:
@@ -239,10 +253,10 @@ def _cond_body(t: list[str], text: str) -> Callable[[Campaign, dict], bool] | No
         tok = _world_tok(t[1], text)
         return lambda c, b: (w := _world(c, tok, b)) is not None and held(c, w.id)
     if len(t) == 4 and t[0] in ("trust", "attention") and t[2] in _OPS:
-        tok, op, n, attr = _faction_tok(t[1], text), _OPS[t[2]], _int(t[3], text), t[0]
+        tok, op, n, attr = _faction_tok(t[1], text, _kind_for(t[0])), _OPS[t[2]], _int(t[3], text), t[0]
         return lambda c, b: (fid := _fid(c, tok, b)) is not None and op(getattr(c.factions[fid], attr), n)
     if len(t) == 3 and t[0] == "stage":
-        tok, stage = _faction_tok(t[1], text), _one(t[2], factions.STAGE_NAMES, "stage", text)
+        tok, stage = _faction_tok(t[1], text, "goauld"), _one(t[2], factions.STAGE_NAMES, "stage", text)
         return lambda c, b: (fid := _fid(c, tok, b)) is not None and factions.stage_of(c, fid) == stage
     if len(t) == 3 and t[0] == "arc":
         aid, state = _one(t[1], ARC_IDS, "arc", text), _one(t[2], ARC_STATES, "arc state", text)
@@ -333,6 +347,8 @@ def _team(tok: str, status: str):
             c.used.add("ally.nox")
             tm.status, tm.until = "injured", c.now + INJURED
             return [f"THE NOX RETURNED {name} ALIVE"]
+        if status == "captured" and prev in ("captured", "lost"):
+            return []                   # already held, or gone: nothing more to take
         tm.status = status
         if status == "captured":
             tm.idc, tm.until = "compromised", c.now + CAPTIVE
@@ -716,7 +732,7 @@ def _effect_body(body: str, text: str):
     if t[0] == "game_over" and len(t) >= 2:
         return _game_over(body.split(None, 1)[1])
     if t[0] in ("attention", "trust") and len(t) == 3:
-        return _faction_delta(t[0], _faction_tok(t[1], text), _signed(t[2], text))
+        return _faction_delta(t[0], _faction_tok(t[1], text, _kind_for(t[0])), _signed(t[2], text))
     if t[0] in ("funding", "naquadah") and len(t) == 2:
         return _resource(t[0], _signed(t[1], text))
     if t[0] == "incident" and len(t) == 2:

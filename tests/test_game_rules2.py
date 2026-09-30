@@ -324,3 +324,35 @@ def test_content_cannot_set_a_team_forming_or_training(status):
     with pytest.raises(RuleError):
         rules.parse_effect(f"team {{team}} {status}")
     assert rules.parse_cond(f"team SG-5 {status}")                          # but it may ask
+
+
+def test_any_condition_on_the_owner_is_hidden():
+    for text in ("aware {owner}", "trust {owner} >= 0"):
+        assert rules.hidden(text), text
+    assert not rules.hidden("aware {faction}") and not rules.hidden("trust {faction} >= 25")
+
+
+def test_capturing_a_captured_or_lost_team_changes_nothing():
+    c = camp()
+    w, b = owned(c)
+    run(["team {team} captured"], c, {**b, "team": "SG-2"})
+    until, attention = c.teams["SG-2"].until, c.factions["sokar"].attention
+    c.minutes += 600
+    assert run(["team {team} captured"], c, {**b, "team": "SG-2"}) == []
+    assert c.teams["SG-2"].until == until and c.factions["sokar"].attention == attention
+    assert c.ledger["captured"] == 1
+    run(["team SG-3 lost"], c)
+    assert run(["team {team} captured"], c, {**b, "team": "SG-3"}) == []
+    assert c.teams["SG-3"].status == "lost" and c.ledger["captured"] == 1
+
+
+@pytest.mark.parametrize("bad", ["trust apophis >= 5", "attention tokra > 1", "stage asgard curious"])
+def test_a_faction_of_the_wrong_kind_is_refused_in_conditions(bad):
+    with pytest.raises(RuleError):
+        rules.parse_cond(bad)
+
+
+@pytest.mark.parametrize("bad", ["trust apophis +5", "attention tokra +5"])
+def test_a_faction_of_the_wrong_kind_is_refused_in_effects(bad):
+    with pytest.raises(RuleError):
+        rules.parse_effect(bad)
