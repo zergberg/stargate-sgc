@@ -7,19 +7,20 @@ from sgc.game.state import new_campaign
 def room():
     scenarios, _ = content.load(user=None)
     c = new_campaign("campaign", "officer", 2)
+    c.stock["uav"] = 2
+    c.upgrades.add("uav_program")
     return Room(Engine(c, scenarios)), c
 
 
 def test_main_menu_and_leaving():
     r, _ = room()
     assert r.title == "BRIEFING ROOM" and [label for label, _ in r.items()][0] == "DIALING LIST"
-    assert r.key("5") == ("close",)
+    assert r.key("7") == ("close",)
     assert r.key("q") == ("close",)
 
 
 def test_probe_uav_and_recall_from_the_dialing_list():
     r, c = room()
-    c.stock["uav"] = 2
     r.key("1")
     assert r.screen == "worlds" and len(r.items()) == 21 and r.items()[0][0].startswith("Abydos")
     target = list(c.worlds)[3]
@@ -241,3 +242,141 @@ def test_pace_set_in_the_config_is_locked():
     assert r.items()[3] == ("PACE · LOCKED", False)
     r.key("4")
     assert r.screen == "main" and r.notice == "SET IN CONFIG (game_pace)" and c.pace == "standard"
+
+
+def test_requisitions_buy_drones_and_upgrades():
+    r, c = room()
+    r.key("5")
+    assert r.screen == "requisitions" and r.title == "REQUISITIONS"
+    labels = [label for label, _ in r.items()]
+    assert labels[:5] == ["BUY A MALP · 20 (4 IN STORES)", "BUY A UAV · 60 (2 IN STORES)", "MALP RESERVE: 2",
+                          "UAV RESERVE: 0", "UAV PROGRAM · APPROVED"]
+    assert "IRIS REINFORCEMENT · 100 + 5 NQ" in labels and labels[-1] == "BACK"
+    r.key("1")
+    assert r.notice.startswith("MALP PURCHASED") and c.funding == 480
+    r.key("3")
+    assert c.reserve["malp"] == 3 and r.items()[2][0] == "MALP RESERVE: 3"
+    r.key("6")
+    assert r.notice == "SECURITY DETAIL APPROVED" and "security_detail" in c.upgrades and c.funding == 360
+    r.key("7")
+    assert r.notice == "NOT ENOUGH NAQUADAH (5)" and "iris_reinforcement" not in c.upgrades
+    detail = r.detail()
+    assert detail[0] == "FUNDING 360 · NAQUADAH 0" and detail[1] == "NEXT REVIEW D8 08:00"
+    assert "Cuts damage from impacts and breaches by a quarter." in detail
+    r.key("5")
+    assert r.notice == "ALREADY APPROVED"
+
+
+def test_the_requisitions_detail_follows_the_selection_and_shows_the_last_review():
+    r, c = room()
+    c.reviews.append((7 * 24 * 60, 320, "summary"))
+    r.key("5")
+    assert r.detail()[2] == "LAST REVIEW D8 00:00: +320" and r.detail()[-1] == "Bought now, from funding."
+    r.sel = 2
+    assert r.detail()[-1].startswith("Topped up at midnight")
+    r.sel = len(r.items()) - 1                      # BACK: nothing to explain
+    assert r.detail()[-1] == "LAST REVIEW D8 00:00: +320"
+
+
+def test_the_reserve_wraps_around():
+    r, c = room()
+    r.key("5")
+    for _ in range(3):
+        r.key("4")
+    assert c.reserve["uav"] == 3
+    r.key("4")
+    r.key("4")
+    assert c.reserve["uav"] == 0
+
+
+def test_without_the_program_the_uav_says_so():
+    r, c = room()
+    c.upgrades.discard("uav_program")
+    r.key("1")
+    for k in ("down", "down", "down", "enter"):
+        r.key(k)
+    assert r.items()[1][1] is False
+    r.key("2")
+    assert r.notice == "NEEDS THE UAV PROGRAM"
+    r.key("q")
+    r.key("q")
+    r.key("5")
+    r.key("2")
+    assert r.notice == "NEEDS THE UAV PROGRAM" and c.stock["uav"] == 2
+
+
+def test_the_recall_item_shows_its_wear():
+    r, c = room()
+    target = list(c.worlds)[3]
+    c.worlds[target].drone = "uav"
+    r.key("1")
+    for k in ("down", "down", "down", "enter"):
+        r.key(k)
+    assert r.items()[2] == ("RECALL DRONE · 15", True)
+
+
+def test_commissioning_a_team_from_the_roster():
+    r, c = room()
+    r.key("2")
+    assert r.items()[4] == ("COMMISSION A NEW TEAM · 200", True)
+    r.key("5")
+    assert r.screen == "commission" and r.detail()[1] == "SG-5 FORMS IN 2 DAYS, GREEN."
+    r.key("5")
+    assert r.screen == "teams" and r.notice.startswith("SG-5 COMMISSIONED: MEDICAL")
+    assert r.items()[4][0] == "SG-5 · MEDICAL · GREEN\nFORMING 2D" and r.items()[5][0] == "COMMISSION A NEW TEAM · 200"
+
+
+def test_commissioning_without_funding_says_why():
+    r, c = room()
+    c.funding = 150
+    r.key("2")
+    assert r.items()[4] == ("COMMISSION A NEW TEAM · 200", False)
+    r.key("5")
+    assert r.screen == "teams" and r.notice == "NOT ENOUGH FUNDING (200)"
+
+
+def test_training_a_second_specialty():
+    r, c = room()
+    r.key("2")
+    r.key("3")
+    assert r.screen == "team" and r.items()[1] == ("TRAIN A SECOND SPECIALTY · 100", True)
+    r.key("2")
+    assert r.screen == "train" and r.items()[1] == ("COMBAT", False)
+    r.key("2")
+    assert r.notice == "SG-3 IS ALREADY COMBAT"
+    r.key("5")
+    assert r.screen == "team" and r.notice.startswith("SG-3 TRAINING: MEDICAL") and c.teams["SG-3"].secondary == "medical"
+    assert r.detail()[0] == "SG-3 · COMBAT/MEDICAL · GREEN" and r.items()[1][1] is False
+    r.key("2")
+    assert r.notice == "SG-3 ALREADY HAS A SECOND SPECIALTY"
+
+
+def test_sg1_cannot_train_and_says_why():
+    r, c = room()
+    r.key("2")
+    r.key("1")
+    assert r.items()[1][1] is False
+    r.key("2")
+    assert r.screen == "team" and r.notice == "SG-1 ALREADY TRAINS IN EVERY SPECIALTY"
+
+
+def test_rescue_and_recovery_name_their_target():
+    r, c = room()
+    w = list(c.worlds.values())[2]
+    w.status = "hostile"
+    c.teams["SG-4"].status, c.teams["SG-4"].where = "captured", w.id
+    w.options.append("rescue")
+    for k in ("1", "3", "4", "3"):
+        r.key(k)
+    assert r.screen == "type_pick" and ("RESCUE SG-4", True) in r.items()
+
+
+def test_retiring_asks_first_and_ends_the_campaign():
+    r, c = room()
+    r.key("6")
+    assert r.screen == "retire" and r.detail()[0] == "SCORE SO FAR: 0"
+    r.key("q")
+    assert r.screen == "main" and not r.e.ended
+    r.key("6")
+    r.key("1")
+    assert r.e.ended and c.ending == "retired" and r.notice == "COMMAND HANDED OVER"

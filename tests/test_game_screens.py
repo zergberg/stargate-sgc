@@ -327,7 +327,9 @@ def test_the_roster_fits_the_panel(cols, rows):
     assert "…" not in text and "SG-4 · SCIENCE ·" in text and f"AWAY: {w.name}" in text
     if layout.side.w >= 38:
         assert "SG-4 · SCIENCE · GREEN" in text
-    assert "RE-FORMING 3D" in text and "5  BACK" in text
+    assert "RE-FORMING 3D" in text and "5  COMMISSION" in text
+    if layout.side.w >= 38:
+        assert "6  BACK" in text
 
 
 def test_standing_orders_are_readable_in_full():

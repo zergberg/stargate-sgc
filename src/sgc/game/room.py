@@ -1,24 +1,35 @@
-"""The briefing room's controls: the dialing list with actions on each address, the roster, the standing
-orders and the pace. A pure controller: it reads the campaign and calls the engine; screens.py draws it."""
+"""The briefing room's controls: the dialing list with actions on each address, the roster (commissioning
+and training), the standing orders, the pace, requisitions and retiring. A pure controller: it reads the campaign and calls the engine; screens.py draws it."""
 from __future__ import annotations
 
 from typing import Callable
 
-from . import orders
-from .clock import HOUR, PACE_NAMES
+from . import economy, orders, roster
+from .clock import DAY, HOUR, PACE_NAMES, short
+from .economy import PRICES, UPGRADES, cost_text
 from .engine import PLANNABLE, Engine, team_label
 from .orders import SITUATIONS
 from .rules import STAND_DOWN, stands_down
-from .state import available_teams, rank, team_names
+from .scoring import score
+from .state import RESERVE_MAX, SPECIALTIES, available_teams, rank, team_names
 
 Handler = Callable[[], "str | None"]
 
-MAIN = ("DIALING LIST", "TEAMS", "STANDING ORDERS", "PACE", "BACK TO THE GATE ROOM")
+MAIN = ("DIALING LIST", "TEAMS", "STANDING ORDERS", "PACE", "REQUISITIONS", "RETIRE FROM COMMAND",
+        "BACK TO THE GATE ROOM")
+MAIN_SCREENS = {"DIALING LIST": "worlds", "TEAMS": "teams", "STANDING ORDERS": "orders", "PACE": "pace",
+                "REQUISITIONS": "requisitions", "RETIRE FROM COMMAND": "retire"}
 TITLES = {"main": "BRIEFING ROOM", "worlds": "DIALING LIST", "world": "ADDRESS", "team_pick": "ASSIGN A TEAM",
           "type_pick": "MISSION TYPE", "note": "ADD A NOTE", "teams": "TEAMS", "team": "TEAM",
-          "orders": "STANDING ORDERS", "pace": "PACE", "revoke": "REVOKE THE IDC?"}
+          "orders": "STANDING ORDERS", "pace": "PACE", "revoke": "REVOKE THE IDC?",
+          "requisitions": "REQUISITIONS", "commission": "COMMISSION A TEAM", "train": "TRAINING",
+          "retire": "RETIRE FROM COMMAND?"}
 PARENT = {"worlds": "main", "world": "worlds", "team_pick": "world", "type_pick": "team_pick", "note": "world",
-          "teams": "main", "team": "teams", "orders": "main", "pace": "main", "revoke": "team"}
+          "teams": "main", "team": "teams", "orders": "main", "pace": "main", "revoke": "team",
+          "requisitions": "main", "commission": "teams", "train": "team", "retire": "main"}
+DRONE_ROWS = 4                   # requisitions: two purchases and two reserves, then the upgrades
+BUY_TEXT = "Bought now, from funding."
+RESERVE_TEXT = "Topped up at midnight from funding, always keeping 100 in hand."
 CANCEL_KEYS = ("ctrl-c", "escape")
 PACE_LOCKED = "SET IN CONFIG (game_pace)"
 # Short situation names for the 38-column panel; the current order goes on the line below.
@@ -55,7 +66,8 @@ class Room:
 
     def _team_line(self, name: str) -> str:
         t = self.c.teams[name]
-        return f"{name} · {t.specialty.upper()} · {rank(t).upper()}"
+        spec = t.specialty.upper() + (f"/{t.secondary.upper()}" if t.secondary else "")
+        return f"{name} · {spec} · {rank(t).upper()}"
 
     def _status(self, name: str) -> str:
         """The roster's status line: where an offworld team is, or the status with its time left."""
@@ -75,18 +87,47 @@ class Room:
         both the item list and the dispatch, so they can't drift apart."""
         c, w = self.c, self.c.worlds[self.world_id]
         teams_available, plannable = bool(available_teams(c)), w.status in PLANNABLE
+        program = "uav_program" in c.upgrades
         bound = f"A {w.drone.upper()} IS ALREADY ON {w.name.upper()}" if w.drone else ""
         return [
             (f"MALP PROBE ({c.stock['malp']} LEFT)", c.stock["malp"] > 0 and not w.drone,
              "NO MALPS LEFT" if c.stock["malp"] <= 0 else bound, lambda: self.e.probe(self.world_id)),
-            (f"UAV FLIGHT ({c.stock['uav']} LEFT)", c.stock["uav"] > 0 and not w.drone,
-             "NO UAVS LEFT" if c.stock["uav"] <= 0 else bound, lambda: self.e.send_uav(self.world_id)),
-            ("RECALL DRONE", bool(w.drone), f"NO DRONE ON {w.name.upper()}",
-             lambda: self.e.recall_drone(self.world_id)),
+            (f"UAV FLIGHT ({c.stock['uav']} LEFT)", program and c.stock["uav"] > 0 and not w.drone,
+             "NEEDS THE UAV PROGRAM" if not program else "NO UAVS LEFT" if c.stock["uav"] <= 0 else bound,
+             lambda: self.e.send_uav(self.world_id)),
+            (f"RECALL DRONE · {economy.recall_cost(w.drone)}" if w.drone else "RECALL DRONE", bool(w.drone),
+             f"NO DRONE ON {w.name.upper()}", lambda: self.e.recall_drone(self.world_id)),
             ("ASSIGN TEAM", teams_available and plannable,
              "PROBE IT FIRST" if not plannable else "NO TEAM AVAILABLE", self._start_assign),
             ("ADD NOTE", True, "", self._start_note),
         ]
+
+    def _req_table(self) -> list[tuple[str, bool, str, "Handler"]]:
+        """Requisitions: buy a drone, set a reserve, approve an upgrade. Like _world_table, one table drives
+        the items, the reasons and the dispatch."""
+        c = self.c
+        rows: list[tuple[str, bool, str, Handler]] = []
+        for drone in ("malp", "uav"):
+            why = economy.reason(c, drone)
+            rows.append((f"BUY A {drone.upper()} · {PRICES[drone]} ({c.stock[drone]} IN STORES)", why is None,
+                         why or "", lambda d=drone: self.e.buy(d)))
+        for drone in ("malp", "uav"):
+            n = c.reserve[drone]
+            rows.append((f"{drone.upper()} RESERVE: {n}", True, "",
+                         lambda d=drone, n=n: self.e.set_reserve(d, (n + 1) % (RESERVE_MAX + 1))))
+        for uid, u in UPGRADES.items():
+            why = economy.reason(c, uid)
+            rows.append((f"{u.title} · {'APPROVED' if uid in c.upgrades else cost_text(uid)}", why is None,
+                         why or "", lambda uid=uid: self.e.buy(uid)))
+        return rows
+
+    def _type_label(self, mtype: str) -> str:
+        target = self.e.mission_target(self.world_id, mtype) if mtype in ("rescue", "recover") else None
+        if mtype == "rescue" and target:
+            return f"RESCUE {target}"
+        if mtype == "recover" and target:
+            return f"RECOVER THE {target.upper()}"
+        return mtype.upper()
 
     def _start_assign(self) -> None:
         self._go("team_pick")
@@ -116,11 +157,23 @@ class Room:
             return [(self._team_line(t), True) if t in free else (f"{self._team_line(t)}\n{self._status(t)}", False)
                     for t in self._teams()] + [("BACK", True)]
         if self.screen == "type_pick":
-            return [(t.upper(), True) for t in self._types()] + [("BACK", True)]
+            return [(self._type_label(t), True) for t in self._types()] + [("BACK", True)]
         if self.screen == "teams":
-            return [(f"{self._team_line(t)}\n{self._status(t)}", True) for t in self._teams()] + [("BACK", True)]
+            return ([(f"{self._team_line(t)}\n{self._status(t)}", True) for t in self._teams()]
+                    + [(f"COMMISSION A NEW TEAM · {roster.COMMISSION}", roster.commission_reason(c) is None),
+                       ("BACK", True)])
+        if self.screen == "commission":
+            return [(s.upper(), True) for s in SPECIALTIES] + [("BACK", True)]
         if self.screen == "team":
-            return [("REVOKE AND REISSUE THE IDC", c.teams[self.team].status != "lost"), ("BACK", True)]
+            return [("REVOKE AND REISSUE THE IDC", c.teams[self.team].status != "lost"),
+                    (f"TRAIN A SECOND SPECIALTY · {roster.TRAINING}", roster.train_reason(c, self.team) is None),
+                    ("BACK", True)]
+        if self.screen == "train":
+            return [(s.upper(), roster.train_reason(c, self.team, s) is None) for s in SPECIALTIES] + [("BACK", True)]
+        if self.screen == "requisitions":
+            return [(label, ok) for label, ok, _, _ in self._req_table()] + [("BACK", True)]
+        if self.screen == "retire":
+            return [("RETIRE AND FILE THE RECORD", True), ("BACK", True)]
         if self.screen == "revoke":
             down = self._extends(self.team)
             return [(f"REVOKE, STAND DOWN {STAND_DOWN // HOUR}H" if down else "REVOKE AND REISSUE", True),
@@ -178,7 +231,13 @@ class Room:
         if self.screen == "world":
             return self._world_table()[i][2]
         if self.screen == "team":
-            return f"{self.team} IS LOST"
+            return f"{self.team} IS LOST" if i == 0 else roster.train_reason(self.c, self.team) or ""
+        if self.screen == "train":
+            return roster.train_reason(self.c, self.team, SPECIALTIES[i]) or ""
+        if self.screen == "teams":
+            return roster.commission_reason(self.c) or ""
+        if self.screen == "requisitions":
+            return self._req_table()[i][2]
         if self.screen == "team_pick":
             team = self._teams()[i]
             return f"{team}: {self._status(team)}"
@@ -199,7 +258,7 @@ class Room:
         if self.screen == "main":
             if label == MAIN[-1]:
                 return ("close",)
-            self._go({"DIALING LIST": "worlds", "TEAMS": "teams", "STANDING ORDERS": "orders", "PACE": "pace"}[label])
+            self._go(MAIN_SCREENS[label])
         elif self.screen == "worlds":
             self.world_id = self._worlds()[i]
             self._go("world")
@@ -215,10 +274,23 @@ class Room:
             self.notice = self.e.assign(self.world_id, self.team, self._types()[i])
             self._go("world")
         elif self.screen == "teams":
-            self.team = self._teams()[i]
-            self._go("team")
+            if i < len(self._teams()):
+                self.team = self._teams()[i]
+                self._go("team")
+            else:
+                self._go("commission")
         elif self.screen == "team":
-            self._go("revoke")
+            self._go("revoke" if i == 0 else "train")
+        elif self.screen == "commission":
+            self.notice = self.e.commission(SPECIALTIES[i])     # _go keeps the notice
+            self._go("teams")
+        elif self.screen == "train":
+            self.notice = self.e.train(self.team, SPECIALTIES[i])
+            self._go("team")
+        elif self.screen == "requisitions":
+            self.notice = self._req_table()[i][3]() or ""
+        elif self.screen == "retire":
+            self.notice = self.e.retire()                       # the app sees the campaign end and takes over
         elif self.screen == "revoke":
             self.e.revoke_idc(self.team)
             self._go("team")
@@ -237,6 +309,28 @@ class Room:
 
     def detail(self) -> list[str]:
         """Lines about the selected address or team, for the screen above the actions."""
+        c = self.c
+        if self.screen == "requisitions":
+            nxt = min((e.due for e in c.events if e.kind == "funding_review"), default=None)
+            lines = [f"FUNDING {c.funding} · NAQUADAH {c.naquadah}",
+                     f"NEXT REVIEW {short(nxt)}" if nxt is not None else "NO REVIEW SCHEDULED"]
+            lines += [f"LAST REVIEW {short(m)}: +{g}" for m, g, _ in c.reviews[-1:]]
+            i = self.sel
+            if i < 2:
+                lines += ["", BUY_TEXT]
+            elif i < DRONE_ROWS:
+                lines += ["", RESERVE_TEXT]
+            elif i < DRONE_ROWS + len(UPGRADES):
+                lines += ["", list(UPGRADES.values())[i - DRONE_ROWS].text]
+            return lines
+        if self.screen == "commission":
+            nxt = roster.next_number(c)
+            return [f"FUNDING {c.funding}",
+                    f"{nxt} FORMS IN {roster.FORMING // DAY} DAYS, GREEN." if nxt else "THE ROSTER IS FULL."]
+        if self.screen == "train" and self.team:
+            return [self._team_line(self.team), "HALF STRENGTH IN THE NEW SPECIALTY; OFF DUTY FOR A DAY."]
+        if self.screen == "retire":
+            return [f"SCORE SO FAR: {score(c)}", "THE CAMPAIGN ENDS HERE AND GOES INTO THE HALL OF RECORDS."]
         if self.screen in ("team", "revoke") and self.team:
             t = self.c.teams[self.team]
             lines = [self._team_line(self.team), self._status(self.team), f"IDC {t.idc.upper()}"]
