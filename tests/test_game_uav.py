@@ -49,7 +49,7 @@ def test_a_contact_is_boxed_when_the_readings_name_one(seen, box):
     assert uav.contact(seen) is box
 
 
-# ---------------------------------------------------------------- the launch and the flight home
+# ---------------------------------------------------------------- the launch
 
 def test_a_uav_launch_fires_off_the_rail_and_climbs_into_the_gate():
     r = Rig(director=True)
@@ -72,28 +72,6 @@ def test_a_uav_launch_fires_off_the_rail_and_climbs_into_the_gate():
     assert s.splashes
     through.update(s, 1.0)
     assert s.figures == [] and s.splashes == []
-
-
-def test_a_uav_flies_home_nose_first_and_lands():
-    r = Rig(director=True)
-    w = r.world(5, env="normal")
-    steps = r.e._v_drone(w, "uav", home=True)
-    assert abs(total(steps) - total(r.e._v_drone(w, "malp", home=True))) <= 1.0
-    s = r.d.scene
-    down = step(steps, "UAV RETURNING THROUGH THE GATE")
-    down.update(s, 0.0)
-    assert uav_of(s).pos == pytest.approx(0.95) and uav_of(s).alt == pytest.approx(eng.UAV_CRUISE)
-    assert uav_of(s).facing == "toward"
-    down.update(s, 0.5)
-    mid = uav_of(s)
-    assert 0.05 < mid.pos < 0.95 and 0 < mid.alt < eng.UAV_CRUISE
-    down.update(s, 1.0)
-    assert uav_of(s).pos == pytest.approx(0.05) and uav_of(s).alt == 0.0
-    landed = step(steps, "UAV RECOVERED")
-    landed.update(s, 0.5)
-    assert uav_of(s).alt == 0.0 and uav_of(s).pos < 0.05
-    landed.update(s, 1.0)
-    assert s.figures == []
 
 
 def test_the_malp_still_rolls():

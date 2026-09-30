@@ -374,23 +374,6 @@ class Engine:
         self.save_now()
         return msg
 
-    def recall_drone(self, wid: str) -> str:
-        w = self.c.worlds[wid]
-        if not w.drone:
-            return f"NO DRONE ON {w.name.upper()}"
-        if self.c.events.find(lambda e: e.kind == "dial_out" and e.data.get("op") == "recall"
-                              and e.data.get("world") == wid):
-            return "RECALL ALREADY QUEUED"
-        why = economy.charge_recall(self.c, w.drone)
-        if why:
-            return why
-        wear = economy.recall_cost(w.drone)
-        self.c.events.push(self.c.now, "dial_out", {"op": "recall", "world": wid, "wear": wear})
-        msg = f"RECALL QUEUED FOR THE {w.drone.upper()} ON {w.name.upper()} — {wear} FOR WEAR"
-        self._log(msg)
-        self.save_now()
-        return msg
-
     def add_note(self, wid: str, text: str) -> None:
         text = text.strip()
         if text:
@@ -677,6 +660,7 @@ class Engine:
             self._log(line)
 
     def _recall_out(self, wid: str, wear: int = 0) -> None:
+        """Legacy: a paid recall queued in an older save still dials and brings the drone home."""
         w = self.c.worlds[wid]
         if not w.drone:
             self.c.funding += wear                   # nothing left to fetch: the wear wasn't spent
@@ -686,7 +670,7 @@ class Engine:
         rules.clear_uplink(self.c, wid)
         self._log(f"{drone.upper()} RECALLED FROM {w.name.upper()}")
         self._stow(drone)
-        self._show(self._v_drone(w, drone, home=True))
+        self._show(self._v_recall(w, drone))
 
     # ------------------------------------------------------------------ scenarios
     def _wbind(self, w: World) -> dict:
@@ -1414,17 +1398,27 @@ class Engine:
         dial, _ = sq.dial(w.address(), self.d.scene.ring_angle)
         return [start_outgoing(w.address()), *dial, *sq.kawoosh()]
 
-    def _v_drone(self, w: World, drone: str, home: bool = False) -> list[Step]:
+    def _v_drone(self, w: World, drone: str) -> list[Step]:
+        """A drone through the gate and the gate shut behind it (a search MALP; a probe plays _v_probe)."""
         if self.d is None:
             return []
         if drone == "uav":
-            return [*self._outgoing(w), *(self._uav_home() if home else self._uav_launch()), *sq.shutdown(),
-                    cleanup()]
+            return [*self._outgoing(w), *self._uav_launch(), *sq.shutdown(), cleanup()]
 
         def roll(s, p):
-            s.figures = [Figure("malp", 1 - p if home else p, 0.0)] if p < 1 else []
-        verb = "RETURNING THROUGH THE GATE" if home else "IN TRANSIT"
-        return [*self._outgoing(w), Step(5.0, roll, f"{drone.upper()} {verb}"), *sq.shutdown(), cleanup()]
+            s.figures = [Figure("malp", p, 0.0)] if p < 1 else []
+        return [*self._outgoing(w), Step(5.0, roll, f"{drone.upper()} IN TRANSIT"), *sq.shutdown(), cleanup()]
+
+    def _v_recall(self, w: World, drone: str) -> list[Step]:
+        """Legacy: an older save's recall, the drone coming home through the gate."""
+        if self.d is None:
+            return []
+        if drone == "uav":
+            return [*self._outgoing(w), *self._uav_home(), *sq.shutdown(), cleanup()]
+
+        def roll(s, p):
+            s.figures = [Figure("malp", 1 - p, 0.0)] if p < 1 else []
+        return [*self._outgoing(w), Step(5.0, roll, "MALP RETURNING THROUGH THE GATE"), *sq.shutdown(), cleanup()]
 
     def _v_telemetry(self, w: World, seen: dict[str, str], drone: str = "malp") -> list[Step]:
         if self.d is None:

@@ -63,15 +63,6 @@ def test_the_reserve_is_clamped():
     assert c.reserve["uav"] == 0
 
 
-def test_recall_wear_is_a_quarter_of_the_price():
-    assert economy.recall_cost("malp") == 5 and economy.recall_cost("uav") == 15
-    c = camp()
-    c.funding = 4
-    assert economy.charge_recall(c, "malp") == "NOT ENOUGH FUNDING FOR THE RECALL (5)" and c.funding == 4
-    c.funding = 5
-    assert economy.charge_recall(c, "malp") is None and c.funding == 0
-
-
 def test_a_review_itemizes_performance_scales_by_difficulty_and_schedules_the_next():
     c = camp("commander")
     c.ledger.update(intel=12, missions=3, lost=1)

@@ -174,7 +174,7 @@ def test_figures_stay_cheap_to_draw():
 def test_the_landed_uav_rolls_off_the_bottom_of_the_frame():
     r = Rig(director=True)
     w = r.world(5, env="normal")
-    steps = r.e._v_drone(w, "uav", home=True)
+    steps = r.e._v_recall(w, "uav")                      # an older save's recall still draws it
     s = r.d.scene
     out = step(steps, "UAV RECOVERED")
     out.update(s, 0.5)

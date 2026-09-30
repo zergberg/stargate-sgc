@@ -55,16 +55,17 @@ def _name(c: Campaign, wid: str) -> str:
 
 def gate_order(c: Campaign) -> list[Event]:
     """Queued dial-outs in the order the gate will take them. While the gate is busy, each one due before it
-    frees up is re-queued behind the ones already waiting for it (engine._fire), in (due, seq) order."""
+    frees up is re-queued behind the ones already waiting for it (engine._fire), in (due, seq) order. An older
+    save's paid recall still dials, but is never listed."""
     free = c.gate_until
-    return sorted(c.events.find(lambda e: e.kind == "dial_out"),
+    return sorted(c.events.find(lambda e: e.kind == "dial_out" and e.data["op"] != "recall"),
                   key=lambda e: (max(e.due, free), e.due < free, e.due, e.seq))
 
 
 def dial_id(ev: Event) -> str:
     """A queued dial-out's id, from what it is, so it survives being re-queued or moved."""
     d = ev.data
-    if d["op"] in ("malp", "uav", "recall", "uplink"):
+    if d["op"] in ("malp", "uav", "uplink"):
         return f"dial:{d['op']}:{d['world']}"
     if d["op"] == "search":
         return f"dial:search:{d['mission']}:{d['by']}"
@@ -83,10 +84,6 @@ def _words(c: Campaign, ev: Event) -> tuple[str, str]:
     if op == "uplink":
         name, drone = _name(c, d["world"]), d["drone"].upper()
         return f"{drone} UPLINK · {name}", f"{drone} UPLINK FROM {name}"
-    if op == "recall":
-        w = c.worlds[d["world"]]
-        drone, name = (w.drone or "drone").upper(), _name(c, w.id)
-        return f"RECALL {drone} FROM {name}", f"RECALL OF THE {drone} ON {name}"
     m = c.mission(d["mission"])
     name = _name(c, m.world)
     if op == "depart":
@@ -178,14 +175,10 @@ def _refusal(c: Campaign, item_id: str, why: Callable[[QueueItem], str]) -> str:
 
 
 def _undo(c: Campaign, d: dict) -> list[str]:
-    """Take back what queuing the dial-out did (engine._launch, assign, recall_drone, _missed_order)."""
+    """Take back what queuing the dial-out did (engine._launch, assign, _missed_order)."""
     op = d["op"]
     if op in ("malp", "uav"):
         return rules.stow(c, op)                     # back into stores
-    if op == "recall":
-        wear = d.get("wear", 0)                      # the drone stays where it is; its wear wasn't spent
-        c.funding += wear
-        return [f"RECALL WEAR REFUNDED ({wear})"] if wear else []
     m = c.mission(d["mission"])
     if op == "depart":                               # it never left: no mission at all
         tm = c.teams.get(m.team)

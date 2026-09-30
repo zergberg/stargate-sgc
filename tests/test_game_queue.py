@@ -139,17 +139,6 @@ def test_cancelling_a_departure_stands_the_team_by_and_counts_no_mission():
     assert m.state == "cancelled" and tm.status == "base"
 
 
-def test_cancelling_a_recall_leaves_the_drone_where_it_is():
-    r = Rig()
-    w = r.world(5, env="normal", drone="uav")
-    r.e.recall_drone(w.id)
-    item = view(r)[0]
-    assert item.what == f"RECALL UAV FROM {w.name.upper()}"
-    r.e.cancel(item.id, confirm=True)
-    r.e.advance(60)
-    assert w.drone == "uav" and r.c.stock["uav"] == 2
-
-
 def test_cancelling_a_search_waits_twelve_hours_instead(monkeypatch):
     r = Rig(CHECKIN)
     w, m = missed(monkeypatch, r)
@@ -303,18 +292,6 @@ def test_a_delivery_shows_no_disruption_odds_and_leaves_once_the_deal_ends():
     assert "%" not in row.status and "RISK" not in row.status
     r.c.deals[0].state = "cut"
     assert not any(i.kind == "delivery" for i in view(r))
-
-
-def test_cancelling_a_queued_recall_refunds_its_wear():
-    r = Rig()
-    w = r.world(5, env="normal", drone="uav")
-    r.c.funding = 500
-    r.e.recall_drone(w.id)
-    assert r.c.funding == 485
-    r.e.cancel(view(r)[0].id, confirm=True)
-    assert r.c.funding == 500 and "RECALL WEAR REFUNDED (15)" in r.logs
-    r.e.advance(60)
-    assert r.c.funding == 500                             # refunded once, never again later
 
 
 # ---------------------------------------------------------------- the GATE QUEUE box's rows

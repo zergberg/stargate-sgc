@@ -156,17 +156,14 @@ def test_probes_can_be_destroyed_or_captured(monkeypatch, table, key, status, dr
     assert w.status == status and w.drone is drone and r.c.stock["malp"] == 3
 
 
-def test_a_uav_sees_more_and_recall_brings_a_drone_home():
+def test_a_uav_sees_more_and_stays_on_the_world(monkeypatch):
+    monkeypatch.setitem(eng.DESTROYED, "normal", 0)
     r = Rig(difficulty="recruit")
     w = r.world(env="normal", inhabitants="human")
     r.e.send_uav(w.id)
     r.e.advance(120)
     assert w.drone == "uav" and w.seen["inhabitants"] == "settlement" and "count" in w.seen
-    assert r.c.stock["uav"] == 1
-    assert r.e.recall_drone(w.id).startswith("RECALL QUEUED")
-    r.e.advance(1)
-    assert w.drone is None and r.c.stock["uav"] == 2 and r.c.gate_until == r.c.now - 1 + 30
-    assert r.e.recall_drone(w.id).startswith("NO DRONE")
+    assert r.c.stock["uav"] == 1 and not hasattr(r.e, "recall_drone")
 
 
 def test_an_alarm_waits_three_game_hours_then_the_default_order_runs():

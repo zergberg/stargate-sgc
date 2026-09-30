@@ -19,7 +19,7 @@ def test_main_menu_and_leaving():
     assert r.key("q") == ("close",)
 
 
-def test_probe_uav_and_recall_from_the_dialing_list():
+def test_probe_and_uav_from_the_dialing_list():
     r, c = room()
     r.key("1")
     assert r.screen == "worlds" and len(r.items()) == 21 and r.items()[0][0].startswith("Abydos")
@@ -27,16 +27,26 @@ def test_probe_uav_and_recall_from_the_dialing_list():
     for k in ("down", "down", "down", "enter"):
         r.key(k)
     assert r.screen == "world" and r.world_id == target and r.title == target
-    assert r.items()[0] == ("MALP PROBE (4 LEFT)", True) and r.items()[2] == ("RECALL DRONE", False)
-    assert r.items()[3] == ("ASSIGN TEAM", False)
+    assert [label for label, _ in r.items()] == [
+        "MALP PROBE (4 LEFT)", "MALP EXTENDED REPORT (4 LEFT)", "UAV FLIGHT (2 LEFT)", "UAV EXTENSIVE SURVEY (2 LEFT)",
+        "ASSIGN TEAM", "ADD NOTE", "BACK"]
+    assert r.items()[4] == ("ASSIGN TEAM", False)
     r.key("1")
     assert r.notice == f"MALP QUEUED FOR {target}" and c.stock["malp"] == 3
-    r.key("2")
-    assert r.notice.startswith("A DRONE IS ALREADY BOUND")
-    c.worlds[target].drone = "malp"
     r.key("3")
-    assert r.notice.startswith("RECALL QUEUED")
+    assert r.notice.startswith("A DRONE IS ALREADY BOUND")
     assert r.detail()[0].startswith(f"{target} · UNEXPLORED")
+
+
+def test_an_extended_report_is_ordered_from_the_dialing_list():
+    r, c = room()
+    r.key("1")
+    target = list(c.worlds)[3]
+    for k in ("down", "down", "down", "enter"):
+        r.key(k)
+    r.key("4")
+    assert r.notice == f"UAV EXTENSIVE SURVEY QUEUED FOR {target}" and c.stock["uav"] == 1
+    assert r.e.c.events.find(lambda e: e.kind == "dial_out" and e.data.get("extended"))
 
 
 def test_assigning_a_team_to_a_probed_world():
@@ -45,7 +55,7 @@ def test_assigning_a_team_to_a_probed_world():
     w.status = "probed"
     r.key("1")
     r.key("3")
-    r.key("4")
+    r.key("5")
     assert r.screen == "team_pick" and [label for label, _ in r.items()][0].startswith("SG-1 · ELITE · GREEN")
     r.key("3")
     assert r.screen == "type_pick" and r.items() == [("SURVEY", True), ("BACK", True)]
@@ -58,7 +68,7 @@ def test_adding_a_note_types_text():
     r, c = room()
     r.key("1")
     r.key("1")
-    r.key("5")
+    r.key("6")
     assert r.text_mode
     for ch in "Kasuf says hi":
         r.key(f"ch:{ch}")
@@ -103,7 +113,7 @@ def test_cancelling_a_note_with_ctrl_c_discards_it():
     r, c = room()
     r.key("1")
     r.key("1")
-    r.key("5")
+    r.key("6")
     assert r.text_mode
     for ch in "discard me":
         r.key(f"ch:{ch}")
@@ -116,7 +126,7 @@ def test_cancelling_a_note_with_escape_discards_it():
     r, c = room()
     r.key("1")
     r.key("1")
-    r.key("5")
+    r.key("6")
     for ch in "nope":
         r.key(f"ch:{ch}")
     r.key("escape")
@@ -137,15 +147,17 @@ def test_disabled_world_actions_explain_why():
     assert r.notice == "NO MALPS LEFT"
     c.stock["uav"] = 0
     r.key("2")
-    assert r.notice == "NO UAVS LEFT"
+    assert r.notice == "NO MALPS LEFT"
     r.key("3")
-    assert r.notice == f"NO DRONE ON {target}"
+    assert r.notice == "NO UAVS LEFT"
     r.key("4")
+    assert r.notice == "NO UAVS LEFT"
+    r.key("5")
     assert r.notice == "PROBE IT FIRST"
     w.status = "probed"
     for name in ("SG-1", "SG-2", "SG-3", "SG-4"):
         c.teams[name].status = "offworld"
-    r.key("4")
+    r.key("5")
     assert r.notice == "NO TEAM AVAILABLE"
 
 
@@ -177,7 +189,7 @@ def test_assign_a_team_lists_unavailable_teams_with_the_reason():
     c.teams["SG-2"].until = c.now + 11 * HOUR
     r.key("1")
     r.key("3")
-    r.key("4")
+    r.key("5")
     items = r.items()
     assert items[0] == ("SG-1 · ELITE · GREEN", True)
     assert items[1] == ("SG-2 · RECON · GREEN\nSTOOD DOWN 11H", False)
@@ -295,24 +307,14 @@ def test_without_the_program_the_uav_says_so():
     r.key("1")
     for k in ("down", "down", "down", "enter"):
         r.key(k)
-    assert r.items()[1][1] is False
-    r.key("2")
+    assert r.items()[2][1] is False and r.items()[3][1] is False
+    r.key("3")
     assert r.notice == "NEEDS THE UAV PROGRAM"
     r.key("q")
     r.key("q")
     r.key("5")
     r.key("2")
     assert r.notice == "NEEDS THE UAV PROGRAM" and c.stock["uav"] == 2
-
-
-def test_the_recall_item_shows_its_wear():
-    r, c = room()
-    target = list(c.worlds)[3]
-    c.worlds[target].drone = "uav"
-    r.key("1")
-    for k in ("down", "down", "down", "enter"):
-        r.key(k)
-    assert r.items()[2] == ("RECALL DRONE · 15", True)
 
 
 def test_commissioning_a_team_from_the_roster():
@@ -366,7 +368,7 @@ def test_rescue_and_recovery_name_their_target():
     w.status = "hostile"
     c.teams["SG-4"].status, c.teams["SG-4"].where = "captured", w.id
     w.options.append("rescue")
-    for k in ("1", "3", "4", "3"):
+    for k in ("1", "3", "5", "3"):
         r.key(k)
     assert r.screen == "type_pick" and ("RESCUE SG-4", True) in r.items()
 

@@ -1,8 +1,10 @@
+import json
+
 import pytest
 
 from sgc.game import clock, rules
 from sgc.game import engine as eng
-from sgc.game.state import CapturedDrone
+from sgc.game.state import CapturedDrone, from_dict, to_dict
 from tests.test_game_engine import Rig
 
 RESCUE = """
@@ -122,17 +124,12 @@ def test_a_uav_flight_locates_a_drone_held_on_that_world(monkeypatch):
     assert r.c.captured_drones[0].located and "recover" in w.options
 
 
-def test_uavs_need_the_program_and_recalls_cost_wear():
+def test_uavs_need_the_program():
     r = Rig()
     r.c.upgrades.discard("uav_program")                # the rig gives it; a new campaign doesn't have it
     r.c.stock["uav"] = 1
     w = r.world(5)
     assert r.e.send_uav(w.id) == "NEEDS THE UAV PROGRAM" and r.c.stock["uav"] == 1
-    v = r.world(6, drone="malp")
-    r.c.funding = 4
-    assert r.e.recall_drone(v.id) == "NOT ENOUGH FUNDING FOR THE RECALL (5)"
-    r.c.funding = 100
-    assert r.e.recall_drone(v.id).startswith("RECALL QUEUED") and r.c.funding == 95
 
 
 def test_debriefs_count_missions_and_analysts_add_an_intel_roll(monkeypatch):
@@ -172,26 +169,25 @@ def test_purchases_commissioning_and_training_through_the_engine():
     assert r.c.funding == 500 - 20 - 200 - 100
 
 
-def test_a_cancelled_recall_refunds_its_wear():
+def test_an_older_save_s_paid_recall_still_brings_the_drone_home():
     r = Rig()
-    r.c.gate_until = r.c.now + 600                      # the gate is busy: the recall waits in the queue
     v = r.world(6, drone="uav")
-    r.c.funding = 100
-    r.e.recall_drone(v.id)
-    assert r.c.funding == 85
-    assert r.e.cancel(f"dial:recall:{v.id}", confirm=True).startswith("CANCELLED")
-    assert r.c.funding == 100 and v.drone == "uav"
+    r.c.events.push(r.c.now, "dial_out", {"op": "recall", "world": v.id, "wear": 15})
+    b = Rig(campaign=from_dict(json.loads(json.dumps(to_dict(r.c)))))
+    assert b.e.schedule_view() == []                    # never listed, never cancellable
+    stock = b.c.stock["uav"]
+    b.e.advance(1)
+    assert b.c.worlds[v.id].drone is None and b.c.stock["uav"] == stock + 1
+    assert f"UAV RECALLED FROM {v.name.upper()}" in b.logs
 
 
-def test_a_recall_with_no_drone_left_to_fetch_refunds_its_wear():
+def test_an_older_save_s_recall_with_no_drone_left_refunds_its_wear():
     r = Rig()
-    v = r.world(6, drone="malp")
+    v = r.world(6)
     r.c.funding = 100
-    r.e.recall_drone(v.id)
-    v.drone = None                                      # taken on the world before the gate dialed
-    stock = r.c.stock["malp"]
+    r.c.events.push(r.c.now, "dial_out", {"op": "recall", "world": v.id, "wear": 5})
     r.e.advance(30)
-    assert r.c.funding == 100 and r.c.stock["malp"] == stock
+    assert r.c.funding == 105
 
 
 def test_the_reserve_cannot_be_set_after_the_campaign_ends():

@@ -89,14 +89,16 @@ class Room:
         teams_available, plannable = bool(available_teams(c)), w.status in PLANNABLE
         program = "uav_program" in c.upgrades
         bound = f"A {w.drone.upper()} IS ALREADY ON {w.name.upper()}" if w.drone else ""
+        malp_ok, uav_ok = c.stock["malp"] > 0 and not w.drone, program and c.stock["uav"] > 0 and not w.drone
+        no_malp = "NO MALPS LEFT" if c.stock["malp"] <= 0 else bound
+        no_uav = "NEEDS THE UAV PROGRAM" if not program else "NO UAVS LEFT" if c.stock["uav"] <= 0 else bound
         return [
-            (f"MALP PROBE ({c.stock['malp']} LEFT)", c.stock["malp"] > 0 and not w.drone,
-             "NO MALPS LEFT" if c.stock["malp"] <= 0 else bound, lambda: self.e.probe(self.world_id)),
-            (f"UAV FLIGHT ({c.stock['uav']} LEFT)", program and c.stock["uav"] > 0 and not w.drone,
-             "NEEDS THE UAV PROGRAM" if not program else "NO UAVS LEFT" if c.stock["uav"] <= 0 else bound,
-             lambda: self.e.send_uav(self.world_id)),
-            (f"RECALL DRONE · {economy.recall_cost(w.drone)}" if w.drone else "RECALL DRONE", bool(w.drone),
-             f"NO DRONE ON {w.name.upper()}", lambda: self.e.recall_drone(self.world_id)),
+            (f"MALP PROBE ({c.stock['malp']} LEFT)", malp_ok, no_malp, lambda: self.e.probe(self.world_id)),
+            (f"MALP EXTENDED REPORT ({c.stock['malp']} LEFT)", malp_ok, no_malp,
+             lambda: self.e.probe(self.world_id, extended=True)),
+            (f"UAV FLIGHT ({c.stock['uav']} LEFT)", uav_ok, no_uav, lambda: self.e.send_uav(self.world_id)),
+            (f"UAV EXTENSIVE SURVEY ({c.stock['uav']} LEFT)", uav_ok, no_uav,
+             lambda: self.e.send_uav(self.world_id, extended=True)),
             ("ASSIGN TEAM", teams_available and plannable,
              "PROBE IT FIRST" if not plannable else "NO TEAM AVAILABLE", self._start_assign),
             ("ADD NOTE", True, "", self._start_note),

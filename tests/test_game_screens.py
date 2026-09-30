@@ -253,7 +253,7 @@ def test_the_briefing_room_list(cols, rows):
     screens.draw_room(cv, layout, room)
     text = cv.text()
     assert "1  MALP PROBE (3 LEFT)" in text and "MALP QUEUED" in text and "UNEXPLORED" in text
-    room.key("5")
+    room.key("6")
     room.key("ch:x")
     screens.draw_room(cv, layout, room)
     assert "> x_" in cv.text()
@@ -736,7 +736,7 @@ def test_the_queue_box_stays_while_typing_a_note():
     layout, cv = full()
     scenarios, _ = content.load(user=None)
     room = Room(Engine(new_campaign("campaign", "officer", 2), scenarios))
-    for k in ("1", "1", "5", "ch:x"):              # dialing list, Abydos, ADD NOTE, type
+    for k in ("1", "1", "6", "ch:x"):              # dialing list, Abydos, ADD NOTE, type
         room.key(k)
     screens.draw_room(cv, layout, room, [])
     assert "> x_" in cv.text() and "NOTHING QUEUED" in cv.text()

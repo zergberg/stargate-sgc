@@ -292,7 +292,7 @@ def test_the_briefing_room_orders_a_probe_and_q_walks_back(tmp_path):
     assert app.view == "briefing" and app.room is not None
     app._handle_keys(["1", "2", "1"])                 # dialing list, second address, MALP probe
     assert app.room.notice.startswith("MALP QUEUED") and app.engine.c.stock["malp"] == 3
-    app._handle_keys(["5"])
+    app._handle_keys(["6"])
     assert app._text_mode()
     app._handle_keys(["ch:h", "ch:i", "enter"])
     assert list(app.engine.c.worlds.values())[1].notes[-1][1] == "hi"
@@ -345,7 +345,7 @@ def test_p_is_ignored_during_the_exit_animation(tmp_path):
 def test_keys_typed_into_a_note_or_search_never_answer_an_alarm(tmp_path):
     for where in ("note", "search"):
         app = start(tmp_path / where)
-        app._handle_keys(["b", "1", "2", "5"] if where == "note" else ["d", "/"])
+        app._handle_keys(["b", "1", "2", "6"] if where == "note" else ["d", "/"])
         typed(app, "abc")
         assert app._text_mode()
         raise_alarm(app)
@@ -359,7 +359,7 @@ def test_keys_typed_into_a_note_or_search_never_answer_an_alarm(tmp_path):
 
 def test_a_half_typed_note_survives_an_alarm(tmp_path):
     app = start(tmp_path)
-    app._handle_keys(["b", "1", "2", "5"])
+    app._handle_keys(["b", "1", "2", "6"])
     typed(app, "hi")
     room = app.room
     raise_alarm(app)
@@ -487,7 +487,7 @@ def test_keys_are_held_for_as_long_as_the_player_keeps_typing(tmp_path, monkeypa
     monkeypatch.setattr(app_mod.time, "monotonic", lambda: now[0])
     app = start(tmp_path)
     run_until(app, 15, lambda a: not a._walking)
-    app._handle_keys(["b", "1", "2", "5"])
+    app._handle_keys(["b", "1", "2", "6"])
     typed(app, "abc")
     raise_alarm(app)
     run_until(app, 5, lambda a: not a._walking)
@@ -521,7 +521,7 @@ def test_enter_ends_the_typing_hold_and_is_swallowed(tmp_path, monkeypatch):
 
 def test_ctrl_c_cancels_a_note_and_does_not_quit(tmp_path):
     app = start(tmp_path)
-    app._handle_keys(["b", "1", "2", "5"])
+    app._handle_keys(["b", "1", "2", "6"])
     typed(app, "half a note")
     w = list(app.engine.c.worlds.values())[1]
     before = list(w.notes)
@@ -534,7 +534,7 @@ def test_escape_cancels_a_note(tmp_path, monkeypatch):
     now = [100.0]
     monkeypatch.setattr(app_mod.time, "monotonic", lambda: now[0])
     app = start(tmp_path)
-    app._handle_keys(["b", "1", "2", "5"])
+    app._handle_keys(["b", "1", "2", "6"])
     typed(app, "hi")
     app._handle_keys(app.parser.feed(b"\x1b", now=10.0))
     app.parser.text = app._typing()
@@ -568,7 +568,7 @@ def test_ctrl_c_during_the_typing_hold_cancels_the_note_not_the_game(tmp_path, m
     now = [100.0]
     monkeypatch.setattr(app_mod.time, "monotonic", lambda: now[0])
     app = start(tmp_path)
-    app._handle_keys(["b", "1", "2", "5"])
+    app._handle_keys(["b", "1", "2", "6"])
     typed(app, "hi")
     room = app.room
     raise_alarm(app)
@@ -767,7 +767,7 @@ def test_a_read_only_save_directory_does_not_crash_the_game(tmp_path):
 
 def test_accented_letters_can_be_typed_into_a_note_and_a_search(tmp_path):
     app = start(tmp_path)
-    app._handle_keys(["b", "1", "2", "5"])
+    app._handle_keys(["b", "1", "2", "6"])
     typed(app, "café ")
     app.parser.text = app._typing()
     for part in (b"\xc3", b"\xbc", b"ber"):            # ü split across two reads

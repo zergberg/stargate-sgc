@@ -8,7 +8,6 @@ from .clock import START
 from .state import DRONES, RESERVE_MAX, REVIEW_EVERY, STOCK, UPGRADE_IDS, Campaign
 
 PRICES = {"malp": 20, "uav": 60}
-WEAR = 0.25                     # a recall costs this share of the drone's price
 FLOOR = 100                     # a requisition never spends the last of this
 GRANT = 300                     # a funding review's base grant
 MIN_GRANT = 50
@@ -97,19 +96,6 @@ def buy(c: Campaign, item: str) -> str:
 def set_reserve(c: Campaign, drone: str, n: int) -> str:
     c.reserve[drone] = max(0, min(RESERVE_MAX, n))
     return f"{drone.upper()} RESERVE: {c.reserve[drone]}"
-
-
-def recall_cost(drone: str) -> int:
-    return round(PRICES[drone] * WEAR)
-
-
-def charge_recall(c: Campaign, drone: str) -> str | None:
-    """Pay a recall's wear; returns why not if funding is short."""
-    cost = recall_cost(drone)
-    if c.funding < cost:
-        return f"NOT ENOUGH FUNDING FOR THE RECALL ({cost})"
-    c.funding -= cost
-    return None
 
 
 def requisition(c: Campaign) -> list[str]:
