@@ -545,7 +545,7 @@ class Engine:
             c.events.push(c.now + self.rng.randint(lo * clock.HOUR, hi * clock.HOUR), "uplink",
                           {"world": w.id, "drone": drone, "from": c.now + lo * clock.HOUR,
                            "to": c.now + hi * clock.HOUR})
-            self._log(f"{drone.upper()} COLLECTING ON {w.name.upper()} — UPLINK IN {lo}-{hi} HOURS")
+            self._log(f"{drone.upper()} COLLECTING ON {w.name.upper()} — UPLINK IN {lo}–{hi} HOURS")
         drawn = self._draw("probe", self._wbind(w))
         if drawn:
             self._start(*drawn)
@@ -683,6 +683,7 @@ class Engine:
             return
         self._occupy("recall")
         drone, w.drone = w.drone, None
+        rules.clear_uplink(self.c, wid)
         self._log(f"{drone.upper()} RECALLED FROM {w.name.upper()}")
         self._stow(drone)
         self._show(self._v_drone(w, drone, home=True))
@@ -1207,13 +1208,22 @@ class Engine:
 
     def _bring_home(self, m: Mission, w: World) -> list[str]:
         """What a team brings home from the world: a parked drone, with an extended report's data if its uplink
-        hadn't come yet (a full return)."""
+        hadn't come yet (a full return). A report already rolled for this same minute (the team lands the very
+        minute the uplink's gate shuts) plays as it landed — the team never overrules it."""
         c = self.c
         if not w.drone:
             return []
-        drone, lines = w.drone, []
+        drone = w.drone
+        rolled = c.events.remove(lambda e: e.kind == "uplink_report" and e.data.get("world") == w.id)
+        if rolled:
+            self._uplink_report(rolled[0].data)
+            if not w.drone:                     # captured or destroyed at the uplink: nothing left to fetch
+                return []
+            w.drone = None
+            return [f"{m.team} BROUGHT THE {drone.upper()} HOME"] + rules.stow(c, drone)
+        lines = []
         waiting = c.events.remove(lambda e: e.data.get("world") == w.id and (
-            e.kind in ("uplink", "uplink_report") or (e.kind == "dial_out" and e.data.get("op") == "uplink")))
+            e.kind == "uplink" or (e.kind == "dial_out" and e.data.get("op") == "uplink")))
         if waiting:
             lines += self._extended(w, drone, self._extended_readings(w, drone))
             lines.append(f"{m.team} BROUGHT THE {drone.upper()} AND ITS DATA HOME")

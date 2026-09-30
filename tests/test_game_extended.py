@@ -3,7 +3,7 @@ import random
 
 import pytest
 
-from sgc.game import clock, schedule
+from sgc.game import clock, rules, schedule
 from sgc.game import engine as eng
 from sgc.game.state import from_dict, to_dict
 from sgc.game.world import World
@@ -75,6 +75,33 @@ def test_a_drone_lost_on_the_live_pass_has_no_extended_report(monkeypatch):
     r.e.probe(w.id, extended=True)
     r.e.advance(clock.HOUR)
     assert not r.c.events.find(lambda e: e.kind == "uplink") and r.e.schedule_view() == []
+
+
+def test_a_drone_captured_on_the_live_pass_has_no_extended_report(monkeypatch):
+    monkeypatch.setitem(eng.DESTROYED, "normal", 0)
+    monkeypatch.setitem(eng.CAPTURED, "jaffa", 100)
+    r = Rig()
+    w = r.world(5, env="normal", inhabitants="jaffa")
+    r.e.probe(w.id, extended=True)
+    r.e.advance(clock.HOUR)
+    assert not r.c.events.find(lambda e: e.kind == "uplink") and r.e.schedule_view() == []
+
+
+def test_a_drone_lost_outside_the_uplink_path_takes_its_pending_uplink_with_it(monkeypatch):
+    """A drone captured or lost by a scenario effect leaves nothing behind to fire a stale uplink on a
+    later, unrelated drone sent to the same world."""
+    r, w = collecting(monkeypatch)
+    rules.parse_effect("drone {world} lost")(r.c, r.e._wbind(w))
+    assert w.drone is None
+    assert not r.c.events.find(lambda e: e.data.get("world") == w.id)
+    assert r.e.schedule_view() == []
+    before = len(r.logs)
+    msg = r.e.probe(w.id)                               # a plain probe, sent to the same world afterwards
+    assert msg == f"MALP QUEUED FOR {w.name.upper()}"
+    monkeypatch.setitem(eng.UPLINK_ODDS, "malp", ALWAYS)
+    r.e.advance(8 * clock.HOUR)
+    later = r.logs[before:]
+    assert not any("EXTENDED REPORT FROM" in line or line.startswith("UPLINK TO") for line in later)
 
 
 # ---------------------------------------------------------------- the odds
@@ -165,6 +192,40 @@ def test_a_team_arriving_first_brings_the_drone_and_its_data_home(monkeypatch):
     assert w.seen["subsurface"] == "naquadah deposit"
     assert "SG-2 BROUGHT THE MALP AND ITS DATA HOME" in m.findings
     assert f"MALP EXTENDED REPORT FROM {w.name.upper()}" in m.findings
+
+
+def test_a_team_landing_the_same_minute_never_overrules_an_uplink_already_lost(monkeypatch):
+    """The uplink's dial has already happened and its outcome rolled (lost): only its report still waits for
+    the gate to shut. A team_return due that very minute fires first (lower seq, same due) — it must not
+    discard that report for a free full return."""
+    r, w = collecting(monkeypatch, features=("naquadah",))
+    w.status = "probed"
+    stock = r.c.stock["malp"]
+    r.e.assign(w.id, "SG-2", "survey")
+    m = r.c.mission(1)
+    r.c.events.push(r.c.now, "uplink_report", {"world": w.id, "drone": "malp", "outcome": "lost", "seen": {}})
+    lines = r.e._bring_home(m, w)
+    assert w.drone is None and r.c.stock["malp"] == stock       # lost at the uplink: nothing comes home
+    assert any(line.startswith("MALP LOST ON") for line in r.logs)
+    assert not any("AND ITS DATA HOME" in line for line in lines)
+    assert "naquadah deposit" not in w.seen.get("subsurface", "")
+
+
+def test_a_team_landing_the_same_minute_still_fetches_a_drone_that_survived_its_uplink(monkeypatch):
+    """A full or partial uplink leaves the drone on the world; the team still brings it home, but its data was
+    already filed by the uplink itself — not granted again as a free full return."""
+    r, w = collecting(monkeypatch, features=("naquadah",))
+    w.status = "probed"
+    stock = r.c.stock["malp"]
+    r.e.assign(w.id, "SG-2", "survey")
+    m = r.c.mission(1)
+    seen = {"subsurface": "naquadah deposit"}
+    r.c.events.push(r.c.now, "uplink_report", {"world": w.id, "drone": "malp", "outcome": "full", "seen": seen})
+    lines = r.e._bring_home(m, w)
+    assert w.drone is None and r.c.stock["malp"] == stock + 1
+    assert w.seen["subsurface"] == "naquadah deposit"
+    assert any(line.startswith("MALP EXTENDED REPORT FROM") for line in r.logs)
+    assert lines == ["SG-2 BROUGHT THE MALP HOME"]
 
 
 # ---------------------------------------------------------------- the save and the screen
