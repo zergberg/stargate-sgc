@@ -1,0 +1,23 @@
+id = "arc_apophis_strike"
+kind = "debrief"
+mission_type = "raid"
+weight = 50
+when = ["is {world} @Chulak", "arc apophis stage == 4"]
+
+[node.start]
+text.full = "{team} debrief: the strike on Apophis's flagship over {world}."
+text.minimal = "{team} debrief: strike on the fleet."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+[node.start.choice.outcome.roll]
+odds = 40
+mods = ["team {team} specialty combat +15", "ally.jaffa +15", "ally.tokra +10", "rank {team} >= veteran +10"]
+[node.start.choice.outcome.roll.win]
+effects = ["arc apophis resolve", "attention apophis -50", "xp {team} +2", "funding +100"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["team {team} injured", "attention apophis +5"]
+end = true

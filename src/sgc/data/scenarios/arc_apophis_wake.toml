@@ -1,0 +1,14 @@
+id = "arc_apophis_wake"
+kind = "debrief"
+weight = 50
+when = ["is {world} @Chulak", "arc apophis dormant"]
+
+[node.start]
+text.full = "{team} debrief: {world} is a Jaffa training world, thousands strong. Every Jaffa there wears the gold serpent of Apophis, and they hold prisoners taken from other worlds. Dr. Jackson says Apophis is one of the great System Lords."
+text.minimal = "{team} debrief: a major Jaffa world."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { effects = ["reveal name {world} from jaffa", "reveal faction apophis from jaffa", "arc apophis start", "status {world} hostile", "unlock raid {world}", "attention apophis +5"], end = true }

@@ -1,0 +1,32 @@
+id = "arc_apophis_reprisal"
+kind = "arc"
+arc = "apophis"
+arc_stage = 2
+visual = "incoming"
+
+[node.start]
+text.full = "Unscheduled offworld activation from {world}. Staff blasts on the iris: Apophis's Jaffa, come for Teal'c and for us."
+text.partial = "Unscheduled offworld activation. Impacts on the iris."
+text.minimal = "Unscheduled offworld activation."
+situation = "unknown_idc"
+default = "closed"
+
+[[node.start.choice]]
+key = "closed"
+label = "Keep the iris closed"
+outcome = { visual = "iris_hold", effects = ["security -8", "arc apophis advance"], end = true }
+
+[[node.start.choice]]
+key = "open_guarded"
+label = "Open for 30 seconds under guard"
+[node.start.choice.outcome.roll]
+odds = 45
+mods = ["ally.jaffa +15", "tech.zat +10", "personnel < 40 -15"]
+[node.start.choice.outcome.roll.win]
+visual = "firefight_win"
+effects = ["personnel -10", "attention apophis +5", "arc apophis advance"]
+end = true
+[node.start.choice.outcome.roll.lose]
+visual = "firefight"
+effects = ["personnel -15", "breach 25", "arc apophis advance"]
+end = true

@@ -1,0 +1,23 @@
+id = "arc_apophis_harass"
+kind = "debrief"
+mission_type = "raid"
+weight = 50
+when = ["is {world} @Chulak", "arc apophis stage == 3"]
+
+[node.start]
+text.full = "{team} debrief: another strike at the shipyards on {world}. Apophis's fleet is slowed, but he will not forget it."
+text.minimal = "{team} debrief: raid on {world}."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+[node.start.choice.outcome.roll]
+odds = 60
+mods = ["team {team} specialty combat +15", "ally.jaffa +10"]
+[node.start.choice.outcome.roll.win]
+effects = ["attention apophis +15", "funding +30", "xp {team} +1"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["attention apophis +15", "team {team} injured"]
+end = true

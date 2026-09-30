@@ -1,0 +1,29 @@
+id = "arc_apophis_fleet_asgard"
+kind = "arc"
+arc = "apophis"
+arc_stage = 4
+visual = "code_red"
+when = ["ally.asgard"]
+
+[node.start]
+text.full = "Two ha'taks have dropped out of hyperspace over Earth. Apophis is hailing the planet, and the President wants options."
+text.minimal = "Enemy ships in orbit."
+default = "all_in"
+
+[[node.start.choice]]
+key = "all_in"
+label = "Everything we have"
+[node.start.choice.outcome.roll]
+odds = 15
+mods = ["tech.naquadah_generator +10", "ally.tokra +15", "ally.jaffa +10"]
+[node.start.choice.outcome.roll.win]
+effects = ["arc apophis resolve", "personnel -20"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["arc apophis fail"]
+end = true
+
+[[node.start.choice]]
+key = "asgard"
+label = "Call the Asgard"
+outcome = { effects = ["use ally.asgard", "arc apophis resolve"], end = true }

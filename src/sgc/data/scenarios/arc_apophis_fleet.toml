@@ -1,0 +1,24 @@
+id = "arc_apophis_fleet"
+kind = "arc"
+arc = "apophis"
+arc_stage = 4
+visual = "code_red"
+when = ["not ally.asgard"]
+
+[node.start]
+text.full = "Two ha'taks have dropped out of hyperspace over Earth. Apophis is hailing the planet. The SGC throws everything it has at them."
+text.minimal = "Enemy ships in orbit."
+default = "all_in"
+
+[[node.start.choice]]
+key = "all_in"
+label = "Everything we have"
+[node.start.choice.outcome.roll]
+odds = 15
+mods = ["tech.naquadah_generator +10", "ally.tokra +15", "ally.jaffa +10"]
+[node.start.choice.outcome.roll.win]
+effects = ["arc apophis resolve", "personnel -20"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["arc apophis fail"]
+end = true

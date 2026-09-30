@@ -1,0 +1,14 @@
+id = "arc_apophis_bratac"
+kind = "checkin"
+weight = 8
+when = ["arc apophis stage == 3", "trust jaffa >= 25", "not ally.jaffa"]
+
+[node.start]
+text.full = "{team} checks in from {world} with a guest: an old Jaffa master, Bra'tac, who trained Teal'c. Apophis's fleet sails for Earth within days, he says, and the Jaffa who follow Teal'c will stand with us."
+text.minimal = "{team} checks in with urgent intelligence."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log it"
+outcome = { effects = ["trust jaffa +20", "gain ally.jaffa", "arc apophis advance"], end = true }

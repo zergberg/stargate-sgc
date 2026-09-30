@@ -1,0 +1,23 @@
+id = "arc_apophis_raid"
+kind = "debrief"
+mission_type = "raid"
+weight = 50
+when = ["is {world} @Chulak", "arc apophis stage == 1"]
+
+[node.start]
+text.full = "{team} debrief: the raid on the prisoners' pit on {world}."
+text.minimal = "{team} debrief: raid on {world}."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+[node.start.choice.outcome.roll]
+odds = 50
+mods = ["team {team} specialty combat +15", "rank {team} >= seasoned +10", "ally.tokra +10"]
+[node.start.choice.outcome.roll.win]
+effects = ["reveal faction jaffa from jaffa", "trust jaffa +25", "attention apophis +15", "arc apophis advance", "xp {team} +1"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["team {team} injured", "attention apophis +15"]
+end = true
