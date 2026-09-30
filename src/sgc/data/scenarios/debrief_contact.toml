@@ -1,0 +1,14 @@
+id = "debrief_contact"
+kind = "debrief"
+mission_type = "contact"
+weight = 4
+
+[node.start]
+text.full = "{team} debrief: talks with the people of {world}. They shared what they know of the gate network, including an address we didn't have."
+text.minimal = "{team} debrief: contact made."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { effects = ["reveal name {world} from locals", "reveal address"], end = true }

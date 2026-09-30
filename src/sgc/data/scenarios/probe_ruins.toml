@@ -1,0 +1,14 @@
+id = "probe_ruins"
+kind = "probe"
+weight = 2
+when = ["world {world} feature ruins"]
+
+[node.start]
+text.full = "Telemetry from {designation}: the camera pans across broken columns around the gate. Dr. Jackson wants a closer look at the glyphs on the dais."
+text.minimal = "Telemetry from {designation}: received."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log the telemetry"
+outcome = { end = true }

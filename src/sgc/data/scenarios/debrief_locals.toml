@@ -1,0 +1,15 @@
+id = "debrief_locals"
+kind = "debrief"
+mission_type = "survey"
+weight = 4
+when = ["world {world} inhabitants human"]
+
+[node.start]
+text.full = "{team} debrief: the people of {world} know the gate and have seen it used before. They were cautious with us, but not hostile."
+text.minimal = "{team} debrief: inhabited world."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { effects = ["reveal name {world} from locals", "unlock contact {world}"], end = true }

@@ -1,0 +1,14 @@
+id = "checkin_talks"
+kind = "checkin"
+mission_type = "contact"
+weight = 4
+
+[node.start]
+text.full = "{team} checks in from {world}: the talks are going well. The locals have offered to show us their records."
+text.minimal = "{team} checks in: talks continue."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log it"
+outcome = { effects = ["reveal name {world} from locals"], end = true }

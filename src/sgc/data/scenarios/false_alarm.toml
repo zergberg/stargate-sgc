@@ -4,17 +4,18 @@ weight = 3
 visual = "incoming"
 
 [node.start]
-text.full = "Incoming. The IDC is garbled; it could be a damaged GDO on a returning team."
-text.partial = "Incoming. The IDC is garbled."
-text.minimal = "Incoming. Garbled IDC."
-default = "hold"
+text.full = "Unscheduled offworld activation. A weak signal on an old frequency, no IDC: a voice asking for help in a dialect Dr. Jackson thinks he knows."
+text.partial = "Unscheduled offworld activation. A voice on the radio, no IDC."
+text.minimal = "Unscheduled offworld activation."
+situation = "unknown_idc"
+default = "closed"
 
 [[node.start.choice]]
-key = "open"
-label = "Open the iris"
-outcome = { visual = "arrival", effects = ["intel +5"], end = true }
-
-[[node.start.choice]]
-key = "hold"
-label = "Keep it closed until they re-send"
+key = "closed"
+label = "Keep the iris closed"
 outcome = { visual = "iris_hold", end = true }
+
+[[node.start.choice]]
+key = "open_guarded"
+label = "Open for 30 seconds under guard"
+outcome = { visual = "arrival", effects = ["reveal address"], end = true }

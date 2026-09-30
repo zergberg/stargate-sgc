@@ -50,3 +50,26 @@ def test_blank_panels_hide_side_screens():
     s = Scene(address=load_canon()[1], blank_panels=4)
     draw_panels(c, L, s, [], datetime(2026, 9, 29, 12), 0.0)
     assert s.address.label.upper() not in c.text()
+
+
+def test_an_unnamed_canon_world_is_not_marked_canon():
+    from sgc.game.world import canon_world
+    L = compute_layout(100, 27, 9, 18)
+    c = Canvas(100, 27)
+    w = canon_world("Chulak")
+    assert w.canon and w.name == w.id
+    draw_panels(c, L, Scene(address=w.address(), locked=2), [], datetime(2026, 9, 29, 12), 0.0)
+    assert "CANON" not in c.text() and w.id in c.text()
+    w.names.append(("Chulak", "the Jaffa", 1))
+    draw_panels(c, L, Scene(address=w.address(), locked=2), [], datetime(2026, 9, 29, 12), 0.0)
+    assert "CHULAK" in c.text() and w.id in c.text()
+
+
+def test_a_campaign_team_at_base_is_marked_home_like_an_ambient_one():
+    L = compute_layout(100, 27, 9, 18)
+    c = Canvas(100, 27)
+    s = Scene()
+    s.teams = {"SG-1": "BASE", "SG-2": "AT BASE", "SG-3": "CAPTURED", "SG-4": "AWAY: ABYDOS"}
+    draw_panels(c, L, s, [], datetime(2026, 9, 29, 12), 0.0)
+    rows = {line.split("SG-")[1][:1]: line for line in c.text().splitlines() if "SG-" in line}
+    assert "○" in rows["1"] and "○" in rows["2"] and "●" in rows["3"] and "●" in rows["4"]

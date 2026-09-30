@@ -79,3 +79,10 @@ def test_open_scale_lengthens_gate_time():
     d1 = sum(st.duration for st in REGISTRY["science"].build(c1))
     d2 = sum(st.duration for st in REGISTRY["science"].build(c2))
     assert d2 > d1 + 30
+
+
+def test_friendly_brings_home_a_campaign_team_shown_as_away():
+    s = Scene()
+    s.teams["SG-3"] = "AWAY: ABYDOS"
+    logs, _ = run(REGISTRY["friendly"].build(ctx(s)), s)
+    assert any("SG-3" in line for line in logs)

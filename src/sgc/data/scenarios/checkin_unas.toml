@@ -1,0 +1,34 @@
+id = "checkin_unas"
+kind = "checkin"
+weight = 4
+when = ["world {world} inhabitants unas"]
+
+[node.start]
+text.full = "{team} checks in from {world}, running: an Unas has been stalking them since dawn and just charged."
+text.minimal = "{team} is under attack."
+situation = "under_fire"
+default = "recall"
+
+[[node.start.choice]]
+key = "recall"
+label = "Recall them"
+outcome = { effects = ["recall {team}"], end = true }
+
+[[node.start.choice]]
+key = "hold"
+label = "Hold position"
+[node.start.choice.outcome.roll]
+odds = 60
+mods = ["team {team} specialty combat +20"]
+[node.start.choice.outcome.roll.win]
+effects = ["xp {team} +1"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["team {team} injured"]
+end = true
+
+[[node.start.choice]]
+key = "reinforce"
+label = "Reinforce if a team is available"
+requires = ["team_available"]
+outcome = { effects = ["reinforce {team}"], end = true }

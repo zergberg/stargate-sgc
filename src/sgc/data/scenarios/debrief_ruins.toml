@@ -1,0 +1,15 @@
+id = "debrief_ruins"
+kind = "debrief"
+mission_type = "survey"
+weight = 4
+when = ["world {world} feature ruins"]
+
+[node.start]
+text.full = "{team} debrief: the ruins on {world} include a cartouche wall. Dr. Jackson has already picked out a gate address we've never seen."
+text.minimal = "{team} debrief: ruins catalogued."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { effects = ["reveal name {world} from ruins", "reveal address"], end = true }

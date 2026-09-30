@@ -1,0 +1,14 @@
+id = "probe_radiation"
+kind = "probe"
+weight = 2
+when = ["world {world} env radiation"]
+
+[node.start]
+text.full = "Telemetry from {designation}: radiation readings climb steadily, well above safe limits. Short visits only."
+text.minimal = "Telemetry from {designation}: radiation warning."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log the telemetry"
+outcome = { effects = [], end = true }

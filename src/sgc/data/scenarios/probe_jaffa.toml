@@ -1,0 +1,15 @@
+id = "probe_jaffa"
+kind = "probe"
+weight = 2
+when = ["world {world} inhabitants jaffa"]
+
+[node.start]
+text.full = "Telemetry from {designation}: the microphones caught marching feet before the camera found them. A Jaffa patrol, twenty strong, passed the gate at dusk."
+text.partial = "Telemetry from {designation}: armed figures passed the gate at dusk."
+text.minimal = "Telemetry from {designation}: received."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log the telemetry"
+outcome = { effects = [], end = true }

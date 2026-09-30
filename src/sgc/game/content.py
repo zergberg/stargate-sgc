@@ -13,19 +13,18 @@ from pathlib import Path
 
 from ..events import REGISTRY
 from . import rules
+from .orders import SITUATIONS
+from .state import MISSION_TYPES
 
-KINDS = ("incoming", "mission")
+KINDS = ("incoming", "probe", "checkin", "debrief")
 GAME_VISUALS = ("incoming", "dial_out", "iris_hold", "arrival", "team_return", "firefight", "firefight_win",
                 "bomb", "asgard_beam")
 VISUALS = frozenset(GAME_VISUALS) | frozenset(REGISTRY)
-LORD_PICKS = ("aggressor", "any", "weakest")
 TEAM_PICKS = ("compromised", "captured", "base", "any")
-RISKS = ("low", "medium", "high")
-MISSION_TYPES = ("recon", "rescue", "ally", "tech", "sabotage", "strike", "science", "diplomacy")
-PLACEHOLDERS = frozenset({"team", "captive", "goauld", "target", "destination", "captured_at"})
+TRIGGERS = ("random", "team_return")            # when an incoming scenario plays
+PLACEHOLDERS = frozenset({"team", "goauld", "world", "designation", "specialty", "captured_at"})
 TEXT_LEVELS = ("full", "partial", "minimal")
-_TOP_KEYS = {"id", "kind", "weight", "when", "visual", "goauld", "team", "captive", "hostile", "mission_type",
-             "brief", "risk", "node"}
+_TOP_KEYS = {"id", "kind", "weight", "when", "visual", "goauld", "team", "mission_type", "on", "node"}
 _OUTCOME_KEYS = {"goto", "visual", "effects", "end", "roll"}
 BUNDLED = Path(__file__).resolve().parent.parent / "data" / "scenarios"
 USER_DIR = Path.home() / ".config" / "stargate-sgc" / "scenarios"
@@ -68,9 +67,14 @@ class Choice:
 class Node:
     name: str
     text: dict[str, str]
-    countdown: float | None
     default: str
     choices: list[Choice]
+    situation: str | None = None             # the standing order that answers this node on a timeout
+
+    @property
+    def routine(self) -> bool:
+        """A node with one choice and no standing order just happens; anything else raises an alarm."""
+        return len(self.choices) == 1 and self.situation is None
 
 
 @dataclass
@@ -80,13 +84,10 @@ class Scenario:
     weight: float
     when: tuple[rules.Cond, ...]
     visual: tuple[str, ...]
-    goauld: str | None
+    goauld: bool
     team: str | None
-    captive: bool
-    hostile: bool
-    mission_type: str | None
-    brief: str | None
-    risk: str | None
+    mission_type: str | None                 # checkin/debrief: survey or contact (None: any mission)
+    on: str = "random"                       # incoming: "random", or "team_return" (a team coming home)
     nodes: dict[str, Node] = field(default_factory=dict)
     source: str = ""
 
@@ -132,13 +133,17 @@ class _Parser:
             self.text(v, f"{path}[{i}]")
         return value
 
-    def conds(self, value, path: str) -> tuple[rules.Cond, ...]:
+    def conds(self, value, path: str, allow_hidden: bool = True) -> tuple[rules.Cond, ...]:
         out = []
         for i, v in enumerate(self.strings(value, path)):
             try:
-                out.append(rules.parse_cond(v))
+                cond = rules.parse_cond(v)
             except rules.RuleError as e:
                 self.fail(f"{path}[{i}]", str(e))
+            if not allow_hidden and _hidden_trait(cond.text):
+                self.fail(f"{path}[{i}]", "hidden world traits (env, inhabitants, feature) may only "
+                                           "appear in a scenario's when")
+            out.append(cond)
         return tuple(out)
 
     def visuals(self, value, path: str) -> tuple[str, ...]:
@@ -166,9 +171,13 @@ class _Parser:
             mods = []
             for i, m in enumerate(self.strings(r.get("mods", []), f"{path}.roll.mods")):
                 try:
-                    mods.append(rules.parse_mod(m))
+                    mod = rules.parse_mod(m)
                 except rules.RuleError as e:
                     self.fail(f"{path}.roll.mods[{i}]", str(e))
+                if _hidden_trait(mod.cond.text):
+                    self.fail(f"{path}.roll.mods[{i}]", "hidden world traits (env, inhabitants, feature) may only "
+                                                         "appear in a scenario's when")
+                mods.append(mod)
             if "win" not in r or "lose" not in r:
                 self.fail(f"{path}.roll", "a roll needs both win and lose")
             return Outcome(roll=Roll(odds, tuple(mods), self.outcome(r["win"], f"{path}.roll.win", nodes),
@@ -203,11 +212,6 @@ class _Parser:
             if level not in TEXT_LEVELS:
                 self.fail(f"{path}.text", f'unknown text level "{level}"')
             self.text(value, f"{path}.text.{level}")
-        countdown = d.get("countdown")
-        if countdown is not None:
-            self.expect(countdown, (int, float), f"{path}.countdown", "countdown")
-            if not 5 <= countdown <= 60:
-                self.fail(f"{path}.countdown", "countdown must be 5-60 seconds")
         raw = self.expect(d.get("choice"), list, f"{path}.choice", "choice list")
         if not 1 <= len(raw) <= 4:
             self.fail(f"{path}.choice", "a node needs 1-4 choices")
@@ -222,7 +226,7 @@ class _Parser:
             if key in (c.key for c in choices):
                 self.fail(f"{cp}.key", f'duplicate choice key "{key}"')
             choices.append(Choice(key, self.text(ch.get("label"), f"{cp}.label"),
-                                  self.conds(ch.get("requires", []), f"{cp}.requires"),
+                                  self.conds(ch.get("requires", []), f"{cp}.requires", allow_hidden=False),
                                   self.outcome(ch.get("outcome"), f"{cp}.outcome", nodes)))
         default = self.expect(d.get("default"), str, f"{path}.default", "default")
         match = next((c for c in choices if c.key == default), None)
@@ -230,10 +234,26 @@ class _Parser:
             self.fail(f"{path}.default", f'default "{default}" is not one of the choice keys')
         if match.requires:
             self.fail(f"{path}.default", "the default choice may not have requires")
+        situation = d.get("situation")
+        if situation is not None:
+            if situation not in SITUATIONS:
+                self.fail(f"{path}.situation", f'unknown situation "{situation}"')
+            sit = SITUATIONS[situation]
+            if default != sit.default:
+                self.fail(f"{path}.default", f'a {situation} node\'s default must be "{sit.default}"')
+            missing = [k for k in sit.keys if k not in {c.key for c in choices}]
+            if missing:
+                self.fail(f"{path}.choice", f"a {situation} node needs choices keyed {', '.join(missing)}")
         for k in d:
-            if k not in ("text", "countdown", "choice", "default"):
+            if k not in ("text", "choice", "default", "situation"):
                 self.fail(path, f'unknown key "{k}"')
-        return Node(name, dict(text), float(countdown) if countdown is not None else None, default, choices)
+        return Node(name, dict(text), default, choices, situation)
+
+
+def _hidden_trait(text: str) -> bool:
+    """True for a condition like "world {world} env normal": it selects a scenario, so it only belongs in `when`."""
+    t = text.split()
+    return len(t) >= 3 and t[0] == "world" and t[2] in ("env", "inhabitants", "feature")
 
 
 def _terminates(o: Outcome, ends: set[str]) -> bool:
@@ -242,15 +262,17 @@ def _terminates(o: Outcome, ends: set[str]) -> bool:
     return o.end or o.game_over or (o.goto is not None and o.goto in ends)
 
 
-def _bound_placeholders(kind: str | None, team: str | None, goauld: str | None, captive: bool) -> frozenset[str]:
-    """Which {placeholders} a scenario may use, given its own top-level fields."""
-    bound = {"destination"}
-    if kind == "mission" or team is not None:
+def _bound_placeholders(kind: str | None, team: str | None, goauld: bool, on: str) -> frozenset[str]:
+    """Which {placeholders} a scenario may use, given its kind and its own top-level fields."""
+    bound: set[str] = set()
+    if kind in ("probe", "checkin", "debrief") or on == "team_return":
+        bound |= {"world", "designation"}
+    if kind in ("checkin", "debrief") or on == "team_return":
+        bound |= {"team", "specialty"}
+    if team is not None:
         bound |= {"team", "captured_at"}
-    if captive:
-        bound |= {"captive", "captured_at"}
-    if goauld is not None:
-        bound |= {"goauld", "target"}
+    if goauld:
+        bound.add("goauld")
     return frozenset(bound)
 
 
@@ -267,23 +289,20 @@ def parse_scenario(data: dict, source: str) -> Scenario:
     if not (weight > 0 and math.isfinite(weight)):
         p.fail("weight", "weight must be positive")
     goauld = data.get("goauld")
-    if goauld is not None and goauld not in LORD_PICKS:
-        p.fail("goauld", f"goauld must be one of {', '.join(LORD_PICKS)}")
+    if goauld is not None and goauld != "any":
+        p.fail("goauld", 'goauld must be "any"')
     team = data.get("team")
-    if team is not None and team not in TEAM_PICKS:
-        p.fail("team", f"team must be one of {', '.join(TEAM_PICKS)}")
-    p.bound = _bound_placeholders(kind, team, goauld, bool(data.get("captive", False)))
-    mission_type = brief = risk = None
-    if kind == "mission":
-        mission_type = data.get("mission_type")
-        if mission_type not in MISSION_TYPES:
-            p.fail("mission_type", f"mission_type must be one of {', '.join(MISSION_TYPES)}")
-        if "brief" not in data:
-            p.fail("brief", "missions need a brief")
-        brief = p.text(data["brief"], "brief")
-        risk = data.get("risk")
-        if risk not in RISKS:
-            p.fail("risk", f"risk must be one of {', '.join(RISKS)}")
+    if team is not None and (team not in TEAM_PICKS or kind != "incoming"):
+        p.fail("team", f"team must be one of {', '.join(TEAM_PICKS)}, and only on incoming scenarios")
+    on = data.get("on", "random")
+    if on not in TRIGGERS or (on != "random" and kind != "incoming"):
+        p.fail("on", f"on must be one of {', '.join(TRIGGERS)}, and only on incoming scenarios")
+    if on == "team_return" and team is not None:
+        p.fail("team", "a team_return scenario is bound to the team coming home; leave team out")
+    mission_type = data.get("mission_type")
+    if mission_type is not None and (mission_type not in MISSION_TYPES or kind not in ("checkin", "debrief")):
+        p.fail("mission_type", f"mission_type must be one of {', '.join(MISSION_TYPES)}, on checkin or debrief")
+    p.bound = _bound_placeholders(kind, team, goauld is not None, on)
     raw_nodes = p.expect(data.get("node"), dict, "node", "node table")
     if "start" not in raw_nodes:
         p.fail("node", "a scenario needs a node named start")
@@ -306,9 +325,8 @@ def parse_scenario(data: dict, source: str) -> Scenario:
     return Scenario(
         id=sid, kind=kind, weight=float(weight), when=p.conds(data.get("when", []), "when"),
         visual=p.visuals(data["visual"], "visual") if "visual" in data else (),
-        goauld=goauld, team=team, captive=p.expect(data.get("captive", False), bool, "captive", "captive"),
-        hostile=p.expect(data.get("hostile", False), bool, "hostile", "hostile"),
-        mission_type=mission_type, brief=brief, risk=risk, nodes=nodes, source=source)
+        goauld=goauld is not None, team=team,
+        mission_type=mission_type, on=on, nodes=nodes, source=source)
 
 
 def load_file(path: Path) -> Scenario:

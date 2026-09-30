@@ -14,8 +14,15 @@ DATA_DIR = Path.home() / ".local" / "share" / "stargate-sgc"
 def _write_atomic(path: Path, data) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(data))
-    os.replace(tmp, path)
+    try:
+        tmp.write_text(json.dumps(data))
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            tmp.unlink()                     # don't leave half a save behind (disk full, read-only)
+        except OSError:
+            pass
+        raise
 
 
 def _is_int(v) -> bool:
@@ -51,14 +58,24 @@ class Saves:
         if not self.exists():
             return None, ""
         try:
-            return from_dict(json.loads(self.path.read_text())), ""
+            data = json.loads(self.path.read_text())
         except Exception:
-            bad = _unique(self.path.with_name(f"campaign.json.bad-{datetime.now():%Y%m%d-%H%M%S}"))
-            try:
-                os.replace(self.path, bad)
-            except OSError:
-                pass
+            data = None
+        if isinstance(data, dict) and data.get("version") == 1:
+            self._set_aside("v1")
+            return None, "BUILD 1 SAVE SET ASIDE — START A NEW GAME"
+        try:
+            return from_dict(data), ""
+        except Exception:
+            self._set_aside("bad")
             return None, "SAVE DAMAGED — STARTING FRESH"
+
+    def _set_aside(self, tag: str) -> None:
+        dest = _unique(self.path.with_name(f"campaign.json.{tag}-{datetime.now():%Y%m%d-%H%M%S}"))
+        try:
+            os.replace(self.path, dest)
+        except OSError:
+            pass
 
     def delete(self) -> None:
         try:
@@ -73,13 +90,11 @@ class Saves:
             return []
         if not isinstance(recs, list):
             return []
-        recs = [r for r in recs if isinstance(r, dict) and _is_int(r.get("goauld_defeated"))
-                and _is_int(r.get("cycles"))]
-        return sorted(recs, key=lambda r: (-r["goauld_defeated"], r["cycles"]))[:top]
+        recs = [r for r in recs if isinstance(r, dict) and _is_int(r.get("surveyed")) and _is_int(r.get("days"))]
+        return sorted(recs, key=lambda r: (-r["surveyed"], -r["days"]))[:top]
 
-    def add_record(self, c: Campaign, result: str) -> None:
+    def add_record(self, entry: dict) -> None:
+        """Add a finished campaign: mode, difficulty, result, days and surveyed (worlds); the date is added here."""
         recs = self.records(top=50)
-        recs.append({"mode": c.mode, "difficulty": c.difficulty, "result": result,
-                     "goauld_defeated": c.record["goauld_defeated"], "cycles": c.cycles,
-                     "date": f"{datetime.now():%Y-%m-%d}"})
+        recs.append({**entry, "date": f"{datetime.now():%Y-%m-%d}"})
         _write_atomic(self.records_path, recs)

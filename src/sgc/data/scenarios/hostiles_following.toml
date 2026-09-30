@@ -1,0 +1,39 @@
+id = "hostiles_following"
+kind = "incoming"
+on = "team_return"
+visual = "incoming"
+
+[node.start]
+text.full = "IDC received: {team}, coming home from {world} with hostiles right behind them. They need the iris open now."
+text.minimal = "IDC received: {team}. Weapons fire on the radio."
+situation = "hostiles_following"
+default = "open_briefly"
+
+[[node.start.choice]]
+key = "open_briefly"
+label = "Open briefly, then close"
+[node.start.choice.outcome.roll]
+odds = 70
+mods = ["tech.zat +15"]
+[node.start.choice.outcome.roll.win]
+visual = ["arrival", "firefight_win"]
+effects = ["personnel -5"]
+end = true
+[node.start.choice.outcome.roll.lose]
+visual = ["arrival", "firefight"]
+effects = ["personnel -10", "breach 15"]
+end = true
+
+[[node.start.choice]]
+key = "keep_closed"
+label = "Keep closed until clear"
+[node.start.choice.outcome.roll]
+odds = 50
+[node.start.choice.outcome.roll.win]
+visual = "iris_hold"
+effects = ["team {team} injured"]
+end = true
+[node.start.choice.outcome.roll.lose]
+visual = "iris_hold"
+effects = ["team {team} lost"]
+end = true

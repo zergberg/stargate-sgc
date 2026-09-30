@@ -1,0 +1,21 @@
+id = "checkin_weather"
+kind = "checkin"
+weight = 3
+when = ["world {world} env extreme"]
+
+[node.start]
+text.full = "{team} checks in from {world}, shouting over the wind. The storm is getting worse."
+text.minimal = "{team} checks in: bad conditions."
+default = "push_on"
+
+[[node.start.choice]]
+key = "push_on"
+label = "Carry on"
+[node.start.choice.outcome.roll]
+odds = 75
+mods = ["team {team} specialty medical +10"]
+[node.start.choice.outcome.roll.win]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["team {team} injured", "personnel -3"]
+end = true

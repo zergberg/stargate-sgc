@@ -1,0 +1,41 @@
+id = "checkin_stronghold"
+kind = "checkin"
+weight = 5
+when = ["world {world} inhabitants goauld"]
+
+[node.start]
+text.full = "{team} checks in from {world}, whispering: gliders overhead, and the Jaffa are sweeping the forest toward their position."
+text.minimal = "{team} is pinned down."
+situation = "under_fire"
+default = "recall"
+
+[[node.start.choice]]
+key = "recall"
+label = "Recall them"
+outcome = { effects = ["recall {team}"], end = true }
+
+[[node.start.choice]]
+key = "hold"
+label = "Hold position"
+[node.start.choice.outcome.roll]
+odds = 35
+mods = ["team {team} specialty recon +20", "team {team} specialty combat +10"]
+[node.start.choice.outcome.roll.win]
+effects = ["xp {team} +1"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["team {team} captured"]
+end = true
+
+[[node.start.choice]]
+key = "reinforce"
+label = "Reinforce if a team is available"
+requires = ["team_available"]
+[node.start.choice.outcome.roll]
+odds = 60
+[node.start.choice.outcome.roll.win]
+effects = ["reinforce {team}"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["reinforce {team}", "team {team} lost"]
+end = true

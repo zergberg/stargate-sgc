@@ -1,0 +1,13 @@
+id = "checkin_quiet"
+kind = "checkin"
+weight = 6
+
+[node.start]
+text.full = "{team} checks in from {world}: all quiet. Next check-in on schedule."
+text.minimal = "{team} checks in: all quiet."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log it"
+outcome = { end = true }

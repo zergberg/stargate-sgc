@@ -1,0 +1,14 @@
+id = "probe_naquadah"
+kind = "probe"
+weight = 2
+when = ["world {world} feature naquadah"]
+
+[node.start]
+text.full = "Telemetry from {designation}: Captain Carter nearly spilled her coffee. The spectrometer shows naquadah in the rocks around the gate."
+text.minimal = "Telemetry from {designation}: received."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log the telemetry"
+outcome = { effects = [], end = true }

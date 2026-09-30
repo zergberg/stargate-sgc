@@ -35,8 +35,18 @@ def test_ctrl_c_aborts_pending_string():
 def test_lone_escape_does_not_eat_next_key():
     kp = KeyParser()
     assert kp.feed(b"\x1b", now=0.0) == []
-    assert kp.feed(b"", now=0.2) == []
+    assert kp.feed(b"", now=0.2) == ["escape"]
     assert kp.feed(b"m", now=0.21) == ["m"]
+
+
+def test_a_lone_escape_is_a_key_once_nothing_follows_it():
+    kp = KeyParser()
+    assert kp.feed(b"\x1b", now=0.0) == [] and kp.feed(b"", now=0.05) == []
+    assert kp.feed(b"q", now=0.3) == ["escape", "q"]           # a key long after the ESC is no Alt-chord
+    kp.text = True
+    assert kp.feed(b"\x1b", now=1.0) == [] and kp.feed(b"", now=1.2) == ["escape"]
+    assert kp.feed(b"\x1b[A\x1bx", now=2.0) == ["up"]          # sequences and Alt-chords are still no Esc
+    assert kp.feed(b"\x1b", now=3.0) == [] and kp.feed(b"[B", now=3.02) == ["down"]
 
 
 def _sound_bank(tmp_path):

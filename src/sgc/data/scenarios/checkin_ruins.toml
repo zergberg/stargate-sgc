@@ -1,0 +1,15 @@
+id = "checkin_ruins"
+kind = "checkin"
+mission_type = "survey"
+weight = 3
+when = ["world {world} feature ruins"]
+
+[node.start]
+text.full = "{team} checks in from {world}: the ruins go on for kilometers. There's a name carved over every doorway."
+text.minimal = "{team} checks in: exploring ruins."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log it"
+outcome = { effects = ["reveal name {world} from ruins"], end = true }

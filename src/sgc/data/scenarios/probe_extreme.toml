@@ -1,0 +1,14 @@
+id = "probe_extreme"
+kind = "probe"
+weight = 2
+when = ["world {world} env extreme"]
+
+[node.start]
+text.full = "Telemetry from {designation}: minus sixty and falling, with winds strong enough to buffet the drone."
+text.minimal = "Telemetry from {designation}: extreme conditions."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log the telemetry"
+outcome = { effects = [], end = true }

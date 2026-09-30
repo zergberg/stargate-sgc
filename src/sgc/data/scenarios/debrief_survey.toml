@@ -1,0 +1,14 @@
+id = "debrief_survey"
+kind = "debrief"
+mission_type = "survey"
+weight = 3
+
+[node.start]
+text.full = "{team} debrief: {world} is mapped out to five kilometers from the gate. Details are in the report."
+text.minimal = "{team} debrief: survey complete."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { end = true }

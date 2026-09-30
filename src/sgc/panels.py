@@ -104,7 +104,12 @@ def _destination(canvas: Canvas, r: Rect, scene: Scene, t: float, dim: float) ->
         canvas.put(r.x, r.y + 1, scene.status[:r.w], _fade(DIM, dim))
         return
     canvas.put(r.x, r.y, a.label.upper()[:r.w], _fade(AMBER, dim), bold=True)
-    sub = a.designation if a.designation and a.designation != a.name else ("CANON" if a.canon else "UNCHARTED")
+    if a.designation and a.designation != a.name:
+        sub = a.designation
+    elif a.canon and a.name != a.designation:       # a canon world stays unmarked until its name is known
+        sub = "CANON"
+    else:
+        sub = "UNCHARTED"
     canvas.put(r.x, r.y + 1, sub.upper()[:r.w], _fade(DIM, dim))
     x = r.x
     for i, g in enumerate(a.full):
@@ -143,7 +148,7 @@ def _wormhole(canvas: Canvas, r: Rect, scene: Scene, t: float, dim: float) -> No
 
 def _teams(canvas: Canvas, r: Rect, scene: Scene, t: float, dim: float) -> None:
     for i, (team, status) in enumerate(list(scene.teams.items())[:r.h]):
-        home = status == "AT BASE"
+        home = status in ("AT BASE", "BASE")          # the ambient gate's words, and the campaign's
         canvas.put(r.x, r.y + i, team, _fade(AMBER, dim), bold=True)
         canvas.put(r.x + 6, r.y + i, "●" if not home else "○", _fade(GREEN if home else AMBER, dim))
         canvas.put(r.x + 8, r.y + i, status[:max(0, r.w - 8)], _fade(WHITE if home else AMBER, dim))

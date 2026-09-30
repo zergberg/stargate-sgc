@@ -1,0 +1,14 @@
+id = "probe_quiet"
+kind = "probe"
+weight = 1
+when = ["world {world} env normal", "world {world} inhabitants none"]
+
+[node.start]
+text.full = "Telemetry from {designation}: breathable air, mild temperatures, forest right up to the gate. Nothing moving but the wind."
+text.minimal = "Telemetry from {designation}: atmosphere breathable."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log the telemetry"
+outcome = { effects = [], end = true }

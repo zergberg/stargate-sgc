@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 TITLES = {"main": "STARGATE COMMAND", "missions": "MISSIONS", "mode": "NEW GAME", "difficulty": "DIFFICULTY",
-          "overwrite": "OVERWRITE SAVE?"}
-MODES = {"CAMPAIGN · DEFEAT 3 SYSTEM LORDS": "campaign", "ENDLESS": "endless"}
+          "pace": "PACE", "overwrite": "OVERWRITE SAVE?"}
+MODES = {"CAMPAIGN": "campaign", "SANDBOX": "sandbox"}
 DIFFICULTIES = ("RECRUIT", "OFFICER", "COMMANDER")
-PARENT = {"missions": "main", "overwrite": "missions", "mode": "missions", "difficulty": "mode"}
+PACES = {"RELAXED · 2 MIN A GAME HOUR": "relaxed", "STANDARD · 1 MIN A GAME HOUR": "standard",
+         "BUSY · 10 S A GAME HOUR": "busy"}
+PARENT = {"missions": "main", "overwrite": "missions", "mode": "missions", "difficulty": "mode", "pace": "difficulty"}
 
 
 class Menu:
@@ -13,6 +15,7 @@ class Menu:
         self.has_save, self.screen = has_save, screen
         self.sel = 0
         self.mode = "campaign"
+        self.difficulty = "officer"
         self.notice = ""
 
     @property
@@ -28,7 +31,9 @@ class Menu:
             return ["START OVER", "BACK"]
         if self.screen == "mode":
             return [*MODES, "BACK"]
-        return [*DIFFICULTIES, "BACK"]
+        if self.screen == "difficulty":
+            return [*DIFFICULTIES, "BACK"]
+        return [*PACES, "BACK"]
 
     def key(self, k: str) -> tuple | None:
         """Handle a key; returns an action tuple for the app, or None."""
@@ -73,6 +78,9 @@ class Menu:
         elif item in MODES:
             self.mode = MODES[item]
             self._go("difficulty")
+        elif item in DIFFICULTIES:
+            self.difficulty = item.lower()
+            self._go("pace")
         else:
-            return ("new", self.mode, item.lower())
+            return ("new", self.mode, self.difficulty, PACES[item])
         return None

@@ -1,0 +1,21 @@
+id = "checkin_exchange"
+kind = "checkin"
+mission_type = "contact"
+weight = 2
+
+[node.start]
+text.full = "{team} checks in from {world}: the council offers a copy of their gate records if one of our medics stays on to help with a fever in the village."
+text.minimal = "{team} reports an offer from the locals."
+situation = "contact_offer"
+default = "defer"
+
+[[node.start.choice]]
+key = "defer"
+label = "Defer to the debrief"
+outcome = { end = true }
+
+[[node.start.choice]]
+key = "accept"
+label = "Accept if the team is diplomatic"
+requires = ["team {team} specialty diplomatic"]
+outcome = { effects = ["reveal address", "personnel -1"], end = true }

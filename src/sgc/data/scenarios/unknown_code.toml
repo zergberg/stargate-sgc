@@ -1,52 +1,30 @@
 id = "unknown_code"
 kind = "incoming"
 weight = 2
-hostile = true
-goauld = "aggressor"
-when = ["cycles >= 5"]
 visual = "incoming"
 
 [node.start]
-text.full = "Incoming. An IDC was received, but that code isn't on file."
-text.minimal = "Incoming. IDC received."
-default = "hold"
+text.full = "Unscheduled offworld activation. A code is coming through, but it isn't one of ours. No radio contact."
+text.partial = "Unscheduled offworld activation. Unknown IDC."
+text.minimal = "Unscheduled offworld activation."
+situation = "unknown_idc"
+default = "closed"
 
 [[node.start.choice]]
-key = "open"
-label = "Open the iris anyway"
+key = "closed"
+label = "Keep the iris closed"
+outcome = { visual = "iris_hold", effects = ["security -3"], end = true }
+
+[[node.start.choice]]
+key = "open_guarded"
+label = "Open for 30 seconds under guard"
 [node.start.choice.outcome.roll]
-odds = 30
+odds = 45
+mods = ["tech.zat +15", "personnel < 40 -15"]
 [node.start.choice.outcome.roll.win]
-visual = "arrival"
-effects = ["intel +5"]
+visual = "firefight_win"
+effects = ["personnel -10", "breach 10"]
 end = true
 [node.start.choice.outcome.roll.lose]
-goto = "fight"
-
-[[node.start.choice]]
-key = "hold"
-label = "Keep the iris closed"
-outcome = { visual = "iris_hold", effects = ["goauld {goauld} aggression +5"], end = true }
-
-[node.fight]
-text.full = "Jaffa! It was one of {goauld}'s tricks."
-default = "fall_back"
-
-[[node.fight.choice]]
-key = "hold"
-label = "Hold the gate room"
-[node.fight.choice.outcome.roll]
-odds = 50
-mods = ["ally.jaffa +20", "tech.zat +15", "personnel < 40 -15"]
-[node.fight.choice.outcome.roll.win]
-visual = "firefight_win"
-effects = ["personnel -10"]
-end = true
-[node.fight.choice.outcome.roll.lose]
 visual = "firefight"
-effects = ["game_over {goauld}'s Jaffa overran the SGC."]
-
-[[node.fight.choice]]
-key = "fall_back"
-label = "Seal level 28 and fall back"
-outcome = { visual = "firefight", effects = ["breach 25", "personnel -5"], end = true }
+effects = ["game_over Jaffa poured through the open iris and overran the SGC."]

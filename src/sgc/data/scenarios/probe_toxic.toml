@@ -1,0 +1,14 @@
+id = "probe_toxic"
+kind = "probe"
+weight = 2
+when = ["world {world} env toxic"]
+
+[node.start]
+text.full = "Telemetry from {designation}: the air is thick with sulfur compounds. Anyone going through will need suits."
+text.minimal = "Telemetry from {designation}: atmosphere unsafe."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log the telemetry"
+outcome = { effects = [], end = true }

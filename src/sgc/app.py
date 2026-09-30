@@ -5,7 +5,9 @@ import argparse
 import math
 import os
 import random
+import shutil
 import signal
+import subprocess
 import sys
 import time
 import traceback
@@ -20,13 +22,15 @@ from . import sequences as sq
 from .addresses import AddressPicker, load_canon
 from .audio.bank import SoundBank
 from .audio.mixer import Mixer, NullMixer
-from .config import Config, load_config
+from .config import Config, load_config, save_setting
 from .director import Director
 from .events import REGISTRY
+from .game import clock, screens
 from .game import content as game_content
-from .game import screens
+from .game.database import Database
 from .game.engine import Engine
 from .game.menu import Menu
+from .game.room import CANCEL_KEYS, Room
 from .game.save import Saves
 from .game.state import Campaign, new_campaign
 from .glyphs import find_font, install_font
@@ -45,6 +49,9 @@ from .term.screen import Terminal
 CUE_GAIN = {"wormhole_hum": 0.45, "ring_spin": 0.6, "klaxon": 0.5, "kawoosh": 1.0}
 FPS_STEPS = (24, 15, 10)
 SCALE_STEPS = (1.0, 0.8, 0.65, 0.5)
+GATE_KEYS = [("b", "BRIEFING"), ("d", "DATABASE"), ("1-9", "ORDERS"), ("?", "HELP"), ("q", "SAVE & QUIT")]
+GRACE = 1.0                   # after an alarm interrupts typing, keys are held until this long without one
+ROOM_KEYS = [("↑↓ ⏎", "CHOOSE"), ("b", "GATE ROOM"), ("d", "DATABASE"), ("?", "HELP"), ("q", "BACK")]
 
 
 class Terminated(Exception):
@@ -54,7 +61,7 @@ class Terminated(Exception):
 class App:
     def __init__(self, term: Terminal, cfg: Config, mixer, rng: random.Random, event: str | None = None,
                  duration: float | None = None, warnings: list[str] | None = None, start: str = "ambient",
-                 saves: Saves | None = None):
+                 saves: Saves | None = None, config_path: Path | None = None):
         self.term, self.cfg, self.mixer, self.rng = term, cfg, mixer, rng
         self.event, self.duration = event, duration
         self.logs: deque[str] = deque(maxlen=60)
@@ -78,14 +85,32 @@ class App:
         self.mode = "ambient"                 # "menu" | "ambient" | "game"
         self.menu: Menu | None = None
         self.engine: Engine | None = None
+        self.view = "gate"                    # in a game: "gate" | "briefing" | "database"
+        self._db_from = "gate"
+        self.db: Database | None = None
+        self._kept_db: Database | None = None  # an alarm closed the Database: d reopens it just as it was
+        self.room: Room | None = None
+        self.legend = cfg.legend
+        self.config_path = config_path
+        self.parser = KeyParser()
         self.briefing: BriefingRenderer | None = None
         self._records: list[dict] = []
         self._prompt_seen = None
         self._last_tick: int | None = None
+        self._grace_until = 0.0               # swallow keys until then (an alarm cut into typing)
+        self._hold_told = False               # "typing held" was logged for this hold
+        self._open_told = None                # the alarm prompt whose "give an order first" was logged
+        self._walking = False                 # a walk between the rooms is queued or playing
+        self._walk_behind = False             # ... and it waits behind a gate scene
+        self._walk_seq = 0
+        self._walk_told = 0                   # the walk whose "q again on arrival" was logged
+        self._resume_room = False             # an alarm pulled the player out of the briefing room
+        self._children: list = []             # notify-send processes still to reap
 
     # ------------------------------------------------------------------ helpers
     def log(self, line: str) -> None:
-        self.logs.append(f"{datetime.now():%H:%M:%S}  {line}")
+        when = clock.short(self.engine.c.minutes) if self.engine is not None else f"{datetime.now():%H:%M:%S}"
+        self.logs.append(f"{when}  {line}")
 
     @property
     def fps(self) -> int:
@@ -97,15 +122,33 @@ class App:
         self.backend.caps = self.caps
         self.layout = compute_layout(cols, rows, cw, ch)
         self.canvas = Canvas(cols, rows)
-        self.canvas.set_holes([self.layout.gate, self.layout.bar])
+        if not (self.mode == "game" and self.view == "database"):     # the Database has the whole screen
+            self.canvas.set_holes([self.layout.gate, self.layout.bar])
         self.gate = None
         self.bar = None
         self._bar_key = None
         self._gate_key = None
         return self.backend.forget() + b"\x1b[0m\x1b[2J"
 
+    def _text_mode(self) -> bool:
+        if self.mode != "game":
+            return False
+        if self.view == "database" and self.db is not None:
+            return self.db.text_mode
+        return self.view == "briefing" and self.room is not None and self.room.text_mode
+
+    def _typing(self) -> bool:
+        """Read keys as text: a note or a search is open, or typing is held after an alarm cut into one
+        (so every letter counts as typing, not only the ones that are also commands)."""
+        return self._text_mode() or (self.mode == "game" and time.monotonic() < self._grace_until)
+
     def _handle_keys(self, keys: list[str]) -> None:
         for k in keys:
+            if self.mode == "game" and self._held(k):
+                continue                      # keys typed for a note or a search, not for the alarm
+            if self.mode == "game" and not self.director.exiting and (k != "ctrl-c" or self._text_mode()) \
+                    and self._game_key(k):
+                continue                      # Ctrl+C reaches the game only to cancel a note or a search
             if k in ("q", "ctrl-c"):
                 if k == "q" and self.mode == "menu" and self.menu.screen != "main" and not self.director.exiting:
                     self.menu.back()
@@ -128,16 +171,163 @@ class App:
             elif self.mode == "menu":
                 if not self.director.exiting:
                     self._menu_action(self.menu.key(k))
-            elif k == "p" and (self.mode == "ambient" or self.engine.campaign.difficulty == "recruit"):
+            elif k == "p" and (self.mode == "ambient" or self.engine.c.difficulty == "recruit"):
                 if not self.director.exiting:
                     self._paused = not self._paused
                     self.mixer.pause(self._paused)
                     self.log("PAUSED" if self._paused else "RESUMED")
-            elif self.mode == "game":
-                if not self.director.exiting:
-                    self.engine.key(k)
-            elif k == "space":
+            elif k == "space" and self.mode == "ambient":
                 self.director.skip()
+
+    def _held(self, k: str) -> bool:
+        """An alarm cut into typing: swallow keys until the player stops typing for GRACE seconds (each
+        key restarts it) or presses Enter. Ctrl+C or Esc ends the hold too, cancelling the note."""
+        now = time.monotonic()
+        if now >= self._grace_until:
+            return False
+        if k in ("enter", *CANCEL_KEYS):
+            self._grace_until = 0.0
+            if k in CANCEL_KEYS and self._resume_room and self.room is not None and self.room.text_mode:
+                self.room.key(k)
+            if k in CANCEL_KEYS and self._kept_db is not None and self._kept_db.text_mode:
+                self._kept_db.key(k)
+        else:
+            self._grace_until = now + GRACE
+        if not self._hold_told:
+            self._hold_told = True
+            self.log("ALARM — TYPING HELD TILL YOU STOP")
+        return True
+
+    def _game_key(self, k: str) -> bool:
+        """Keys in a campaign; returns True if used (False lets q quit, m mute and so on)."""
+        e = self.engine
+        if e.ended:
+            return e.key(k)
+        if self.view == "database":
+            if k in ("m", "+", "-") and not self.db.text_mode:
+                return False
+            if k == "?" and not self.db.text_mode:
+                self._cycle_legend()
+            elif self.db.key(k) == ("close",):
+                self._close_database()
+            return True
+        if self._text_mode():
+            self.room.key(k)
+            return True
+        if k == "?":
+            self._cycle_legend()
+            return True
+        if k == "d":
+            self._open_database()
+            return True
+        if k == "b":
+            if self.view == "gate" and (prompt := e.prompt) is not None:
+                if self._open_told is not prompt:           # answer the alarm before leaving it
+                    self._open_told = prompt
+                    self.log("ALARM OPEN — GIVE AN ORDER FIRST")
+                return True
+            self._walk("gate" if self.view == "briefing" else "briefing")
+            return True
+        if self.view == "briefing":
+            if k in ("m", "+", "-"):
+                return False
+            if self.room.key(k) == ("close",):
+                self._walk("gate")
+            return True
+        if k == "q" and self._walking:            # still walking down: not yet time to quit
+            if self._walk_told != self._walk_seq:
+                self._walk_told = self._walk_seq
+                self.log("WALKING — Q AGAIN ON ARRIVAL")
+            return True
+        return e.key(k)
+
+    def _gate_busy(self) -> bool:
+        """The engine owns the gate: an alarm is pending, or real traffic is queued or playing (a walk, the
+        ambient scene or its cut don't count)."""
+        return bool(self.engine.c.alarms) or self.engine.prompt is not None or self.engine.showing
+
+    def _legend_busy(self) -> bool:
+        """The side panel holds something the full legend mustn't cover."""
+        return self.view == "briefing" or (self.engine is not None and self.engine.prompt is not None)
+
+    def _cycle_legend(self) -> None:
+        self.legend = screens.next_legend(self.legend)
+        save_setting("legend", self.legend, self.config_path)
+
+    def _open_database(self) -> None:
+        self.db, self._kept_db = self._kept_db or Database(self.engine.c), None
+        self._db_from, self.view = self.view, "database"
+        self.canvas.set_holes([])
+        self.canvas.invalidate()
+        self.term.write(self.backend.forget() + b"\x1b[0m\x1b[2J")
+
+    def _close_database(self) -> None:
+        self.view, self.db = self._db_from, None
+        self._resized = True                      # relayout: the gate and the address bar come back
+
+    def _walk(self, to: str) -> None:
+        """Walk between the rooms. Only an idle gate is interrupted; otherwise the walk waits for
+        what the gate is showing, so live traffic and alarms play out."""
+        t = self.cfg.transition_seconds
+        if to == "briefing":
+            if not (self._resume_room and self.room is not None):
+                self.room = Room(self.engine)
+            self.view = "briefing"
+            steps = sq.to_briefing(t)
+        else:
+            self.view = "gate"
+            steps = sq.to_gateroom(t)
+        self._resume_room = False
+        ambient, s = self.engine.ambient, self.director.scene
+        self.engine.cut_ambient()                 # never queue behind the ambient scene: traffic would cut the walk
+        up = not ambient and (s.horizon != "off" or bool(s.locked))      # a live wormhole is never shut by a walk
+        self._set_off(steps, self._gate_busy() or up)
+
+    def _set_off(self, steps: list[Step], behind: bool) -> None:
+        """Play a walk: queued behind what the gate is showing, or at once, cutting an idle gate."""
+        self._walk_seq += 1
+        seq = self._walk_seq
+
+        def arrived(scene, p):
+            if seq == self._walk_seq:
+                self._walking = False
+        steps = [*steps, Step(0, arrived)]
+        if behind:
+            self.director.run_steps(steps)
+        else:
+            self.director.cut_to(steps, auto=False)
+        self._walking, self._walk_behind = True, behind
+
+    def _alarm(self, title: str, text: str) -> None:
+        """An urgent event: the bell, a desktop notification, the klaxon, and back to the gate room."""
+        if self._text_mode():
+            self._grace_until = time.monotonic() + GRACE
+            self._hold_told = False
+        self.term.write(b"\x07")
+        self.mixer.play("klaxon", gain=CUE_GAIN["klaxon"])
+        self._reap()
+        if self.cfg.notify and shutil.which("notify-send"):
+            try:
+                self._children.append(subprocess.Popen(
+                    ["notify-send", "-a", "sgc", f"SGC: {title}", text],
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+            except OSError:
+                pass
+        self._back_to_the_gate_room()
+
+    def _reap(self) -> None:
+        """Collect finished notify-send processes, so none is left a zombie."""
+        if self._children:
+            self._children = [p for p in self._children if p is not None and p.poll() is None]
+
+    def _back_to_the_gate_room(self) -> None:
+        if self.view == "database":
+            kept = self.db
+            self._close_database()
+            self._kept_db = kept              # d reopens it: tab, search and scroll as they were
+        if self.view == "briefing":
+            self._walk("gate")
+            self._resume_room = True          # b goes back to the same room, a half-typed note and all
 
     def _play(self, cues: list[str]) -> None:
         for cue in cues:
@@ -169,7 +359,8 @@ class App:
             else:
                 self._start_game(c)
         elif action[0] == "new":
-            self._start_game(new_campaign(action[1], action[2], self.rng.randrange(2 ** 31)))
+            _, mode, difficulty, pace = action
+            self._start_game(new_campaign(mode, difficulty, self.rng.randrange(2 ** 31), pace))
 
     def _start_game(self, c: Campaign) -> None:
         try:
@@ -179,20 +370,32 @@ class App:
             return
         for w in warnings:
             self.log(w.upper())
-        engine = Engine(self.director, c, scenarios, self.cfg.transition_seconds, self.cfg.decision_countdown,
-                        save=self.saves.save, on_end=self._game_ended, log=self.log)
-        self.engine, self.mode = engine, "game"
+        engine = Engine(c, scenarios, self.director, self.cfg.game_pace,
+                        save=self.saves.save, on_end=self._game_ended, log=self.log, on_alarm=self._alarm)
+        self.engine, self.mode, self.view = engine, "game", "gate"
         engine.save_now()
-        self.log(f"{c.mode.upper()} · {c.difficulty.upper()} · KEYS 1-4 orders  r review IDCs  q save & quit")
-        self.director.cut_to([*sq.to_gateroom(self.cfg.transition_seconds), Step(0, lambda s, p: engine.begin())],
-                             auto=False)
+        pace = (f"PACE {self.cfg.game_pace} S/HOUR (CONFIG)" if self.cfg.game_pace is not None
+                else f"{c.pace.upper()} PACE")
+        self.log(f"{c.mode.upper()} · {c.difficulty.upper()} · {pace}")
+        self.log("KEYS b briefing  d database  ? help  q save & quit")
+        self._resume_room = False
+        self._set_off(sq.to_gateroom(self.cfg.transition_seconds), behind=False)
 
     def _game_ended(self, c: Campaign) -> None:
-        self.saves.add_record(c, "victory" if c.won else "overrun")
-        self.saves.delete()
+        self._back_to_the_gate_room()
+        try:
+            self.saves.add_record({"mode": c.mode, "difficulty": c.difficulty, "result": "overrun",
+                                   "days": clock.day(c.minutes), "surveyed": c.record["surveyed"]})
+        except OSError as e:
+            self.log(f"RECORD NOT SAVED — {(e.strerror or type(e).__name__).upper()[:40]}")
+        try:
+            self.saves.delete()
+        except OSError as e:
+            self.log(f"OLD SAVE NOT REMOVED — {(e.strerror or type(e).__name__).upper()[:40]}")
 
     def _to_menu(self) -> None:
-        self.engine = None
+        self.engine, self.db, self._kept_db, self.room, self.view = None, None, None, None, "gate"
+        self._walking = self._resume_room = False
         self.director.scene.prompt = None
         self.director.scene.teams = _teams()
         self.mode = "menu"
@@ -211,6 +414,23 @@ class App:
             if sec > 0 and sec != self._last_tick:
                 self._last_tick = sec
                 self.mixer.play("countdown_tick")
+
+    def _step(self, dt: float) -> None:
+        """One frame's worth of time: the animation (at the ambient speed) and the SGC clock (never scaled)."""
+        if not self._paused:
+            new_logs, cues = self.director.advance(dt * self.cfg.speed)
+            for line in new_logs:
+                self.log(line)
+            self._play(cues)
+            if self._walking and self.director.idle:  # the walk was thrown away: arrive anyway
+                self._walking = self._walk_behind = False
+                self.director.scene.view_p = 1.0 if self.view == "gate" else 0.0
+            if self.engine is not None and not self.director.exiting:
+                self.engine.update(dt)
+                if self.engine.finished:
+                    self._to_menu()
+        self._prompt_sounds()
+        self._reap()
 
     def _room(self, gate_img, p: float):
         size = gate_img.size[0]
@@ -299,6 +519,9 @@ class App:
     def _frame(self, t: float) -> bytes:
         out = bytearray(b"\x1b[?2026h")
         L, scene = self.layout, self.director.scene
+        if self.mode == "game" and self.view == "database" and L.mode != "tiny":
+            screens.draw_database(self.canvas, L, self.db, self.legend)
+            return bytes(out + self.canvas.render(self.caps.truecolor) + b"\x1b[?2026l")
         if L.mode != "tiny" and L.gate.w and L.gate.h:
             w, h = self.backend.pixel_size(L.gate)
             size = max(16, min(w, h))
@@ -330,7 +553,14 @@ class App:
         if self.mode == "menu" and self.menu is not None:
             screens.draw_menu(self.canvas, L, self.menu, self._records)
         elif self.mode == "game" and self.engine is not None:
-            screens.draw_game(self.canvas, L, scene, self.engine.campaign, t)
+            c = self.engine.c
+            if self.view == "briefing" and not self.engine.ended:
+                screens.draw_room(self.canvas, L, self.room)
+                screens.draw_legend(self.canvas, L, self.legend, ROOM_KEYS, busy=True)
+            else:
+                screens.draw_game(self.canvas, L, scene, c, t)
+                screens.draw_legend(self.canvas, L, self.legend, GATE_KEYS, busy=self._legend_busy())
+            screens.draw_header(self.canvas, L, c, self.engine.alarm_title, t)
         screens.draw_room_label(self.canvas, L, scene)
         out += self.canvas.render(self.caps.truecolor)
         out += b"\x1b[?2026l"
@@ -339,7 +569,7 @@ class App:
     # ------------------------------------------------------------------ run
     def run(self) -> int:
         signal.signal(signal.SIGWINCH, lambda *_: setattr(self, "_resized", True))
-        parser = KeyParser()
+        parser = self.parser
         self.term.enter()
         try:
             self.caps = detect(self.term, self.cfg.graphics, os.environ)
@@ -366,6 +596,7 @@ class App:
             start = last = time.monotonic()
             while not self._quit:
                 frame_start = time.monotonic()
+                parser.text = self._typing()
                 self._handle_keys(parser.feed(self.term.read_available(0)))
                 if self._quit:
                     break
@@ -376,16 +607,7 @@ class App:
                 now = time.monotonic()
                 dt = min(0.25, now - last)
                 last = now
-                if not self._paused:
-                    new_logs, cues = self.director.advance(dt * self.cfg.speed)
-                    for line in new_logs:
-                        self.log(line)
-                    self._play(cues)
-                    if self.engine is not None and not self.director.exiting:
-                        self.engine.update(dt * self.cfg.speed)
-                        if self.engine.finished:
-                            self._to_menu()
-                self._prompt_sounds()
+                self._step(dt)
                 if self.director.finished:
                     break
                 if self.duration is not None and now - start >= self.duration and not self.director.exiting:
@@ -397,6 +619,7 @@ class App:
                     self.term.write(extra)
                 wait = 1 / self.fps - (time.monotonic() - frame_start)
                 if wait > 0:
+                    parser.text = self._typing()
                     self._handle_keys(parser.feed(self.term.read_available(wait)))
             return 0
         finally:
@@ -457,7 +680,7 @@ def main(argv: list[str] | None = None) -> int:
     mixer = Mixer(SoundBank(cfg.sound_pack), cfg.volume) if cfg.sound else NullMixer()
     start = "ambient" if args.ambient or args.event else "missions" if args.missions else "menu"
     app = App(Terminal(), cfg, mixer, random.Random(args.seed), args.event, args.duration, warnings,
-              start=start)
+              start=start, config_path=Path(args.config) if args.config else None)
     try:
         return app.run()
     except (Terminated, KeyboardInterrupt):

@@ -1,35 +1,42 @@
+import json
 import random
 import tomllib
 
+import pytest
+
+from sgc import sequences as sq
 from sgc.addresses import AddressPicker, load_canon
 from sgc.config import Config
 from sgc.director import Director
 from sgc.events import REGISTRY
+from sgc.game import clock
+from sgc.game import engine as eng
 from sgc.game.content import parse_scenario
 from sgc.game.engine import Engine
-from sgc.game.state import new_campaign, to_dict
+from sgc.game.state import from_dict, new_campaign, to_dict
 
-CHOICE = """
-id = "t_choice"
+UNKNOWN = """
+id = "t_unknown"
 kind = "incoming"
+goauld = "any"
 visual = "incoming"
 [node.start]
-text.full = "Decide."
-countdown = 5
-default = "safe"
+text.full = "No IDC. {goauld}'s Jaffa, probably."
+situation = "unknown_idc"
+default = "closed"
 [[node.start.choice]]
-key = "bold"
-label = "Bold"
-outcome = { effects = ["intel +50"], end = true }
+key = "closed"
+label = "Keep the iris closed"
+outcome = { visual = "iris_hold", effects = ["security -5"], end = true }
 [[node.start.choice]]
-key = "safe"
-label = "Safe"
-outcome = { effects = ["security -10"], end = true }
+key = "open_guarded"
+label = "Open under guard"
+outcome = { effects = ["personnel -10"], end = true }
 [[node.start.choice]]
 key = "locked"
-label = "Locked"
-requires = ["intel >= 99"]
-outcome = { effects = ["intel +1"], end = true }
+label = "Call the Asgard"
+requires = ["ally.asgard"]
+outcome = { end = true }
 """
 
 DOOM = """
@@ -42,54 +49,23 @@ default = "open"
 key = "open"
 label = "Open the iris"
 outcome = { visual = "firefight", effects = ["game_over The Jaffa took the SGC."] }
-"""
-
-STOLEN = """
-id = "t_stolen"
-kind = "incoming"
-team = "compromised"
-when = ["any_compromised_idc"]
-[node.start]
-text.full = "IDC from {team}, captured on {captured_at}."
-text.minimal = "IDC received."
-default = "hold"
 [[node.start.choice]]
 key = "hold"
 label = "Hold"
 outcome = { end = true }
 """
 
-RECON = """
-id = "t_recon"
-kind = "mission"
-mission_type = "recon"
-goauld = "any"
-risk = "low"
-brief = "Recon {goauld} at {destination}"
+PROBE = """
+id = "t_probe"
+kind = "probe"
+when = ["world {world} env normal"]
 [node.start]
-text.full = "{team} is on {destination}."
-default = "home"
+text.full = "Telemetry from {designation}: green across the board."
+default = "log"
 [[node.start.choice]]
-key = "home"
-label = "Come home"
-outcome = { visual = "team_return", effects = ["intel +20"], end = true }
-"""
-
-STRIKE = """
-id = "t_strike"
-kind = "mission"
-mission_type = "strike"
-goauld = "weakest"
-risk = "high"
-when = ["goauld {goauld} strength <= 1"]
-brief = "Strike {goauld}"
-[node.start]
-text.full = "{goauld} is in reach."
-default = "hit"
-[[node.start.choice]]
-key = "hit"
-label = "Take the shot"
-outcome = { visual = "team_return", effects = ["goauld {goauld} strength -1"], end = true }
+key = "log"
+label = "Log it"
+outcome = { effects = ["reveal name {world} from ruins"], end = true }
 """
 
 
@@ -102,339 +78,562 @@ def scen(*texts):
 
 
 class Rig:
-    def __init__(self, scenarios, campaign=None, difficulty="officer", mode="campaign"):
-        self.d = Director(Config(), random.Random(1), AddressPicker(load_canon(), 0.6, random.Random(1)), REGISTRY)
-        self.c = campaign or new_campaign(mode, difficulty, 7)
-        self.saves, self.ended, self.logs = [], [], []
-        self.e = Engine(self.d, self.c, scenarios, transition=1.0, countdown=4.0,
+    def __init__(self, *texts, campaign=None, director=False, pace=None, difficulty="officer"):
+        self.c = campaign or new_campaign("campaign", difficulty, 7)
+        if campaign is None:
+            self.c.events.cancel(lambda e: e.kind == "incoming")      # tests trigger incoming themselves
+        self.saves, self.ended, self.logs, self.alarms = [], [], [], []
+        self.d = Director(Config(), random.Random(1), AddressPicker(load_canon(), 0.6, random.Random(1)),
+                          REGISTRY) if director else None
+        self.e = Engine(self.c, scen(*texts), self.d, pace_override=pace,
                         save=lambda c: self.saves.append(to_dict(c)), on_end=self.ended.append,
-                        log=self.logs.append)
-        self.e.begin()
+                        log=self.logs.append, on_alarm=lambda t, x: self.alarms.append(t))
 
-    def run(self, until, limit=4000, dt=0.25, answer=None):
-        for _ in range(limit):
-            logs, _ = self.d.advance(dt)
-            self.logs += logs
-            self.e.update(dt)
-            if answer and self.d.scene.prompt is not None and self.e.mode in ("decision", "briefing"):
-                key = answer(self.e)
-                if key:
-                    self.e.key(key)
-            if until():
-                return
-        raise AssertionError(f"condition not reached; mode={self.e.mode} cycles={self.c.cycles}")
+    def world(self, i=5, **traits):
+        w = list(self.c.worlds.values())[i]
+        for k, v in traits.items():
+            setattr(w, k, v)
+        return w
 
 
-def test_countdown_timeout_takes_the_default():
-    r = Rig(scen(CHOICE))
-    r.e.queue_scenario("t_choice")
-    r.run(lambda: r.e.mode == "decision")
-    p = r.d.scene.prompt
-    assert p.total == 5 and [ok for _, ok in p.options] == [True, True, False]
-    r.run(lambda: r.e.mode != "decision")
-    assert r.c.meters["security"] == 60 and any("STANDING PROCEDURE" in line for line in r.logs)
+def test_the_clock_runs_by_pace_and_recovers_the_base():
+    r = Rig()
+    r.c.meters["security"] = 50
+    r.e.update(60)                                        # standard: a real minute is a game hour
+    assert r.c.minutes == 540 and r.c.meters["security"] == 50
+    r.e.advance(5 * 60)                                   # 14:00 is 6-hourly
+    assert r.c.meters["security"] == 51 and r.c.events.peek().kind == "recovery_tick"
+    fast = Rig(pace=10)
+    fast.e.update(10)
+    assert fast.c.minutes == 540
 
 
-def test_keys_pick_enabled_choices_only():
-    r = Rig(scen(CHOICE))
-    r.e.queue_scenario("t_choice")
-    r.run(lambda: r.e.mode == "decision")
-    assert r.e.key("3") and r.e.mode == "decision"
+def test_the_gate_is_one_resource():
+    r = Rig(UNKNOWN)
+    r.c.gate_until = r.c.now + 20
+    r.c.events.push(r.c.now, "incoming")
+    r.e.advance(10)
+    assert r.alarms == []
+    r.e.advance(15)
+    assert r.alarms == ["INCOMING"] and r.c.gate_until == r.c.now + clock.GATE_MINUTES["incoming"] - 5
+
+
+def test_probe_to_telemetry_report():
+    r = Rig(PROBE)
+    w = r.world(env="normal", inhabitants="none", features=("ruins",), hidden_names={"locals": "Tel'kar"})
+    assert r.e.probe(w.id) == f"MALP QUEUED FOR {w.id}" and r.c.stock["malp"] == 3
+    assert r.e.probe(w.id).startswith("A DRONE IS ALREADY BOUND")
+    r.e.advance(1)
+    assert r.c.gate_until == r.c.now - 1 + 10 and any("MALP SENT TO" in line for line in r.logs)
+    r.e.advance(125)
+    assert w.status == "probed" and w.drone == "malp" and w.seen["env"] == "breathable atmosphere"
+    assert w.seen["features"] == "ruins" and w.last_visit is not None
+    assert any("green across the board" in text for _, text in w.reports)
+    assert w.name == "Tel'kar" and w.names[0][1] == "inscriptions in the ruins"
+    assert r.c.record["probes"] == 1 and r.e.probe(w.id).startswith("A MALP IS ALREADY ON")
+
+
+def test_no_lock_marks_the_world_lost_and_keeps_the_malp():
+    r = Rig()
+    w = r.world(env="no_lock")
+    r.e.probe(w.id)
+    r.e.advance(1)
+    assert w.status == "lost" and r.c.stock["malp"] == 4 and any("NO LOCK" in line for line in r.logs)
+
+
+@pytest.mark.parametrize("table,key,status,drone", [("DESTROYED", "extreme", "probed", None),
+                                                    ("CAPTURED", "jaffa", "hostile", None)])
+def test_probes_can_be_destroyed_or_captured(monkeypatch, table, key, status, drone):
+    monkeypatch.setitem(getattr(eng, table), key, 100)
+    r = Rig()
+    w = r.world(env="extreme" if key == "extreme" else "normal", inhabitants=key if key == "jaffa" else "none")
+    r.e.probe(w.id)
+    r.e.advance(200)
+    assert w.status == status and w.drone is drone and r.c.stock["malp"] == 3
+
+
+def test_a_uav_sees_more_and_recall_brings_a_drone_home():
+    r = Rig(difficulty="recruit")
+    w = r.world(env="normal", inhabitants="human")
+    r.e.send_uav(w.id)
+    r.e.advance(120)
+    assert w.drone == "uav" and w.seen["inhabitants"] == "settlement" and "count" in w.seen
+    assert r.c.stock["uav"] == 1
+    assert r.e.recall_drone(w.id).startswith("RECALL QUEUED")
+    r.e.advance(1)
+    assert w.drone is None and r.c.stock["uav"] == 2 and r.c.gate_until == r.c.now - 1 + 30
+    assert r.e.recall_drone(w.id).startswith("NO DRONE")
+
+
+def test_a_recalled_drone_coming_home_to_full_stores_is_scrapped():
+    r = Rig()
+    w = r.world(env="normal", drone="malp")
+    r.c.stock["malp"] = 6                                  # an older save, already over: nothing adds to it
+    r.e.recall_drone(w.id)
+    r.e.advance(1)
+    assert w.drone is None and r.c.stock["malp"] == 6 and "MALP SCRAPPED — STORES FULL (6)" in r.logs
+
+
+def test_an_alarm_waits_three_game_hours_then_the_default_order_runs():
+    r = Rig(UNKNOWN)
+    r.c.events.push(r.c.now, "incoming")
+    r.e.advance(1)
+    p = r.e.prompt
+    assert r.alarms == ["INCOMING"] and p.title == "INCOMING" and "Jaffa" in p.text
+    assert [ok for _, ok in p.options] == [True, True, False] and p.total == 180
+    assert r.e.alarm_title == "INCOMING"
+    r.e.advance(178)
+    assert r.e.prompt is not None and r.c.meters["security"] == 70
+    r.e.advance(2)
+    assert r.e.prompt is None and r.c.meters["security"] == 65
+    assert any("STANDING ORDER: KEEP THE IRIS CLOSED" in line for line in r.logs)
+
+
+def test_a_standing_order_changes_what_runs_on_timeout():
+    r = Rig(UNKNOWN)
+    r.e.set_order("unknown_idc", "open_guarded")
+    r.c.events.push(r.c.now, "incoming")
+    r.e.advance(200)
+    assert r.c.meters["personnel"] == 70 and r.c.meters["security"] == 70
+
+
+def test_the_window_is_at_least_a_real_minute():
+    r = Rig(UNKNOWN, pace=10)
+    r.c.events.push(r.c.now, "incoming")
+    r.e.advance(1)
+    assert r.e.prompt.total == 60 and r.c.alarms[0]["deadline"] == 480 + 360
+
+
+def test_keys_pick_enabled_choices_only_and_answers_save():
+    r = Rig(UNKNOWN)
+    r.c.events.push(r.c.now, "incoming")
+    r.e.advance(1)
+    assert r.e.key("3") and r.e.prompt is not None
+    assert not r.e.key("x")
+    r.e.key("2")
+    assert r.e.prompt is None and r.c.meters["personnel"] == 70 and r.saves[-1]["meters"]["personnel"] == 70
+
+
+def test_alarms_queue_and_each_gets_its_own_window():
+    r = Rig(UNKNOWN)
+    r.c.events.push(r.c.now, "incoming")
+    r.c.events.push(r.c.now + 60, "incoming")
+    r.e.advance(61)
+    assert len(r.c.alarms) == 2 and r.c.alarms[1]["deadline"] is None
     r.e.key("1")
-    assert r.e.mode == "busy" and r.c.meters["intel"] == 60 and r.d.scene.prompt is None
-    assert r.saves and r.saves[-1]["meters"]["intel"] == 60
-    r.run(lambda: r.c.cycles >= 2)
+    assert r.c.alarms[0]["deadline"] == r.c.now + 180
 
 
 def test_game_over_ends_the_campaign():
-    r = Rig(scen(DOOM))
-    r.e.queue_scenario("t_doom")
-    r.run(lambda: r.e.mode == "decision")
+    r = Rig(DOOM)
+    r.c.events.push(r.c.now, "incoming")
+    r.e.advance(1)
     r.e.key("1")
-    assert r.c.over == "The Jaffa took the SGC." and r.ended == [r.c]
-    r.run(lambda: r.e.mode == "over")
-    assert r.d.scene.prompt.title == "BASE OVERRUN"
+    assert r.c.over == "The Jaffa took the SGC." and r.ended == [r.c] and r.e.ended
+    assert r.e.prompt.title == "BASE OVERRUN" and r.c.alarms == []
     n = len(r.saves)
     r.e.save_now()
-    assert len(r.saves) == n                 # a fallen campaign is never saved again
+    r.e.advance(600)
+    assert len(r.saves) == n and r.e.probe(r.world().id) == "THE CAMPAIGN IS OVER"
     r.e.key("1")
     assert r.e.finished
 
 
-def test_compromised_idc_binds_the_team_and_difficulty_hides_detail():
-    for diff, expected in (("officer", "captured on Chulak"), ("commander", "IDC received.")):
-        c = new_campaign("campaign", diff, 7)
-        c.teams["SG-3"].status, c.teams["SG-3"].idc, c.teams["SG-3"].captured_at = "captured", "compromised", "Chulak"
-        r = Rig(scen(STOLEN), campaign=c)
-        r.e.queue_scenario("t_stolen")
-        r.run(lambda: r.e.mode == "decision")
-        assert expected in r.d.scene.prompt.text, diff
+def test_random_incoming_reschedules_itself():
+    r = Rig(UNKNOWN)
+    r.c.events.push(r.c.now, "incoming")
+    r.e.advance(1)
+    nxt = r.c.events.find(lambda e: e.kind == "incoming")
+    assert len(nxt) == 1 and 36 * 60 <= nxt[0].due - (r.c.now - 1) <= 96 * 60
 
 
-def test_briefing_sends_a_team_and_brings_it_home():
-    r = Rig(scen(RECON))
-    r.c.since_briefing = 2
-    r.run(lambda: r.e.mode == "briefing")
-    p = r.d.scene.prompt
-    assert p.title == "MISSION BRIEFING" and p.options[-1][0] == "Stand down" and "LOW RISK" in p.options[0][0]
-    assert r.d.scene.view_p == 0.0
-    r.e.key("1")
-    assert r.c.teams["SG-1"].status == "offworld" and r.c.record["missions"] == 1
-    r.run(lambda: r.e.mode == "decision")
-    assert r.d.scene.view_p == 1.0 and "SG-1" in r.d.scene.prompt.text
-    r.e.key("1")
-    r.run(lambda: r.c.cycles >= 2)
-    assert r.c.meters["intel"] == 30 and r.c.teams["SG-1"].status == "base"
-
-
-def test_standing_down_walks_back_down():
-    r = Rig(scen(RECON))
-    r.c.since_briefing = 2
-    r.run(lambda: r.e.mode == "briefing")
-    r.e.key("2")
-    r.run(lambda: r.c.cycles >= 2)
-    assert r.d.scene.view_p == 1.0 and r.c.record["missions"] == 0
-
-
-def test_strike_on_the_last_lord_wins_and_debriefs():
-    r = Rig(scen(STRIKE))
-    r.c.record["goauld_defeated"] = 2
-    weakest = r.c.lords[0]
-    weakest.strength = 1
-    r.e.queue_scenario("t_strike")
-    r.run(lambda: r.e.mode == "decision")
-    assert weakest.name in r.d.scene.prompt.text
-    r.e.key("1")
-    r.run(lambda: r.e.mode == "debrief")
-    assert r.c.won and weakest.defeated and r.ended == [r.c]
-    assert "RATING" in r.d.scene.prompt.text
-
-
-def test_an_eligible_strike_opens_an_early_briefing():
-    r = Rig(scen(RECON, STRIKE))
-    r.c.lords[0].strength = 1
-    r.run(lambda: r.e.mode == "briefing")
-    assert r.c.cycles == 1 and any("Strike" in label for label, _ in r.d.scene.prompt.options)
-
-
-def test_no_early_briefing_without_an_eligible_strike():
-    r = Rig(scen(RECON, STRIKE))
-    r.run(lambda: r.e.mode == "briefing")
-    assert r.c.cycles == 3
-
-
-def test_r_does_nothing_once_the_campaign_is_over():
-    r = Rig(scen(DOOM))
-    r.e.queue_scenario("t_doom")
-    r.run(lambda: r.e.mode == "decision")
-    r.e.key("1")
-    assert r.e.mode == "busy" and not r.e.key("r") and not r.e._revoke_pending
-    r.run(lambda: r.e.mode == "over")
-    assert not r.e.key("r") and not r.e._revoke_pending
-
-
-def test_revoke_request_opens_between_cycles():
-    r = Rig(scen(CHOICE))
-    r.c.teams["SG-2"].idc = "compromised"
-    assert r.e.key("r")
-    r.run(lambda: r.e.mode == "revoke")
-    labels = [label for label, _ in r.d.scene.prompt.options]
-    assert labels[-1] == "Cancel" and not any("COMPROMISED" in label for label in labels)
-    r.e.key("2")
-    assert r.c.teams["SG-2"].idc == "valid" and r.c.teams["SG-2"].out_cycles == 2 and r.e.mode == "idle"
-
-
-def test_scene_team_labels_follow_the_campaign():
-    r = Rig(scen(CHOICE))
-    r.c.teams["SG-4"].status = "captured"
-    r.e.update(0.0)
-    assert r.d.scene.teams["SG-4"] == "MISSING" and r.d.scene.teams["SG-1"] == "AT BASE"
-
-
-RECON2 = """
-id = "t_recon2"
-kind = "mission"
-mission_type = "recon"
-risk = "low"
-brief = "Recon {destination}"
-[node.start]
-text.full = "{team} is on {destination}."
-default = "on"
-[[node.start.choice]]
-key = "on"
-label = "Press on"
-outcome = { goto = "deeper" }
-[node.deeper]
-text.full = "{team} is deep inside."
-default = "home"
-[[node.deeper.choice]]
-key = "home"
-label = "Come home"
-outcome = { visual = "team_return", end = true }
-"""
-
-CAPTURE = """
-id = "t_capture"
-kind = "mission"
-mission_type = "recon"
-risk = "high"
-brief = "Walk into a trap at {destination}"
-[node.start]
-text.full = "{team} is surrounded."
-default = "give"
-[[node.start.choice]]
-key = "give"
-label = "Surrender"
-outcome = { effects = ["team {team} captured"], end = true }
-"""
-
-TWO_VISUALS = """
-id = "t_two"
-kind = "incoming"
-visual = ["incoming", "malp"]
-[node.start]
-text.full = "Two things at once."
-default = "ok"
-[[node.start.choice]]
-key = "ok"
-label = "Carry on"
-outcome = { end = true }
-"""
-
-SILENT = """
-id = "t_silent"
-kind = "incoming"
-[node.start]
-text.full = ""
-default = "ok"
-[[node.start.choice]]
-key = "ok"
-label = "Carry on"
-outcome = { end = true }
-"""
-
-
-def test_a_mid_mission_save_brings_the_team_home_on_load():
-    from sgc.game.rules import available_teams
-    from sgc.game.state import from_dict
-    r = Rig(scen(RECON2))
-    r.e.queue_scenario("t_recon2")
-    r.run(lambda: r.e.mode == "decision")
-    r.e.key("1")
-    r.run(lambda: r.e.mode == "decision")
-    saved = r.saves[-1]
-    assert saved["teams"]["SG-1"]["status"] == "offworld"
-    b = Rig(scen(RECON2), campaign=from_dict(saved))
-    assert b.c.teams["SG-1"].status == "base" and "SG-1" in available_teams(b.c)
-    assert "SG-1 RECALLED TO BASE" in b.logs
-
-
-def _play(dt):
-    from sgc.game import content
-    scenarios, _ = content.load(user=None)
-    r = Rig(scenarios)
-    r.run(lambda: r.c.cycles >= 6 or r.e.mode in ("over", "debrief"), limit=100000, dt=dt,
-          answer=lambda e: "1" if e.mode == "briefing" else None)
-    d = to_dict(r.c)
-    d.pop("rng_state", None)
-    return d, r.e.rng.getstate()
+def test_saving_and_loading_mid_flight_gives_an_identical_future():
+    a = Rig(UNKNOWN, PROBE)
+    for i in (3, 4, 5):
+        a.e.probe(a.world(i).id)
+    a.c.events.push(a.c.now + 30, "incoming")
+    a.e.advance(45)                                      # an alarm is open, drones are in flight
+    a.e.save_now()
+    b = Rig(UNKNOWN, PROBE, campaign=from_dict(json.loads(json.dumps(a.saves[-1]))))
+    assert b.e.prompt is not None and b.e.prompt.text == a.e.prompt.text
+    for r in (a, b):
+        r.e.advance(3 * 24 * 60)
+        r.e.save_now()
+    assert a.saves[-1] == b.saves[-1]
 
 
 def test_campaign_randomness_does_not_depend_on_the_frame_rate():
-    slow, fast = _play(0.25), _play(0.6)
-    assert slow[0]["cycles"] >= 6
-    assert slow[0] == fast[0]
-    assert slow[1] == fast[1]
+    a, b = Rig(UNKNOWN, PROBE), Rig(UNKNOWN, PROBE)
+    for r in (a, b):
+        r.c.events.push(r.c.now + 100, "incoming")
+        r.e.probe(r.world(4).id)
+    for _ in range(600):
+        a.e.update(1.0)
+    for _ in range(2400):
+        b.e.update(0.25)
+    a.e.save_now()
+    b.e.save_now()
+    da, db = a.saves[-1], b.saves[-1]
+    da["minutes"] = db["minutes"] = 0
+    assert da == db
 
 
-def test_quitting_at_the_briefing_board_keeps_the_briefing():
-    from sgc.game.state import from_dict
-    r = Rig(scen(RECON))
-    r.c.since_briefing = 2
-    r.run(lambda: r.e.mode == "briefing")
-    r.e.save_now()
-    n = r.c.cycles
-    b = Rig(scen(RECON), campaign=from_dict(r.saves[-1]))
-    b.run(lambda: b.e.mode == "briefing" or b.c.cycles >= n + 2)
-    assert b.e.mode == "briefing" and b.c.cycles == n + 1
+def play(r, seconds, dt):
+    """The app's frame: the director, then the engine. Returns (game minute, line) for both logs, in order."""
+    out = []
+    for _ in range(round(seconds / dt)):
+        out += [(r.c.minutes, line) for line in r.d.advance(dt)[0]]
+        seen = len(r.logs)
+        r.e.update(dt)
+        out += [(r.c.minutes, line) for line in r.logs[seen:]]
+    return out
 
 
-def test_each_visual_is_built_against_the_scene_it_plays_on():
-    r = Rig(scen(TWO_VISUALS))
-    r.e.queue_scenario("t_two")
-    seen = []
-    for _ in range(4000):
-        logs, _ = r.d.advance(0.25)
-        if any(line.startswith("DIALING") for line in logs):
-            seen.append(r.d.scene.horizon)
-        r.e.update(0.25)
-        if r.e.mode == "decision":
-            break
-    assert seen == ["off"]
+def test_at_a_busy_pace_a_result_waits_for_the_gate_to_finish_showing_it():
+    r = Rig(PROBE, director=True, pace=10)                # 10 real seconds a game hour: a dial outlasts the trip
+    w = r.world(env="normal", inhabitants="none")
+    name = w.name.upper()                                 # the ruins may name it once the telemetry is in
+    r.e.probe(w.id)
+    lines = [line for _, line in play(r, 120, 0.1)]
+    transit = lines.index("MALP IN TRANSIT")
+    telemetry = lines.index(f"MALP TELEMETRY FROM {name}")
+    assert transit < telemetry and "TELEMETRY RECEIVED" in lines[telemetry:]
+    assert w.status == "probed"
 
 
-def test_empty_text_does_not_crash_the_engine():
-    r = Rig(scen(SILENT))
-    r.e.queue_scenario("t_silent")
-    r.run(lambda: r.e.mode == "decision")
-    assert r.d.scene.prompt.text == ""
+def test_the_clock_is_not_held_by_the_ambient_scene_or_without_a_director():
+    r = ambient_rig()
+    before = r.c.minutes
+    r.c.events.push(r.c.now + 1, "recovery_tick")
+    r.e.update(10)
+    assert r.c.minutes == before + 10
 
 
-def test_redaction_follows_the_scenarios_own_info_level():
-    for tokra, expected in ((False, "SG-1 MISSED CHECK-IN"), (True, "SG-1 CAPTURED ON")):
-        c = new_campaign("campaign", "commander", 7)
-        if tokra:
-            c.inventory.add("ally.tokra")
-        r = Rig(scen(CAPTURE), campaign=c)
-        r.e.queue_scenario("t_capture")
-        r.run(lambda: r.e.mode == "decision")
-        r.e.key("1")
-        assert any(line.startswith(expected) for line in r.logs), tokra
+def test_holding_for_the_gate_does_not_change_the_campaign_at_any_frame_rate():
+    a, b = Rig(UNKNOWN, PROBE, director=True, pace=10), Rig(UNKNOWN, PROBE, director=True, pace=10)
+    for r in (a, b):
+        r.c.events.push(r.c.now + 100, "incoming")
+        for i in (3, 4, 5):
+            r.e.probe(r.world(i).id)
+    play(a, 300, 1 / 30)
+    play(b, 300, 1 / 7)
+    for r in (a, b):
+        r.e.advance(clock.START + 2 * clock.DAY - r.c.minutes)      # the rest headless, to the same minute
+        r.e.save_now()
+    assert a.saves[-1] == b.saves[-1]
 
 
-def test_a_saved_win_goes_straight_to_the_debrief():
-    c = new_campaign("campaign", "officer", 7)
-    c.won = True
-    r = Rig(scen(CHOICE), campaign=c)
-    assert r.e.mode == "debrief" and r.ended == [c] and "RATING" in r.d.scene.prompt.text
+def test_the_director_plays_the_gate_and_follows_the_teams():
+    r = Rig(UNKNOWN, director=True)
+    assert r.d.auto is False
+    r.c.events.push(r.c.now, "incoming")
+    r.e.update(1)
+    assert not r.d.idle and r.d.scene.prompt is r.e.prompt
+    r.c.teams["SG-2"].status = "captured"
+    r.e.update(0.1)
+    assert r.d.scene.teams["SG-2"] == "CAPTURED"
 
 
-def test_quiet_cycles_skip_the_traffic_event():
-    from sgc.game.engine import QUIET_EVENTS
-    assert "traffic" not in QUIET_EVENTS
+def test_the_gate_panel_uses_the_database_words_without_the_time_left():
+    from sgc.game.database import team_status
+    r = Rig(UNKNOWN, director=True)
+    c, w = r.c, next(iter(r.c.worlds.values()))
+    c.teams["SG-1"].status, c.teams["SG-1"].where = "offworld", w.id
+    c.teams["SG-2"].until = c.now + 11 * 60
+    c.teams["SG-3"].status, c.teams["SG-3"].until = "injured", c.now + 44 * 60
+    c.teams["SG-4"].status, c.teams["SG-4"].until = "lost", c.now + 53 * 60
+    r.e.update(0.1)
+    assert r.d.scene.teams == {"SG-1": f"AWAY: {w.name.upper()}", "SG-2": "STOOD DOWN", "SG-3": "INJURED",
+                               "SG-4": "RE-FORMING"}
+    for name in ("SG-2", "SG-3", "SG-4"):
+        assert team_status(c, name).startswith(r.d.scene.teams[name] + " ")
+    c.teams["SG-2"].until, c.teams["SG-4"].until = 0, 0
+    r.e.update(0.1)
+    assert r.d.scene.teams["SG-2"] == "BASE" == team_status(c, "SG-2")
+    assert r.d.scene.teams["SG-4"] == "LOST" == team_status(c, "SG-4")
 
 
-def test_game_over_plays_the_outcome_visual_before_the_verdict():
-    r = Rig(scen(DOOM))
-    r.e.queue_scenario("t_doom")
-    r.run(lambda: r.e.mode == "decision")
+def test_a_pending_alarm_whose_scenario_is_gone_is_withdrawn_on_load():
+    a = Rig(UNKNOWN)
+    a.c.events.push(a.c.now, "incoming")
+    a.e.advance(1)
+    b = Rig(campaign=from_dict(json.loads(json.dumps(to_dict(a.c)))))
+    assert b.e.prompt is None and b.c.alarms == [] and any("WITHDRAWN" in line for line in b.logs)
+
+
+CHAIN = """
+id = "t_chain"
+kind = "incoming"
+[node.start]
+text.full = "Someone is dialing in."
+situation = "unknown_idc"
+default = "closed"
+[[node.start.choice]]
+key = "closed"
+label = "Keep the iris closed"
+outcome = { goto = "second" }
+[[node.start.choice]]
+key = "open_guarded"
+label = "Open under guard"
+outcome = { end = true }
+[node.second]
+text.full = "They're transmitting a message."
+default = "listen"
+[[node.second.choice]]
+key = "listen"
+label = "Listen"
+outcome = { end = true }
+[[node.second.choice]]
+key = "ignore"
+label = "Ignore it"
+outcome = { end = true }
+"""
+
+QUIET_DOOM = """
+id = "t_quiet_doom"
+kind = "incoming"
+[node.start]
+text.full = "The self-destruct goes off."
+default = "boom"
+[[node.start.choice]]
+key = "boom"
+label = "Boom"
+outcome = { effects = ["game_over The SGC is gone."], end = true }
+"""
+
+
+def normal_worlds(r, n):
+    return [r.world(i, env="normal", inhabitants="none") for i in range(3, 3 + n)]
+
+
+def test_a_follow_up_node_goes_to_the_front_of_the_queue_without_ringing_again():
+    r = Rig(CHAIN, UNKNOWN)
+    r.e.scenarios = {k: v for k, v in r.e.scenarios.items() if k == "t_chain"}
+    r.c.events.push(r.c.now, "incoming")
+    r.e.advance(1)
+    r.e.scenarios.update(scen(UNKNOWN))
+    r.e.scenarios.pop("t_chain")
+    r.c.events.push(r.c.now, "incoming")
+    r.e.advance(31)                                      # the gate frees after the first wormhole
+    r.e.scenarios.update(scen(CHAIN))
+    assert [a["scenario"] for a in r.c.alarms] == ["t_chain", "t_unknown"] and len(r.alarms) == 2
     r.e.key("1")
-    r.run(lambda: r.e.mode == "over")
-    assert r.logs.index("FIREFIGHT IN THE GATE ROOM") < r.logs.index("THE SGC HAS FALLEN")
+    assert [(a["scenario"], a["node"]) for a in r.c.alarms] == [("t_chain", "second"), ("t_unknown", "start")]
+    assert len(r.alarms) == 2 and r.e.prompt.text == "They're transmitting a message."
+    assert r.c.alarms[0]["deadline"] == r.c.now + 180
 
 
-from sgc.game import content
-from sgc.game.state import from_dict
+def test_a_game_over_is_never_saved_and_a_fallen_base_loads_straight_to_game_over():
+    r = Rig(QUIET_DOOM)
+    r.c.events.push(r.c.now, "incoming")
+    r.e.advance(1)
+    assert r.e.ended and r.c.over and all(s["over"] is None for s in r.saves)
+    d = to_dict(r.c)
+    b = Rig(QUIET_DOOM, campaign=from_dict(json.loads(json.dumps(d))))
+    assert b.e.ended and b.ended == [b.c] and b.e.prompt.title == "BASE OVERRUN" and b.saves == []
 
 
-def _briefings_only(e):
-    return "1" if e.mode == "briefing" else None     # decisions time out to the cautious default
+def test_changing_pace_with_an_alarm_open_keeps_the_countdown_within_its_bar():
+    r = Rig(UNKNOWN)
+    r.c.pace = "busy"
+    r.c.events.push(r.c.now, "incoming")
+    r.e.advance(1)
+    assert r.c.alarms[0]["deadline"] == r.c.now - 1 + 360
+    r.e.set_pace("standard")
+    assert r.c.alarms[0]["deadline"] == r.c.now + 180
+    r.e.update(0)
+    assert r.e.prompt.total == 180 and r.e.prompt.remaining == 180
+    r.e.update(5.0)
+    assert r.e.prompt.remaining == pytest.approx(175)
 
 
-def test_save_and_load_resume_identically():
-    scenarios, _ = content.load(user=None)
-    a = Rig(scenarios)
-    a.run(lambda: a.c.cycles >= 9 or a.e.mode in ("over", "debrief"), limit=40000, answer=_briefings_only)
-    assert a.c.cycles >= 9, "a cautious run should survive nine cycles"
-    at = max(i for i, s in enumerate(a.saves) if s["cycles"] == 4)
-    b = Rig(scenarios, campaign=from_dict(a.saves[at]))
-    b.run(lambda: b.c.cycles >= 9 or b.e.mode in ("over", "debrief"), limit=40000, answer=_briefings_only)
-    later = [s for s in a.saves[at + 1:] if s["cycles"] <= 8]
-    assert later and b.saves[:len(later)] == later
+def test_a_timed_out_alarm_that_can_no_longer_be_answered_is_withdrawn():
+    r = Rig(UNKNOWN)
+    r.c.events.push(r.c.now, "incoming")
+    r.e.advance(1)
+    r.e.scenarios.clear()
+    r.e.advance(200)
+    assert r.c.alarms == [] and r.e.prompt is None and any("WITHDRAWN" in line for line in r.logs)
 
 
-def test_bundled_content_survives_a_long_reckless_campaign():
-    scenarios, _ = content.load(user=None)
-    r = Rig(scenarios, difficulty="recruit")
-    r.run(lambda: r.c.cycles >= 25 or r.e.mode in ("over", "debrief"), limit=80000, answer=lambda e: "1")
-    assert r.c.cycles >= 1 and r.c.record["missions"] >= 1
+@pytest.mark.parametrize("alarm", [
+    {"type": "mystery", "title": "T", "text": "X", "deadline": None},
+    {"type": "node", "title": "T", "text": "X", "deadline": None, "bind": {}, "scenario": "t_unknown", "node": "gone"},
+])
+def test_an_alarm_that_cant_be_shown_is_withdrawn_on_load(alarm):
+    a = Rig(UNKNOWN)
+    a.c.alarms.append(alarm)
+    b = Rig(UNKNOWN, campaign=from_dict(json.loads(json.dumps(to_dict(a.c)))))
+    assert b.c.alarms == [] and b.e.prompt is None and any("WITHDRAWN" in line for line in b.logs)
+
+
+def test_inbound_traffic_goes_before_queued_dial_outs():
+    r = Rig(UNKNOWN)
+    r.c.stock["malp"] = 6
+    for w in normal_worlds(r, 6):
+        r.e.probe(w.id)
+    r.c.events.push(r.c.now + 1, "incoming")
+    r.e.advance(11)                                      # the first dial-out holds the gate for 10 minutes
+    assert r.alarms == ["INCOMING"]
+    assert len(r.c.events.find(lambda e: e.kind == "dial_out")) == 5
+
+
+def test_redialing_a_world_with_no_lock_counts_one_probe():
+    r = Rig()
+    w = r.world(env="no_lock")
+    r.e.probe(w.id)
+    r.e.advance(1)
+    r.e.probe(w.id)
+    r.e.advance(1)
+    assert w.status == "lost" and r.c.stock["malp"] == 4 and r.c.record["probes"] == 1
+
+
+def test_a_quiet_gate_plays_an_ambient_scene_to_a_known_world_without_touching_the_campaign():
+    r = Rig(director=True)
+    before, state = to_dict(r.c), r.e.rng.getstate()
+    assert r.d.idle
+    r.e._idle_scene(eng.IDLE_SCENE - 1)
+    assert r.d.idle
+    r.e._idle_scene(1)
+    assert not r.d.idle
+    for _ in range(40):
+        r.d.advance(1.0)
+    known = {w.name.upper() for w in r.c.worlds.values() if w.status in ("probed", "surveyed", "contact")}
+    assert r.d.scene.panel_title.startswith("SCIENCE · ") and r.d.scene.panel_title[10:] in known
+    assert to_dict(r.c) == before and r.e.rng.getstate() == state
+
+
+def ambient_rig(*texts):
+    r = Rig(*texts, director=True)
+    r.e._idle_scene(eng.IDLE_SCENE)
+    assert r.e.ambient and not r.d.idle
+    for _ in range(10):
+        r.d.advance(1.0)                                  # the uplink is dialling
+    return r
+
+
+def director_logs(r, seconds):
+    logs = []
+    for _ in range(int(seconds * 10)):
+        logs += r.d.advance(0.1)[0]
+    return logs
+
+
+def test_an_alarm_cuts_the_ambient_scene_at_once():
+    r = ambient_rig(UNKNOWN)
+    r.c.events.push(r.c.now, "incoming")
+    r.e.advance(1)
+    assert not r.e.ambient
+    assert "UNSCHEDULED OFFWORLD ACTIVATION" in director_logs(r, 5)
+
+
+def test_routine_traffic_cuts_the_ambient_scene_instead_of_being_dropped():
+    r = ambient_rig()
+    r.e._show(r.e._v_checkin("SG-2"))
+    assert not r.e.ambient
+    assert "IDC RECEIVED — SG-2" in director_logs(r, 10)
+
+
+def test_the_ambient_flag_clears_when_the_scene_ends():
+    r = ambient_rig()
+    for _ in range(80):
+        r.d.advance(1.0)
+    assert r.d.idle and r.e.ambient
+    r.e.update(0)
+    assert not r.e.ambient
+
+
+@pytest.mark.parametrize("why", ["alarm", "gate", "no_worlds"])
+def test_no_ambient_scene_while_an_alarm_is_open_the_gate_is_busy_or_nothing_is_known(why):
+    r = Rig(UNKNOWN, director=True)
+    if why == "alarm":
+        r.c.events.push(r.c.now, "incoming")
+        r.e.advance(1)
+        r.d.skip(log=None)
+        for _ in range(20):
+            r.d.advance(1.0)
+        assert r.c.alarms and r.d.idle
+    elif why == "gate":
+        r.c.gate_until = r.c.now + 30
+    else:
+        for w in r.c.worlds.values():
+            w.status = "unexplored"
+    r.e._idle_scene(eng.IDLE_SCENE + 1)
+    assert r.d.idle and not r.e.ambient
+
+
+def test_an_order_for_an_unknown_situation_is_rejected():
+    r = Rig()
+    with pytest.raises(ValueError):
+        r.e.set_order("tea_time", "earl_grey")
+
+
+def test_a_walk_is_not_gate_traffic_and_traffic_due_during_it_waits_behind_it():
+    r = Rig(PROBE, director=True, pace=10)
+    w = r.world(env="normal", inhabitants="none")
+    r.d.run_steps(sq.to_briefing(10.0))                   # the app's walk between the rooms
+    assert not r.e.showing
+    r.e.probe(w.id)
+    before = r.c.minutes
+    r.e.update(1.0)
+    assert r.c.minutes == pytest.approx(before + clock.to_minutes(1.0, r.e.sph))      # the clock ran on
+    assert any("MALP SENT TO" in line for line in r.logs)
+    assert r.e.showing                                    # the drone's scene is queued behind the walk
+    assert "MALP IN TRANSIT" in director_logs(r, 40)
+
+
+def test_real_traffic_still_holds_the_clock_until_it_has_played():
+    r = Rig(PROBE, director=True, pace=10)
+    w = r.world(env="normal", inhabitants="none")
+    r.e.probe(w.id)
+    r.e.update(0.1)
+    assert r.e.showing
+    due = r.c.now + 1
+    r.c.events.push(due, "incoming")
+    r.e.update(5.0)
+    assert r.c.minutes == due and r.c.events.peek().kind == "incoming"       # held at the next thing due
+    director_logs(r, 60)
+    r.e.update(0.1)
+    assert not r.e.showing and r.c.minutes > due
+
+
+def test_the_ambient_scene_and_its_cut_are_not_traffic():
+    r = ambient_rig()
+    assert not r.e.showing
+    r.e.cut_ambient()
+    assert not r.d.idle and not r.e.showing
+
+
+def test_an_alarm_with_nothing_to_show_still_cuts_the_ambient_scene():
+    r = ambient_rig()
+    r.e._raise({"type": "missed_checkin", "mission": 99, "deadline": None, "title": "MISSED CHECK-IN",
+                "text": "Nobody."})
+    assert not r.e.ambient
+
+
+def test_a_failed_save_is_logged_once_per_streak_and_play_goes_on():
+    r = Rig()
+    broken = [True]
+
+    def save(c):
+        if broken[0]:
+            raise PermissionError(13, "Permission denied")
+        r.saves.append(to_dict(c))
+    r.e._save = save
+    r.e.save_now()
+    r.e.update(60 * 5)                                     # hours of game time, trying every five minutes
+    assert [line for line in r.logs if "SAVE" in line] == ["SAVE FAILED — PERMISSION DENIED"]
+    broken[0] = False
+    r.e.save_now()
+    r.e.save_now()
+    assert [line for line in r.logs if "SAVE" in line][1:] == ["SAVE OK"] and r.saves
+    broken[0] = True
+    r.e.save_now()
+    assert [line for line in r.logs if "SAVE" in line][2:] == ["SAVE FAILED — PERMISSION DENIED"]
+
+
+def test_one_tuple_of_text_levels_and_no_dead_engine_attributes():
+    from sgc.game import content, world
+    r = Rig(UNKNOWN)
+    assert not hasattr(r.e, "transition") and not hasattr(world, "DETAILS") and not hasattr(eng, "INFO_LEVELS")
+    assert set(eng.DETAIL.values()) == set(content.TEXT_LEVELS)

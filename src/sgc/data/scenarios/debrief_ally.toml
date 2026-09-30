@@ -1,0 +1,14 @@
+id = "debrief_ally"
+kind = "debrief"
+weight = 4
+when = ["world {world} inhabitants ally"]
+
+[node.start]
+text.full = "{team} debrief: the people of {world} are far more advanced than they let on. They listened politely, and asked a lot about the Goa'uld."
+text.minimal = "{team} debrief: advanced civilization."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { effects = ["reveal name {world} from locals", "unlock contact {world}"], end = true }

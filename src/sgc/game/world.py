@@ -1,0 +1,212 @@
+"""Worlds: hidden traits, what the SGC knows, names learned from intel, designations, the cartouche list."""
+from __future__ import annotations
+
+import random
+from dataclasses import dataclass, field
+
+from ..addresses import Address, load_canon
+
+ENVIRONMENTS = ("normal", "toxic", "radiation", "extreme", "no_lock")
+INHABITANTS = ("none", "human", "unas", "jaffa", "goauld", "ally")
+FEATURES = ("ruins", "technology", "naquadah")
+STATUSES = ("unexplored", "probed", "surveyed", "contact", "hostile", "lost")
+PROGRESS = ("unexplored", "probed", "surveyed", "contact")
+DRONES = ("malp", "uav")
+NAME_SOURCES = ("locals", "ruins", "jaffa", "goauld", "comms", "allies", "records")
+SOURCE_TEXT = {"locals": "the locals", "ruins": "inscriptions in the ruins", "jaffa": "the Jaffa",
+               "goauld": "a Goa'uld database", "comms": "a UAV comms intercept", "allies": "allied intelligence",
+               "records": "SGC records"}
+GOAULD = ("Apophis", "Heru'ur", "Sokar", "Cronus", "Ba'al", "Yu", "Nirrti", "Svarog", "Olokun", "Bastet")
+CARTOUCHE = "the Abydos cartouche"
+CARTOUCHE_SIZE = 20
+_LETTERS = "XCJMRWYAB"
+_SYLLABLES = ("ka", "tor", "nel", "ab", "ys", "shar", "mi", "dos", "ren", "tal", "vek", "ul", "an", "ce", "ri",
+              "khe", "em", "sa", "hol", "ta", "ra", "nu", "bel", "kor")
+_DANGER = {"none": 0, "human": 0, "ally": 0, "unas": 2, "jaffa": 2, "goauld": 3}
+
+# Canon worlds: environment, inhabitants, features, owner, and the names intel can reveal (by source).
+CANON = {
+    "Abydos": ("normal", "human", ("ruins",), None, {"locals": "Abydos"}),
+    "Chulak": ("normal", "jaffa", ("ruins",), "Apophis", {"locals": "Chulak", "jaffa": "Chulak"}),
+    "Cimmeria": ("normal", "human", ("ruins", "technology"), None, {"locals": "Cimmeria"}),
+    "Kheb": ("normal", "none", ("ruins",), None, {"locals": "Kheb", "jaffa": "Kheb"}),
+    "K'tau": ("normal", "human", ("technology",), None, {"locals": "K'tau"}),
+    "Langara": ("normal", "human", ("naquadah",), None, {"locals": "Langara", "comms": "Kelowna"}),
+    "Tollana": ("normal", "ally", ("technology",), None, {"locals": "Tollana", "allies": "Tollana"}),
+    "Juna": ("normal", "human", (), None, {"locals": "Juna"}),
+}
+CAMPAIGN_CANON = ("Chulak", "Cimmeria", "Kheb", "K'tau", "Langara", "Tollana", "Juna")
+
+
+@dataclass
+class World:
+    id: str                                  # the SGC designation, e.g. "P3X-866"; unique
+    glyphs: tuple[int, ...]
+    env: str = "normal"
+    inhabitants: str = "none"
+    features: tuple[str, ...] = ()
+    owner: str | None = None                 # a Goa'uld, if one holds the world
+    hidden_names: dict[str, str] = field(default_factory=dict)    # source -> name, until intel reveals it
+    canon: bool = False
+    status: str = "unexplored"
+    surveyed: bool = False                   # a survey has counted for this world, even if it's since gone hostile
+    names: list[tuple[str, str, int]] = field(default_factory=list)   # (name, source text, game minute)
+    seen: dict[str, str] = field(default_factory=dict)            # traits learned: env, life, features, ...
+    telemetry: list[str] = field(default_factory=list)            # the latest drone readings
+    reports: list[tuple[int, str]] = field(default_factory=list)  # (game minute, text), oldest first
+    notes: list[tuple[int, str]] = field(default_factory=list)
+    drone: str | None = None                 # an intact MALP or UAV left on the world
+    options: list[str] = field(default_factory=lambda: ["survey"])   # mission types unlocked here
+    found: str = CARTOUCHE                   # where the address came from
+    last_visit: int | None = None
+
+    @property
+    def name(self) -> str:
+        """The most recently learned name, or the designation until intel gives one."""
+        return self.names[-1][0] if self.names else self.id
+
+    @property
+    def danger(self) -> int:
+        """0 (quiet) to 3 (Goa'uld stronghold), from the hidden traits."""
+        d = _DANGER[self.inhabitants] + (1 if self.env in ("toxic", "radiation", "extreme") else 0)
+        return min(3, d)
+
+    @property
+    def glyph_text(self) -> str:
+        return "-".join(f"{g:02d}" for g in self.glyphs)
+
+    def address(self) -> Address:
+        return Address(self.name, self.id, tuple(self.glyphs), self.canon)
+
+
+def designation(glyphs: tuple[int, ...]) -> str:
+    """A catalogue number like 'P3X-866', always the same for the same glyphs."""
+    h = 0
+    for g in glyphs:
+        h = (h * 41 + g) % 1_000_003
+    return f"P{2 + h % 8}{_LETTERS[(h // 8) % len(_LETTERS)]}-{100 + (h // 72) % 900}"
+
+
+def set_status(w: World, status: str) -> bool:
+    """Move a world's status; returns False (and changes nothing) if the move isn't allowed.
+
+    Progress only goes forward (UNEXPLORED, PROBED, SURVEYED, CONTACT). Any world can become HOSTILE or
+    LOST; a LOST world can be PROBED again, and a HOSTILE one can reach CONTACT.
+    """
+    if status not in STATUSES:
+        raise ValueError(f"unknown world status {status!r}")
+    cur = w.status
+    if status == cur:
+        return False
+    ok = (status in ("hostile", "lost")
+          or (cur in PROGRESS and PROGRESS.index(status) > PROGRESS.index(cur))
+          or (cur == "lost" and status == "probed")
+          or (cur == "hostile" and status == "contact"))
+    if ok:
+        w.status = status
+    return ok
+
+
+def learn_name(w: World, name: str, source: str, minute: int) -> bool:
+    """Record a name and where it came from; False if that exact name and source are already known."""
+    if any(n == name and s == source for n, s, _ in w.names):
+        return False
+    w.names.append((name, source, minute))
+    return True
+
+
+def reveal_name(w: World, source: str, minute: int) -> str | None:
+    """Reveal the name this source knows the world by (the locals' name if it has none of its own)."""
+    name = w.hidden_names.get(source) or w.hidden_names.get("locals")
+    if name is None:
+        return None
+    return name if learn_name(w, name, SOURCE_TEXT.get(source, source), minute) else None
+
+
+def gen_name(rng: random.Random) -> str:
+    parts = [rng.choice(_SYLLABLES) for _ in range(rng.choice((2, 2, 3)))]
+    if len(parts) == 3 and rng.random() < 0.5:
+        return (parts[0] + parts[1]).capitalize() + "'" + parts[2]
+    return "".join(parts).capitalize()
+
+
+def generate(rng: random.Random, taken: set[str], found: str = CARTOUCHE, owner_odds: float = 1.0) -> World:
+    """A new world with canon-style traits and a designation not in `taken`."""
+    while True:
+        glyphs = tuple(rng.sample(range(2, 40), 6))
+        wid = designation(glyphs)
+        if wid not in taken:
+            break
+    env = rng.choices(ENVIRONMENTS, (60, 12, 10, 10, 8))[0]
+    inhabitants = rng.choices(INHABITANTS, (40, 25, 8, 15, 7, 5))[0]
+    if inhabitants in ("jaffa", "goauld") and rng.random() > owner_odds:
+        inhabitants = "human"
+    features = tuple(f for f, p in zip(FEATURES, (0.3, 0.15, 0.15)) if rng.random() < p)
+    owner = rng.choice(GOAULD) if inhabitants in ("jaffa", "goauld") else None
+    names = {"locals": gen_name(rng)}
+    if owner:
+        names["jaffa"] = gen_name(rng)
+    return World(wid, glyphs, env, inhabitants, features, owner, names, found=found)
+
+
+def canon_world(name: str) -> World:
+    env, inhabitants, features, owner, names = CANON[name]
+    glyphs = next(a.glyphs for a in load_canon() if a.name == name)
+    return World(designation(glyphs), glyphs, env, inhabitants, features, owner, dict(names), canon=True)
+
+
+def cartouche(mode: str, seed: int, minute: int) -> dict[str, World]:
+    """The starting dialing list: 20 addresses, Abydos first.
+
+    Campaign places the canon worlds; Sandbox is Abydos plus generated worlds, with Goa'uld-held
+    worlds rarer.
+    """
+    rng = random.Random(seed)
+    abydos = canon_world("Abydos")
+    abydos.status, abydos.found, abydos.options = "contact", "the Abydos expedition", ["survey", "contact"]
+    abydos.seen = {"env": "breathable atmosphere", "life": "humanoid life signs", "inhabitants": "settlement"}
+    learn_name(abydos, "Abydos", "the Abydos expedition", minute)
+    worlds = [abydos]
+    if mode == "campaign":
+        worlds += [canon_world(n) for n in CAMPAIGN_CANON]
+    taken = {w.id for w in worlds}
+    while len(worlds) < CARTOUCHE_SIZE:
+        w = generate(rng, taken, owner_odds=1.0 if mode == "campaign" else 0.3)
+        taken.add(w.id)
+        worlds.append(w)
+    rest = worlds[1:]
+    rng.shuffle(rest)
+    return {w.id: w for w in [abydos, *rest]}
+
+
+_ENV_TEXT = {"normal": "breathable atmosphere", "toxic": "toxic atmosphere", "radiation": "high radiation",
+             "extreme": "extreme temperatures", "no_lock": "no lock"}
+_LIFE = {"none": "none detected", "human": "humanoid life signs", "unas": "large reptilian life signs",
+         "jaffa": "humanoid life signs", "goauld": "humanoid life signs", "ally": "humanoid life signs"}
+_FEATURE_TEXT = {"ruins": "ruins", "technology": "energy readings", "naquadah": "naquadah traces"}
+_SETTLEMENT = {"none": "no settlements", "human": "settlement", "unas": "Unas", "jaffa": "Jaffa garrison",
+               "goauld": "Goa'uld stronghold", "ally": "outpost"}
+_COUNT = {"none": (0, 0), "human": (40, 900), "unas": (3, 30), "jaffa": (50, 400), "goauld": (200, 2000),
+          "ally": (10, 80)}
+
+
+def readings(w: World, drone: str, detail: str, rng: random.Random) -> dict[str, str]:
+    """What a MALP (or a UAV, which sees more) learns about a world, at this difficulty's level of detail."""
+    out = {"env": _ENV_TEXT[w.env]}
+    if detail == "minimal" and drone == "malp":
+        out["life"] = "inconclusive"
+        return out
+    life = _LIFE[w.inhabitants]
+    out["life"] = life if detail == "full" or life == "none detected" else "life signs"
+    shown = [_FEATURE_TEXT[f] for f in w.features]
+    if drone == "malp" and detail != "full":
+        shown = shown[:1]
+    if shown:
+        out["features"] = ", ".join(shown)
+    if drone == "uav":
+        out["inhabitants"] = _SETTLEMENT[w.inhabitants]
+        lo, hi = _COUNT[w.inhabitants]
+        if hi:
+            n = rng.randint(lo, hi)
+            out["count"] = f"about {round(n, -1) or n}" if detail == "full" else ("many" if n > 150 else "some")
+    return out

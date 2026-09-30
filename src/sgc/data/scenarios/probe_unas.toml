@@ -1,0 +1,15 @@
+id = "probe_unas"
+kind = "probe"
+weight = 2
+when = ["world {world} inhabitants unas"]
+
+[node.start]
+text.full = "Telemetry from {designation}: something large crossed in front of the camera, then came back to sniff it. Dr. Jackson thinks it's an Unas."
+text.partial = "Telemetry from {designation}: something large crossed the camera."
+text.minimal = "Telemetry from {designation}: received."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log the telemetry"
+outcome = { effects = [], end = true }

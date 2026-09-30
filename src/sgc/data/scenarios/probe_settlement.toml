@@ -1,0 +1,15 @@
+id = "probe_settlement"
+kind = "probe"
+weight = 2
+when = ["world {world} inhabitants human"]
+
+[node.start]
+text.full = "Telemetry from {designation}: smoke on the horizon and a worn path leading from the gate. Someone lives here, and they use this gate."
+text.partial = "Telemetry from {designation}: smoke on the horizon and a worn path leading from the gate."
+text.minimal = "Telemetry from {designation}: received."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log the telemetry"
+outcome = { effects = [], end = true }

@@ -1,0 +1,22 @@
+id = "checkin_locals"
+kind = "checkin"
+mission_type = "survey"
+weight = 2
+when = ["world {world} inhabitants human"]
+
+[node.start]
+text.full = "{team} checks in from {world}: villagers came out to meet them, and the elders want to talk. {team} asks for instructions."
+text.minimal = "{team} has met locals."
+situation = "contact_offer"
+default = "defer"
+
+[[node.start.choice]]
+key = "defer"
+label = "Defer to the debrief"
+outcome = { end = true }
+
+[[node.start.choice]]
+key = "accept"
+label = "Accept if the team is diplomatic"
+requires = ["team {team} specialty diplomatic"]
+outcome = { effects = ["reveal name {world} from locals", "unlock contact {world}"], end = true }

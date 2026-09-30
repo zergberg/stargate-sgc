@@ -14,7 +14,7 @@ WALK, STAGGER = 5.0, 1.0
 
 def build(ctx: EventContext) -> list:
     rng, scene0 = ctx.rng, ctx.scene
-    away = [t for t, v in scene0.teams.items() if v.startswith("OFFWORLD")]
+    away = [t for t, v in scene0.teams.items() if v.startswith(("OFFWORLD", "AWAY"))]
     canon = {a.name: a for a in load_canon()}
     if away:
         who = rng.choice(away)

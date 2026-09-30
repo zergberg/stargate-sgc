@@ -9,15 +9,35 @@ def test_main_menu_numbers_and_quit():
     assert m.key("7") is None
 
 
-def test_new_game_path_with_arrows_and_enter():
+def test_new_game_path_mode_difficulty_pace():
     m = Menu(has_save=False)
     assert m.key("down") is None and m.key("enter") is None and m.screen == "missions"
     assert m.items() == ["NEW GAME", "BACK"]
     m.key("1")
-    assert m.screen == "mode"
+    assert m.screen == "mode" and m.items() == ["CAMPAIGN", "SANDBOX", "BACK"]
     m.key("2")
     assert m.screen == "difficulty"
-    assert m.key("3") == ("new", "endless", "commander")
+    m.key("3")
+    assert m.screen == "pace" and m.title == "PACE" and len(m.items()) == 4
+    assert m.key("3") == ("new", "sandbox", "commander", "busy")
+
+
+def test_pace_defaults_to_standard_with_enter_on_the_second_item():
+    m = Menu(has_save=False, screen="missions")
+    for k in ("1", "1", "2", "down"):
+        m.key(k)
+    assert m.key("enter") == ("new", "campaign", "officer", "standard")
+
+
+def test_back_walks_up_through_pace_and_difficulty():
+    m = Menu(has_save=False, screen="missions")
+    for k in ("1", "1", "1"):
+        m.key(k)
+    assert m.screen == "pace"
+    m.key("q")
+    assert m.screen == "difficulty"
+    m.key("4")
+    assert m.screen == "mode"
 
 
 def test_continue_only_with_a_save_and_back_navigation():
@@ -48,7 +68,8 @@ def test_new_game_over_a_save_asks_before_overwriting():
     assert m.items() == ["START OVER", "BACK"]
     assert m.key("1") is None and m.screen == "mode"
     m.key("2")
-    assert m.key("1") == ("new", "endless", "recruit")
+    m.key("1")
+    assert m.key("1") == ("new", "sandbox", "recruit", "relaxed")
 
 
 def test_overwrite_back_and_q_return_to_missions():
@@ -57,9 +78,3 @@ def test_overwrite_back_and_q_return_to_missions():
     assert m.key("2") is None and m.screen == "missions"
     m.key("2")
     assert m.key("q") is None and m.screen == "missions"
-
-
-def test_new_game_without_a_save_skips_the_confirmation():
-    m = Menu(has_save=False, screen="missions")
-    m.key("1")
-    assert m.screen == "mode"

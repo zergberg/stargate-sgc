@@ -1,0 +1,15 @@
+id = "debrief_naquadah"
+kind = "debrief"
+mission_type = "survey"
+weight = 3
+when = ["world {world} feature naquadah"]
+
+[node.start]
+text.full = "{team} debrief: Captain Carter confirms a naquadah seam on {world}, close to the surface. Worth remembering."
+text.minimal = "{team} debrief: mineral deposits."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { end = true }

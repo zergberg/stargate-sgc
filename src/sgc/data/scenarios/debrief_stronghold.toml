@@ -1,0 +1,15 @@
+id = "debrief_stronghold"
+kind = "debrief"
+mission_type = "survey"
+weight = 10
+when = ["world {world} inhabitants goauld"]
+
+[node.start]
+text.full = "{team} debrief: {world} is a Goa'uld stronghold: a pyramid, a landing platform and a standing army. {team} kept its distance."
+text.minimal = "{team} debrief: Goa'uld stronghold."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { effects = ["status {world} hostile"], end = true }
