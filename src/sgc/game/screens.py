@@ -9,7 +9,7 @@ from ..model import Prompt, Scene
 from ..panels import AMBER, CYAN, DIM, GREEN, RED, WHITE
 from ..term.canvas import Canvas
 from .clock import stamp
-from .database import COLUMNS, SEARCHABLE, TAB_TITLES, TABS, Database
+from .database import COLUMNS, OPENS, SEARCHABLE, TAB_TITLES, TABS, Database
 from .menu import Menu
 from .room import Room
 from .state import Campaign
@@ -21,7 +21,8 @@ METER_W = 10
 STATUS_H = 6
 LEGENDS = ("bar", "full", "off")
 WIDTHS = {"addresses": (0, 18, 10, 10, 5, 5), "missions": (5, 16, 8, 10, 9, 4, 0),
-          "teams": (5, 10, 9, 17, 16, 0), "intel": (5, 22, 8, 0), "queue": (10, 0, 41)}
+          "teams": (5, 10, 9, 17, 16, 0), "intel": (5, 22, 8, 0), "queue": (10, 0, 41),
+          "factions": (8, 16, 0, 20), "trade": (16, 12, 10, 4, 0), "arcs": (22, 9, 0, 10)}
 KEYS_HELP = (("b", "briefing room"), ("d", "SGC Database"), ("1-9", "give an order"), ("↑↓ ⏎", "choose"),
              ("←→", "Database tabs"), ("/", "search"), ("s f", "sort, filter"), ("?", "legend"),
              ("m + -", "mute, volume"), ("p", "pause (Recruit)"), ("^C Esc", "cancel typing"),
@@ -56,7 +57,7 @@ def _elastic_widths(widths: tuple[int, ...], cols: int) -> list[int]:
 def _db_keys(tab: str) -> list[tuple[str, str]]:
     """Only the keys that do something on the current Database tab."""
     keys = [("←→", "TABS"), ("↑↓", "SCROLL" if tab == "world" else "SELECT")]
-    if tab in ("addresses", "missions", "intel"):
+    if tab in OPENS:
         keys.append(("⏎", "OPEN"))
     if tab == "addresses":
         keys += [("/", "SEARCH"), ("s", "SORT"), ("f", "FILTER")]
@@ -69,7 +70,7 @@ def _db_keys(tab: str) -> list[tuple[str, str]]:
 def _db_help_entries(tab: str) -> list[tuple[str, str]]:
     """The full Database legend for this tab, mirroring _db_keys: only the keys that do something, explained."""
     entries = [("←→", "switch tabs"), ("↑↓", "select, or scroll a world file")]
-    if tab in ("addresses", "missions", "intel"):
+    if tab in OPENS:
         entries.append(("⏎", "open a world's file"))
     if tab == "addresses":
         entries += [("/", "search names, ids and glyphs"), ("s", "sort by status or name"),
@@ -79,6 +80,34 @@ def _db_help_entries(tab: str) -> list[tuple[str, str]]:
                     ("[ ]", "move a dial-out up, down")]
     entries += [("?", "legend: bar, full, off"), ("q", "close the Database")]
     return entries
+
+
+def _tab_strip(tabs: tuple[str, ...], current: str, width: int) -> list[tuple[str, bool]]:
+    """The Database's tabs as (label, is_current) pieces fitting width: all of them if they fit, else a window
+    around the current tab with ‹ and › where tabs are hidden."""
+    labels = [f" {TAB_TITLES[t]} " for t in tabs]
+    if sum(len(lb) + 1 for lb in labels) <= width:
+        return [(lb + " ", t == current) for lb, t in zip(labels, tabs)]
+    i = tabs.index(current)
+    lo, hi = i, i + 1
+    room = width - 4                                     # the two markers
+    used = len(labels[i]) + 1
+    while True:
+        grew = False
+        if hi < len(tabs) and used + len(labels[hi]) + 1 <= room:
+            used += len(labels[hi]) + 1
+            hi += 1
+            grew = True
+        if lo > 0 and used + len(labels[lo - 1]) + 1 <= room:
+            lo -= 1
+            used += len(labels[lo]) + 1
+            grew = True
+        if not grew:
+            break
+    parts = [("‹ " if lo > 0 else "  ", False)]
+    parts += [(labels[j] + " ", tabs[j] == current) for j in range(lo, hi)]
+    parts.append((" ›" if hi < len(tabs) else "", False))
+    return parts
 
 
 def _db_help_rows(cols: int, tab: str = "addresses") -> list[str]:
@@ -93,7 +122,7 @@ def _db_help_rows(cols: int, tab: str = "addresses") -> list[str]:
 def _db_hint(tab: str) -> str:
     """A short, tab-aware one-liner for the compact Database, where the full key list won't fit."""
     keys = [("←→", "TAB"), ("↑↓", "SCROLL" if tab == "world" else "SELECT")]
-    if tab in ("addresses", "missions", "intel"):
+    if tab in OPENS:
         keys.append(("⏎", "OPEN"))
     if tab == "queue":
         keys += [("x", "CANCEL"), ("[ ]", "MOVE")]
@@ -420,11 +449,9 @@ def draw_database(canvas: Canvas, layout: Layout, db: Database, legend: str) -> 
     x = 1
     canvas.put(x, 0, "SGC DATABASE", AMBER, HEADER_BG, bold=True)
     x += 14
-    for tab in TABS:
-        label = f" {TAB_TITLES[tab]} "
-        on = tab == db.tab
+    for label, on in _tab_strip(TABS, db.tab, max(10, cols - x - 1)):
         canvas.put(x, 0, label, WHITE if on else DIM, HILITE if on else HEADER_BG, bold=on)
-        x += len(label) + 1
+        x += len(label)
     clock_text = f"{stamp(db.c.minutes)} SGC "
     canvas.put(max(0, cols - len(clock_text)), 1, clock_text, AMBER, bold=True)
     help_rows = _db_help_rows(cols, db.tab) if legend == "full" else []

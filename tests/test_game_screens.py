@@ -2,7 +2,7 @@ import pytest
 
 from sgc.game import screens
 from sgc.game import content
-from sgc.game.database import Database
+from sgc.game.database import TAB_TITLES, TABS, Database
 from sgc.game.engine import Engine
 from sgc.game.menu import Menu
 from sgc.game.room import Room
@@ -391,7 +391,7 @@ def test_the_database_on_a_small_terminal():
     db = Database(db_campaign()[0])
     screens.draw_database(cv, layout, db, "bar")
     text = cv.text()
-    assert "TAB 1/6 ADDRESSES" in text and "Abydos" in text and "q BACK" in text
+    assert f"TAB 1/{len(TABS)} ADDRESSES" in text and "Abydos" in text and "q BACK" in text
 
 
 def test_the_database_on_a_tiny_terminal():
@@ -464,7 +464,7 @@ def test_the_queue_tab_on_a_small_terminal():
     db.tab = "queue"
     screens.draw_database(cv, layout, db, "bar")
     text = cv.text()
-    assert "TAB 6/6 QUEUE" in text and "UAV → P3X-774" in text and "x CANCEL" in text
+    assert f"TAB {len(TABS)}/{len(TABS)} QUEUE" in text and "UAV → P3X-774" in text and "x CANCEL" in text
     db.message = "CANCELLED: UAV TO P3X-774"
     screens.draw_database(cv, layout, db, "bar")
     assert "CANCELLED: UAV TO P3X-774" in cv.text().split("\n")[-1]
@@ -521,3 +521,21 @@ def test_the_engines_reply_is_clipped_never_silently_cut():
     db.message = "X" * 200
     screens.draw_database(cv, layout, db, "bar")
     assert "…" in cv.text().split("\n")[1]                # a truly oversized reply is clipped visibly, not cut
+
+
+def test_open_is_in_the_legend_wherever_enter_opens_a_world():
+    from sgc.game.database import OPENS
+    for tab in TABS:
+        opens = tab in OPENS
+        assert (("⏎", "OPEN") in screens._db_keys(tab)) == opens, tab
+        assert ("⏎ OPEN" in screens._db_hint(tab)) == opens, tab
+        assert any(k == "⏎" for k, _ in screens._db_help_entries(tab)) == opens, tab
+
+
+@pytest.mark.parametrize("tab", ["factions", "trade", "arcs"])
+def test_the_new_tabs_draw_and_the_current_tab_stays_in_the_strip(tab):
+    layout, cv = small(80, 22)
+    db = Database(db_campaign()[0])
+    db.tab = tab
+    screens.draw_database(cv, layout, db, "bar")
+    assert TAB_TITLES[tab] in cv.text().split("\n")[0]

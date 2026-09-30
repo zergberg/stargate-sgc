@@ -1,6 +1,7 @@
+from sgc.game import arcs, clock, factions, trade, world
 from sgc.game.database import TABS, Database
 from sgc.game.schedule import QueueItem
-from sgc.game.state import Mission, new_campaign
+from sgc.game.state import CapturedDrone, Mission, Team, new_campaign
 
 
 def camp():
@@ -257,7 +258,7 @@ def test_switching_tabs_clears_the_search():
         db.key(f"ch:{ch}")
     db.key("enter")
     assert db.query == "toxic" and not db.searching
-    for _ in range(5):
+    for _ in range(TABS.index("queue")):
         db.key("right")                            # addresses -> ... -> queue: a search doesn't follow
     assert db.tab == "queue" and db.query == "" and not db.searching
     assert [r.key for r in db.rows()] == [i.id for i in QUEUE]     # not still filtered by the old search
@@ -268,3 +269,108 @@ def test_disarm_clears_armed_and_the_message():
     db.armed, db.message = "dial:uav:P3X-774", "CANCEL THE UAV TO P3X-774?  x AGAIN TO CONFIRM"
     db.disarm()
     assert db.armed is None and db.message == ""
+
+
+def test_the_new_tabs_come_right_after_intel():
+    i = TABS.index("intel")
+    assert TABS[i + 1:i + 4] == ("factions", "trade", "arcs")
+
+
+def test_factions_show_only_known_ones_in_words():
+    c, ws = camp()
+    c.factions["apophis"].attention = 60
+    c.factions["tokra"].trust = 55
+    db = Database(c)
+    db.tab = "factions"
+    assert db.rows() == []
+    factions.know(c, "apophis", "the Jaffa")
+    factions.know(c, "tokra", "allied intelligence")
+    rows = db.rows()
+    assert [r.cells for r in rows] == [("GOA'ULD", "Apophis", "has put a price on the SG teams", "the Jaffa"),
+                                       ("ALLY", "the Tok'ra", "friendly", "allied intelligence")]
+    c.inventory.add("ally.tokra")
+    assert db.rows()[1].cells[2] == "ALLIANCE"
+    assert not any(ch.isdigit() for r in db.rows() for ch in r.cells[2])
+
+
+def test_trade_rows_and_their_world_file():
+    c, ws = camp()
+    w = ws[2]
+    w.inhabitants, w.owner = "human", None
+    trade.new_deal(c, w.id, "naquadah", 2)
+    db = Database(c)
+    db.tab = "trade"
+    [row] = db.rows()
+    assert row.key == w.id and row.cells == (w.name, "2 NAQUADAH", clock.short(c.deals[0].next), "6", "LOW")
+    db.key("enter")
+    assert db.tab == "world" and db.world_id == w.id
+    assert any(line.startswith("  2 NAQUADAH EVERY 72 HOURS") for line in db.detail())
+    c.deals[0].state = "cut"
+    db.tab = "trade"
+    assert db.rows()[0].cells[2] == "CUT" and db.rows()[0].cells[4] == "—"
+
+
+def test_arcs_show_only_awakened_ones_with_their_deadline():
+    c, ws = camp()
+    db = Database(c)
+    db.tab = "arcs"
+    assert db.rows() == []
+    arcs.start(c, "apophis")
+    c.factions["apophis"].attention = 85
+    arcs.on_attention(c, "apophis")
+    [row] = db.rows()
+    assert row.cells[:2] == ("Apophis and Chulak", "ACTIVE") and row.cells[2].endswith(
+        f"Due {clock.short(c.arcs['apophis'].deadline)}.") and row.key == world.place_id("Chulak")
+    arcs.resolve(c, "apophis")
+    assert db.rows()[0].cells[1:3] == ("RESOLVED", "Resolved.")
+
+
+def test_intel_lists_technology_and_where_to_look_for_addresses():
+    c, ws = camp()
+    c.inventory.add("tech.zat")
+    ws[2].seen["features"] = "ruins"
+    f = c.factions["asgard"]
+    f.known, f.trust = True, 60
+    db = Database(c)
+    db.tab = "intel"
+    cells = [r.cells for r in db.rows()]
+    assert ("TECH", "ZAT'NIK'TEL", "—", "on file") in cells
+    assert any(cl[0] == "SOURCE" and cl[2] == ws[2].id and "ruins" in cl[1] for cl in cells)
+    assert any(cl[0] == "SOURCE" and cl[1].startswith("the Asgard") for cl in cells)
+    db.sel = next(i for i, r in enumerate(db.rows()) if r.cells[0] == "TECH")
+    db.key("enter")
+    assert db.tab == "intel"                                    # not a world: nothing to open
+
+
+def test_the_hint_appears_once_the_addresses_run_out():
+    c, ws = camp()
+    db = Database(c)
+    assert db.hint() is None
+    c.hints.add("explored")
+    assert db.hint() == "EVERY ADDRESS VISITED · RE-SURVEY, STUDY RUINS OR ASK ALLIES FOR MORE"
+    db.tab = "teams"
+    assert db.hint() is None
+
+
+def test_the_world_file_lists_who_and_what_is_held_there():
+    c, ws = camp()
+    w = ws[2]
+    c.teams["SG-4"].status, c.teams["SG-4"].where = "captured", w.id
+    c.captured_drones.append(CapturedDrone("uav", w.id, 0, located=True))
+    c.captured_drones.append(CapturedDrone("malp", w.id, 0))            # not located: not shown
+    db = Database(c)
+    db.world_id = w.id
+    lines = db.detail()
+    i = lines.index("HELD HERE")
+    assert lines[i + 1:i + 3] == ["  SG-4 (CAPTURED)", "  OUR UAV"] and "  OUR MALP" not in lines
+
+
+def test_forming_and_training_teams_and_secondary_specialties():
+    c, ws = camp()
+    c.teams["SG-5"] = Team("medical", status="forming", until=c.now + clock.DAY + 4 * 60)
+    c.teams["SG-4"].status, c.teams["SG-4"].until, c.teams["SG-4"].secondary = "training", c.now + 20 * 60, "combat"
+    db = Database(c)
+    db.tab = "teams"
+    rows = {r.key: r.cells for r in db.rows()}
+    assert rows["SG-5"][3] == "FORMING 1D 4H" and rows["SG-4"][3] == "TRAINING 20H"
+    assert rows["SG-4"][1] == "SCIENCE/COMBAT"

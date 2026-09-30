@@ -4,23 +4,33 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
+from . import arcs, factions, trade
+from .arcs import ARCS
 from .clock import DAY, HOUR, short
+from .rules import FLAG_NAMES
 from .schedule import QueueItem
 from .state import Campaign, rank, team_names
-from .world import World
+from .world import FACTION_IDS, World, faction_name
 
-TABS = ("addresses", "world", "missions", "teams", "intel", "queue")
+TABS = ("addresses", "world", "missions", "teams", "intel", "factions", "trade", "arcs", "queue")
 TAB_TITLES = {"addresses": "ADDRESSES", "world": "WORLD FILE", "missions": "MISSIONS", "teams": "TEAMS",
-              "intel": "INTEL", "queue": "QUEUE"}
+              "intel": "INTEL", "factions": "FACTIONS", "trade": "TRADE", "arcs": "ARCS", "queue": "QUEUE"}
 COLUMNS = {
     "addresses": ("NAME", "GLYPHS", "STATUS", "LAST VISIT", "FLAGS", "DRONE"),
     "missions": ("TEAM", "WORLD", "TYPE", "STARTED", "OUTCOME", "CAS", "FINDINGS"),
     "teams": ("TEAM", "SPECIALTY", "RANK", "STATUS", "LOCATION", "HISTORY"),
     "intel": ("KIND", "WHAT", "WORLD", "SOURCE"),
+    "factions": ("KIND", "NAME", "STANDING", "ON FILE FROM"),
+    "trade": ("WORLD", "GOODS", "NEXT", "LEFT", "RISK"),
+    "arcs": ("ARC", "STATE", "WHERE IT STANDS", "SINCE"),
     "queue": ("WHEN", "WHAT", "STATUS"),
     "world": (),
 }
 SEARCHABLE = ("addresses", "queue")
+OPENS = ("addresses", "missions", "intel", "trade", "arcs")      # tabs where Enter opens a world's file
+HINT = "EVERY ADDRESS VISITED · RE-SURVEY, STUDY RUINS OR ASK ALLIES FOR MORE"
+ALLY_FLAGS = {"tokra": "ally.tokra", "asgard": "ally.asgard", "tollan": "ally.tollan", "nox": "ally.nox",
+              "jaffa": "ally.jaffa"}
 SORTS = ("status", "name")
 FILTERS = (None, "unexplored", "probed", "surveyed", "contact", "hostile", "lost")
 _STATUS_ORDER = {s: i for i, s in enumerate(("contact", "surveyed", "probed", "unexplored", "hostile", "lost"))}
@@ -34,7 +44,8 @@ def time_left(minutes: float) -> str:
 
 
 def team_status(c: Campaign, name: str) -> str:
-    """A team's status with its timer: STOOD DOWN 11H, INJURED 1D 20H, CAPTURED 4D, RE-FORMING 2D 5H.
+    """A team's status with its timer: STOOD DOWN 11H, INJURED 1D 20H, CAPTURED 4D, RE-FORMING 2D 5H,
+    FORMING 1D 4H, TRAINING 20H.
 
     An offworld team reads OFFWORLD; where it is belongs in another column.
     """
@@ -48,6 +59,10 @@ def team_status(c: Campaign, name: str) -> str:
         return f"CAPTURED {time_left(left)}"
     if t.status == "lost":
         return f"RE-FORMING {time_left(left)}" if t.until else "LOST"
+    if t.status == "forming":
+        return f"FORMING {time_left(left)}"
+    if t.status == "training":
+        return f"TRAINING {time_left(left)}"
     return t.status.upper()
 
 
@@ -119,7 +134,8 @@ class Database:
                 done = [m for m in c.missions if m.team == name and m.state not in ("active", "cancelled")]
                 where = self._world_name(t.where) if t.where else "—" if t.status == "lost" else "SGC"
                 history = f"{len(done)} missions" + (f", last {self._world_name(done[-1].world)}" if done else "")
-                out.append(Row(name, (name, t.specialty.upper(), rank(t).upper(), team_status(c, name), where,
+                specialty = t.specialty.upper() + (f"/{t.secondary.upper()}" if t.secondary else "")
+                out.append(Row(name, (name, specialty, rank(t).upper(), team_status(c, name), where,
                                      history)))
             return out
         if self.tab == "intel":
@@ -130,6 +146,40 @@ class Database:
             for w in c.worlds.values():
                 if _lead(w) and w.status == "unexplored":
                     out.append(Row(w.id, ("LEAD", "address not yet visited", w.id, w.found)))
+            for flag in sorted(f for f in c.inventory if f.startswith("tech.")):
+                out.append(Row("", ("TECH", FLAG_NAMES[flag], "—", "on file")))
+            for w in c.worlds.values():
+                if w.status in ("surveyed", "contact") and "ruins" in w.seen.get("features", ""):
+                    out.append(Row(w.id, ("SOURCE", "ruins: study or re-survey for addresses", w.id, "Dr. Jackson")))
+            for fid in factions.ALLIES:
+                f = c.factions[fid]
+                if f.known and f.trust >= 50:
+                    out.append(Row("", ("SOURCE", f"{faction_name(fid)}: allied intelligence", "—",
+                                        "shares addresses at reviews")))
+            return out
+        if self.tab == "factions":
+            out = []
+            for fid in FACTION_IDS:                    # the Goa'uld come first in FACTION_IDS
+                f = c.factions[fid]
+                if not f.known:
+                    continue
+                standing = "ALLIANCE" if ALLY_FLAGS.get(fid) in c.inventory else factions.words(c, fid)
+                out.append(Row(fid, ("GOA'ULD" if f.kind == "goauld" else "ALLY", faction_name(fid), standing,
+                                     f.source)))
+            return out
+        if self.tab == "trade":
+            return [Row(d.world, (self._world_name(d.world), f"{d.amount} {d.goods.upper()}",
+                                  short(d.next) if d.state == "active" else d.state.upper(), str(d.left),
+                                  trade.risk_words(c, d))) for d in c.deals]
+        if self.tab == "arcs":
+            out = []
+            for aid, st in c.arcs.items():
+                if st.state == "dormant":
+                    continue
+                w = arcs.arc_world(c, aid)
+                key = w.id if w is not None and w.id in c.worlds else ""
+                out.append(Row(key, (ARCS[aid].title, st.state.upper(), arcs.stage_text(c, aid),
+                                     short(st.started) if st.started is not None else "—")))
             return out
         if self.tab == "queue":
             q = self.query.strip().lower()
@@ -154,6 +204,10 @@ class Database:
                 self.sel = i
                 return
 
+    def hint(self) -> str | None:
+        """A one-line nudge for the Addresses tab once every address has been visited (never a spoiler)."""
+        return HINT if self.tab == "addresses" and "explored" in self.c.hints else None
+
     def disarm(self) -> None:
         """Clear the armed cancel and any showing reply. The app calls this before ?, m, + and -."""
         self.armed, self.message = None, ""
@@ -171,6 +225,16 @@ class Database:
         lines += [f"  {k.upper()}: {v}" for k, v in w.seen.items()] or ["  no readings"]
         if w.drone:
             lines.append(f"  {w.drone.upper()} ON SITE")
+        held = [n for n in team_names(self.c)
+                if self.c.teams[n].status == "captured" and self.c.teams[n].where == w.id]
+        drones = [d.drone for d in self.c.captured_drones if d.world == w.id and d.located]
+        if held or drones:
+            lines += ["", "HELD HERE"] + [f"  {n} (CAPTURED)" for n in held] + [f"  OUR {d.upper()}" for d in drones]
+        deals = [d for d in self.c.deals if d.world == w.id]
+        if deals:
+            lines += ["", "TRADE"] + [
+                f"  {d.amount} {d.goods.upper()} EVERY {trade.EVERY // HOUR} HOURS · "
+                + (f"NEXT {short(d.next)}" if d.state == "active" else d.state.upper()) for d in deals]
         lines += ["", "MISSION OPTIONS: " + ", ".join(o.upper() for o in w.options), "", "REPORTS"]
         lines += [f"  {short(m)}  {text}" for m, text in w.reports] or ["  none"]
         lines += ["", "NOTES"]
@@ -222,11 +286,12 @@ class Database:
             n = len(self.rows())
             if n:
                 self.sel = (self.sel + (-1 if k == "up" else 1)) % n
-        elif k == "enter" and self.tab in ("addresses", "missions", "intel"):
+        elif k == "enter" and self.tab in OPENS:
             row = self.selected()
-            if row is not None:
-                self.world_id = self.c.mission(int(row.key)).world if self.tab == "missions" else row.key
-                self.tab, self.scroll = "world", 0
+            if row is not None and self.tab == "missions":
+                self.world_id, self.tab, self.scroll = self.c.mission(int(row.key)).world, "world", 0
+            elif row is not None and row.key in self.c.worlds:    # a TECH or ally SOURCE row is not a world
+                self.world_id, self.tab, self.scroll = row.key, "world", 0
         elif k == "/" and self.tab in SEARCHABLE:
             self.searching, self.query, self.sel = True, "", 0
         elif k == "s" and self.tab == "addresses":
