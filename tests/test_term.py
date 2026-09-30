@@ -32,6 +32,13 @@ def test_key_parser_campaign_keys():
     assert kp.feed(b"dDbB?/sSfF\t\x7f") == ["d", "d", "b", "b", "?", "/", "s", "s", "f", "f", "tab", "backspace"]
 
 
+def test_key_parser_queue_keys():
+    kp = KeyParser()
+    assert kp.feed(b"xX[]") == ["x", "x", "[", "]"]
+    kp.text = True
+    assert kp.feed(b"x[]") == ["ch:x", "ch:[", "ch:]"]              # typed into a search, they're just text
+
+
 def test_key_parser_text_mode():
     kp = KeyParser()
     kp.text = True

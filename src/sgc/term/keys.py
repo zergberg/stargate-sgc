@@ -9,6 +9,7 @@ _ABORT = (0x03, 0x18, 0x1a)  # Ctrl+C, CAN, SUB cancel a pending sequence
 _KEYS = {"q": "q", "Q": "q", "m": "m", "M": "m", "p": "p", "P": "p", "+": "+", "=": "+",
          "-": "-", "_": "-", " ": "space", "\x03": "ctrl-c", "r": "r", "R": "r", "\r": "enter", "\n": "enter",
          "d": "d", "D": "d", "b": "b", "B": "b", "?": "?", "/": "/", "s": "s", "S": "s", "f": "f", "F": "f",
+         "x": "x", "X": "x", "[": "[", "]": "]",
          "\t": "tab", "\x7f": "backspace", "\x08": "backspace",
          **{str(d): str(d) for d in range(1, 10)}}
 _TEXT_KEYS = {"\x03": "ctrl-c", "\r": "enter", "\n": "enter", "\x7f": "backspace", "\x08": "backspace"}
