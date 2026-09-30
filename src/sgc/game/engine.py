@@ -18,7 +18,7 @@ from ..director import Director
 from ..events import REGISTRY, EventContext
 from ..events.common import cleanup, start_outgoing
 from ..model import Figure, Prompt, Step
-from . import clock, orders, rules, uav
+from . import clock, economy, factions, orders, roster, rules, uav
 from .content import TEXT_LEVELS, Node, Outcome, Scenario
 from .database import team_status
 from .orders import SITUATIONS
@@ -44,7 +44,12 @@ INBOUND = ("incoming", "checkin", "team_return", "malp_return")
 # other check-ins already due.
 GATE_RANK = {"checkin": 0, **{k: 1 for k in INBOUND if k != "checkin"}, "dial_out": 2}
 ALARM_WAIT = 5                       # game minutes a team at the gate waits, again, for an open decision
-MISSION_HOURS = {"survey": 24, "contact": 36}
+MISSION_HOURS = {"survey": 24, "contact": 36, "trade": 30, "raid": 18, "study": 36, "rescue": 20, "recover": 12,
+                 "mine": 48, "aid": 30}
+MISSION_NEEDS = {"contact": "diplomatic", "trade": "diplomatic", "raid": "combat", "study": "science",
+                 "aid": "medical"}
+CONTACT_TYPES = ("contact", "trade", "aid")   # these end in CONTACT; the rest in SURVEYED
+SEEN = 5                                      # attention when a team departs for a Goa'uld's world
 MISS = (3, 8, 15, 25)                # % chance of a missed check-in, by world danger
 SEARCH = {"malp": (60, 85), "team": (80, 95)}     # a search finds the team / finds it pinned down (cumulative %)
 OVERDUE = (50, 80)                   # after 12 hours: the team turns up / is captured (cumulative %); else lost
@@ -249,6 +254,8 @@ class Engine:
             return f"A {w.drone.upper()} IS ALREADY ON {w.name.upper()}"
         if c.events.find(lambda e: e.kind in ("dial_out", "malp_return") and e.data.get("world") == wid):
             return f"A DRONE IS ALREADY BOUND FOR {w.name.upper()}"
+        if drone == "uav" and "uav_program" not in c.upgrades:
+            return "NEEDS THE UAV PROGRAM"
         c.stock[drone] -= 1
         c.events.push(c.now, "dial_out", {"op": drone, "world": wid})
         msg = f"{drone.upper()} QUEUED FOR {w.name.upper()}"
@@ -263,8 +270,12 @@ class Engine:
         if self.c.events.find(lambda e: e.kind == "dial_out" and e.data.get("op") == "recall"
                               and e.data.get("world") == wid):
             return "RECALL ALREADY QUEUED"
-        self.c.events.push(self.c.now, "dial_out", {"op": "recall", "world": wid})
-        msg = f"RECALL QUEUED FOR THE {w.drone.upper()} ON {w.name.upper()}"
+        why = economy.charge_recall(self.c, w.drone)
+        if why:
+            return why
+        wear = economy.recall_cost(w.drone)
+        self.c.events.push(self.c.now, "dial_out", {"op": "recall", "world": wid, "wear": wear})
+        msg = f"RECALL QUEUED FOR THE {w.drone.upper()} ON {w.name.upper()} — {wear} FOR WEAR"
         self._log(msg)
         self.save_now()
         return msg
@@ -288,6 +299,34 @@ class Engine:
         for line in rules.revoke(self.c, team):
             self._log(line)
         self.save_now()
+
+    def _purchase(self, msg: str, done: bool) -> str:
+        if done:
+            self._log(msg)
+            self.save_now()
+        return msg
+
+    def buy(self, item: str) -> str:
+        """A drone ("malp", "uav") or an upgrade id."""
+        if self.ended:
+            return "THE CAMPAIGN IS OVER"
+        done = economy.reason(self.c, item) is None
+        return self._purchase(economy.buy(self.c, item), done)
+
+    def set_reserve(self, drone: str, n: int) -> str:
+        return self._purchase(economy.set_reserve(self.c, drone, n), True)
+
+    def commission(self, specialty: str) -> str:
+        if self.ended:
+            return "THE CAMPAIGN IS OVER"
+        done = roster.commission_reason(self.c) is None
+        return self._purchase(roster.commission(self.c, specialty), done)
+
+    def train(self, team: str, specialty: str) -> str:
+        if self.ended:
+            return "THE CAMPAIGN IS OVER"
+        done = roster.train_reason(self.c, team, specialty) is None
+        return self._purchase(roster.train(self.c, team, specialty), done)
 
     # ------------------------------------------------------------------ the schedule (the Database's QUEUE tab)
     def schedule_view(self) -> list[schedule.QueueItem]:
@@ -320,7 +359,7 @@ class Engine:
         if op in ("malp", "uav"):
             self._drone_out(data["world"], op)
         elif op == "recall":
-            self._recall_out(data["world"])
+            self._recall_out(data["world"], data.get("wear", 0))
         elif op == "depart":
             self._depart(data["mission"])
         elif op == "search":
@@ -367,7 +406,7 @@ class Engine:
             w.reports.append((c.now, f"{drone.upper()} captured. Armed humanoids seen before the feed was cut."))
             w.seen["life"] = "armed humanoids"
             self._log(f"{drone.upper()} CAPTURED ON {w.name.upper()}")
-            for line in rules.set_world_status(c, w, "hostile"):
+            for line in rules.capture_drone(c, w, drone):
                 self._log(line)
             if drone == "uav":
                 self._show(self._v_signal_lost(w, {}))
@@ -379,6 +418,9 @@ class Engine:
         self._log(f"{drone.upper()} TELEMETRY FROM {w.name.upper()}")
         for line in rules.set_world_status(c, w, "probed"):
             self._log(line)
+        if drone == "uav":                                  # a drone of ours held here shows up on the feed
+            for line in rules.parse_effect("locate {world}")(c, self._wbind(w)):
+                self._log(line)
         if drone == "uav" and w.inhabitants != "none" and self.rng.random() < 0.4:
             for line in rules.parse_effect("reveal name {world} from comms")(c, self._wbind(w)):
                 self._log(line)
@@ -391,9 +433,10 @@ class Engine:
         for line in rules.stow(self.c, drone):
             self._log(line)
 
-    def _recall_out(self, wid: str) -> None:
+    def _recall_out(self, wid: str, wear: int = 0) -> None:
         w = self.c.worlds[wid]
         if not w.drone:
+            self.c.funding += wear                   # nothing left to fetch: the wear wasn't spent
             return
         self._occupy("recall")
         drone, w.drone = w.drone, None
@@ -653,9 +696,33 @@ class Engine:
 
     # ------------------------------------------------------------------ missions
     def mission_types(self, wid: str, team: str) -> list[str]:
-        """The mission types this team can run on this world now (survey always; contact needs a diplomat)."""
+        """The mission types this team can run on this world now: the world's options, less those that need a
+        specialty the team lacks, or a captive or located drone that isn't there (or already has a team)."""
         w, tm = self.c.worlds[wid], self.c.teams[team]
-        return [t for t in w.options if t != "contact" or has_specialty(tm, "diplomatic")]
+        out = []
+        for t in w.options:
+            need = MISSION_NEEDS.get(t)
+            if need and not has_specialty(tm, need):
+                continue
+            if t in ("rescue", "recover") and self.mission_target(wid, t) is None:
+                continue
+            out.append(t)
+        return out
+
+    def mission_target(self, wid: str, mtype: str) -> str | None:
+        """Who a rescue is for (a team), or what a recovery is after (a drone kind); None if nothing is."""
+        c = self.c
+        taken = [m.target for m in c.active_missions() if m.world == wid and m.type == mtype]
+        if mtype == "rescue":
+            return next((n for n in team_names(c) if c.teams[n].status == "captured" and c.teams[n].where == wid
+                         and n not in taken), None)
+        if mtype == "recover":
+            held = [d.drone for d in c.captured_drones if d.world == wid and d.located]
+            for drone in taken:
+                if drone in held:
+                    held.remove(drone)
+            return held[0] if held else None
+        return None
 
     def assign(self, wid: str, team: str, mtype: str) -> str:
         c = self.c
@@ -668,7 +735,8 @@ class Engine:
             return f"{team} IS NOT AVAILABLE"
         if mtype not in self.mission_types(wid, team):
             return f"{team} CAN'T RUN A {mtype.upper()} MISSION ON {w.name.upper()}"
-        m = Mission(len(c.missions) + 1, team, wid, mtype, c.now, c.now + self._duration(team, mtype))
+        m = Mission(len(c.missions) + 1, team, wid, mtype, c.now, c.now + self._duration(team, mtype),
+                    target=self.mission_target(wid, mtype))
         c.missions.append(m)
         tm = c.teams[team]
         tm.status, tm.where, tm.mission = "offworld", wid, m.id
@@ -682,10 +750,7 @@ class Engine:
     def _duration(self, team: str, mtype: str) -> int:
         tm = self.c.teams[team]
         hours = MISSION_HOURS[mtype] * self.rng.uniform(0.85, 1.2)
-        if tm.specialty == "recon":
-            hours *= 0.75
-        elif tm.specialty == "elite":
-            hours *= 0.875
+        hours *= 1 - 0.25 * roster.strength(tm, "recon")
         return round(max(12, min(72, hours)) * clock.HOUR)
 
     def _interval(self, team: str) -> int:
@@ -693,8 +758,10 @@ class Engine:
 
     def _mbind(self, m: Mission) -> dict:
         tm = self.c.teams[m.team]
-        return {**self._wbind(self.c.worlds[m.world]), "team": m.team, "specialty": tm.specialty,
-                "mission": str(m.id)}
+        b = {**self._wbind(self.c.worlds[m.world]), "team": m.team, "specialty": tm.specialty, "mission": str(m.id)}
+        if m.type == "rescue" and m.target:
+            b["captive"] = m.target
+        return b
 
     def _next_checkin(self, m: Mission) -> None:
         due = self.c.now + self._interval(m.team)
@@ -707,6 +774,8 @@ class Engine:
         if m is None or m.state != "active":
             return
         self._occupy("depart")
+        for line in rules.attention(c, factions.owner_of(c, m.world), SEEN):   # seen on their world
+            self._log(line)
         length = m.end - m.start
         m.start, m.end = c.now, c.now + length
         self._next_checkin(m)
@@ -872,14 +941,15 @@ class Engine:
     def _debrief(self, m: Mission, w: World) -> None:
         c = self.c
         tm = c.teams[m.team]
+        economy.note(c, "missions")
         bind = self._mbind(m)
         lines = rules.parse_effect("xp {team} +1")(c, bind)
-        lines += rules.set_world_status(c, w, "surveyed" if m.type == "survey" else "contact")
+        lines += rules.set_world_status(c, w, "contact" if m.type in CONTACT_TYPES else "surveyed")
         drawn = self._draw("debrief", bind, m.type)
         if drawn:
             self._start(*drawn)
         rolls = 1 + rank_index(tm) + (1 if has_specialty(tm, "science") and {"ruins", "technology"} & set(w.features)
-                                      else 0)
+                                      else 0) + (1 if "database_analysts" in c.upgrades else 0)
         for _ in range(rolls):
             if self.rng.random() < INTEL_ROLL:
                 lines += rules.parse_effect("reveal address")(c, bind)

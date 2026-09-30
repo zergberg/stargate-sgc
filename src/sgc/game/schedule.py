@@ -166,7 +166,8 @@ def _undo(c: Campaign, d: dict) -> list[str]:
     if op in ("malp", "uav"):
         return rules.stow(c, op)                     # back into stores
     if op == "recall":
-        return []                                    # the drone stays where it is
+        c.funding += d.get("wear", 0)                # the drone stays where it is; its wear wasn't spent
+        return []
     m = c.mission(d["mission"])
     if op == "depart":                               # it never left: no mission at all
         tm = c.teams.get(m.team)
