@@ -216,3 +216,49 @@ def test_only_rescue_debriefs_can_be_drawn_for_a_rescue():
     pool = [sc.id for sc in scenarios.values() if sc.kind == "debrief" and sc.mission_type in (None, "rescue")
             and r.e._binding(sc, bind) is not None]
     assert pool == ["debrief_rescue"]
+
+
+@pytest.mark.parametrize("traits", [dict(inhabitants="ally"), dict(inhabitants="jaffa"),
+                                    dict(inhabitants="goauld", owner="Sokar")])
+def test_a_rescue_draws_only_rescue_debriefs_in_campaign(traits):
+    r = Rig()
+    w = probed(r, **traits)
+    rules.apply_all([rules.parse_effect("team {team} captured")], r.c, {"team": "SG-2", "world_id": w.id,
+                                                                       "world": w.name})
+    w.options.append("rescue")
+    from sgc.game import content
+    scenarios, _ = content.load(user=None)
+    r.e.scenarios = scenarios
+    r.c.minutes = 10 * clock.DAY
+    r.e.assign(w.id, "SG-3", "rescue")
+    bind = r.e._mbind(r.c.mission(1))
+    for _ in range(40):
+        drawn = r.e._draw("debrief", bind, "rescue")
+        assert drawn is not None and drawn[0].id == "debrief_rescue"
+
+
+def test_a_rescue_on_chulak_with_the_wake_eligible_still_draws_the_rescue_debrief():
+    from sgc.game import content, world
+    scenarios, _ = content.load(user=None)
+    r = Rig()
+    r.e.scenarios = scenarios
+    w = r.c.worlds[world.place_id("Chulak")]
+    w.status = "probed"
+    bind = {**r.e._wbind(w), "team": "SG-3", "captive": "SG-2"}
+    r.c.minutes = 10 * clock.DAY
+    r.c.teams["SG-2"].status = "captured"
+    assert "arc_apophis_wake" in {r.e._draw("debrief", bind, "survey")[0].id for _ in range(100)}
+    for _ in range(40):
+        assert r.e._draw("debrief", bind, "rescue")[0].id == "debrief_rescue"
+
+
+def test_a_recover_draws_only_recover_debriefs():
+    from sgc.game import content
+    scenarios, _ = content.load(user=None)
+    r = Rig()
+    r.e.scenarios = scenarios
+    w = probed(r, inhabitants="jaffa")
+    r.c.minutes = 10 * clock.DAY
+    bind = {**r.e._wbind(w), "team": "SG-3"}
+    for _ in range(40):
+        assert r.e._draw("debrief", bind, "recover")[0].id == "debrief_recover"

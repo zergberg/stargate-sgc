@@ -77,6 +77,11 @@ def team_label(c: Campaign, name: str, timer: bool = True) -> str:
     return status if timer else _TIME_LEFT.sub("", status)
 
 
+# Rescue and recover missions draw only scenarios written for them: a generic one would never free the captive
+# or bring the drone home.
+EXACT_TYPES = ("rescue", "recover")
+
+
 class Engine:
     def __init__(self, campaign: Campaign, scenarios: dict[str, Scenario], director: Director | None = None,
                  pace_override: int | None = None,
@@ -307,6 +312,7 @@ class Engine:
         elif arc.endgame == stage:                       # nothing to play at the endgame: the arc is lost
             for line in arcs.fail(c, aid):
                 self._log(line)
+            self._check_victory()
         else:
             self._log(f"{arc.title.upper()}: NO WORD")
 
@@ -548,7 +554,10 @@ class Engine:
               stage: str | None = None, arc: tuple[str, int] | None = None) -> tuple[Scenario, dict] | None:
         pool = []
         for sc in sorted(self.scenarios.values(), key=lambda s: s.id):
-            if sc.kind != kind or sc.on != on or (mission_type and sc.mission_type not in (None, mission_type)):
+            if sc.kind != kind or sc.on != on:
+                continue
+            if mission_type and sc.mission_type != mission_type and (
+                    sc.mission_type is not None or mission_type in EXACT_TYPES):
                 continue
             if sc.kind == "faction" and sc.stage != stage:
                 continue

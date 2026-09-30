@@ -319,3 +319,16 @@ def test_a_non_endgame_stage_with_no_scenario_keeps_the_arc_going():
     arcs.advance(r.c, "apophis")
     r.e.advance(48 * 60)
     assert r.c.arcs["apophis"].state == "active" and "APOPHIS AND CHULAK: NO WORD" in r.logs
+
+
+def test_an_endgame_arc_failing_as_the_last_active_arc_can_raise_victory(monkeypatch):
+    import dataclasses
+    r = Rig()
+    monkeypatch.setitem(arcs.ARCS, "thor", dataclasses.replace(arcs.ARCS["thor"], endgame=3, countdown=1))
+    arcs.start(r.c, "apophis")
+    arcs.resolve(r.c, "apophis")
+    arcs.start(r.c, "thor")
+    arcs.advance(r.c, "thor")
+    arcs.advance(r.c, "thor")
+    r.e.advance(60)
+    assert r.c.arcs["thor"].state == "failed" and r.c.won is not None and r.victories == [r.c]
