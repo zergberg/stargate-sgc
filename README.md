@@ -63,7 +63,7 @@ You command the SGC while sgc runs in a terminal pane. The game keeps its own cl
 ### Starting
 
 - **The menu:** `sgc` opens the briefing-room menu: Ambience, Missions or Quit. Missions offers Continue (when there's a save) and New Game. New Game over an existing save asks first (Start over or Back). Then pick a mode, a difficulty and a pace.
-- **Modes:** Campaign places seven canon worlds (Chulak, Cimmeria, Kheb, K'tau, Langara, Tollana, Juna) among the 20 addresses of the Abydos cartouche, and the rest are generated. Sandbox generates everything but Abydos, and Goa'uld and Jaffa worlds are rarer. Story arcs and victory come in a later build, so for now both modes are open-ended.
+- **Modes:** Campaign places seven canon worlds (Chulak, Cimmeria, Kheb, K'tau, Langara, Tollana, Juna) among the 20 addresses of the Abydos cartouche, and the rest are generated. Sandbox generates everything but Abydos, and Goa'uld and Jaffa worlds are rarer. A Campaign also hides three story arcs from SG-1 (see Arcs and victory). Sandbox has no arcs and no victory: it's scored.
 - **Difficulty:**
   - Recruit, Officer or Commander.
   - Meter losses count ×0.5, ×1 or ×1.5, and gains ×1.25, ×1 or ×0.75.
@@ -73,7 +73,8 @@ You command the SGC while sgc runs in a terminal pane. The game keeps its own cl
   - The campaign saves after every event and decision to `~/.local/share/stargate-sgc/campaign.json`. It resumes exactly where it was, missions in flight included.
   - If a save fails (a full disk, a read-only home), the log reads `SAVE FAILED — <reason>` once and the game plays on. It tries again every 5 game minutes and logs `SAVE OK` when a save works again.
   - A save from build 1 is renamed `campaign.json.v1-<date>` and the menu says so. A damaged save is set aside the same way (`.bad-<date>`).
-  - When the base falls, the save is deleted and the run goes into the hall of records on the menu (the top five, by worlds surveyed).
+  - When the base falls, the save is deleted and the run goes into the hall of records on the menu (the top five, by score).
+  - A save from Stage 1 is upgraded when you continue it, and the log reads `STAGE 1 SAVE UPGRADED`: it gets 500 funding and the UAV program, and everything in flight carries on.
 
 ### The clock
 
@@ -104,7 +105,7 @@ You command the SGC while sgc runs in a terminal pane. The game keeps its own cl
   - After the hold, `1`–`9` answers the alarm.
 - **Leaving an open alarm:** `b` won't take you out of the gate room while an alarm is open. The log reads `ALARM OPEN — GIVE AN ORDER FIRST`. After you answer, `b` takes you back to the same briefing-room screen, a half-typed note and all.
 - **Hostiles on their heels:** a team coming home from a dangerous world (Unas, Jaffa or Goa'uld) has a 15% chance of being followed. You decide before they step through: open the iris briefly and risk a firefight, or keep it closed and risk losing the team.
-- **Losing:** the base falls if a security breach hits while Security is at 0, if Jaffa win a gate-room firefight after you open the iris to an unknown code, or if a device you try to push back through the gate goes off.
+- **Losing:** the base falls if a security breach hits while Security is at 0, if Jaffa win a gate-room firefight after you open the iris to an unknown code, or if a device you try to push back through the gate goes off. A campaign can also end when an arc's final threat reaches Earth with nothing to stop it (the header then reads EARTH HAS FALLEN).
 
 ### Standing orders
 
@@ -133,8 +134,8 @@ A missed check-in plays out as follows:
   - Some addresses won't lock and are marked LOST.
   - A world counts as surveyed once, for good. Surveying a HOSTILE world counts too, though it stays HOSTILE.
 - **Drones:**
-  - You start with 4 MALPs and 2 UAVs. Stores hold at most 6 MALPs and 3 UAVs.
-  - At midnight a MALP is delivered every day, and a UAV every third day, unless the fleet is already at the cap. Drones out in the field count towards the cap.
+  - You start with 4 MALPs and no UAVs. A MALP costs 20; UAVs need the UAV program (see Funding) and cost 60 each. Stores hold at most 8 MALPs and 4 UAVs; a drone coming home always fits.
+  - At midnight the SGC tops stores up to your reserve (2 MALPs and 0 UAVs unless you change it in Requisitions), never spending the last 100 of its funding.
   - A MALP's telemetry comes back in 1–2 game hours, and a UAV's in 45–90 minutes. A UAV sees more (settlements and head counts), and sometimes catches a name over comms. It's also more likely to be shot down over Jaffa or Goa'uld worlds.
   - The UAV is its own aircraft, a small straight-wing drone with a pusher propeller:
     - **Launch:** it fires off a launch rail at the foot of the ramp and climbs into the wormhole.
@@ -145,16 +146,17 @@ A missed check-in plays out as follows:
     - **Small panes:** when the gate image is under 160 pixels, the monitor is left out and the side screen still reads out.
   - Drones can be destroyed by a harsh world or captured by its garrison. Capture marks the world HOSTILE.
   - One that survives stays parked on the world, one drone per world. Recall it through the gate, or the next team there brings it home.
-  - A drone that comes home to full stores is scrapped.
+  - A recall costs a quarter of the drone's price, for wear.
+  - A captured drone is held where it was taken. Once a UAV flight over that world, or intel, locates it, a team can go and recover it.
   - A search MALP stays on the world, unless a drone is already parked there. In that case it comes home.
 - **The gate** does one thing at a time. Check-ins go first, then other incoming traffic, then your queued dial-outs.
 
 ### Teams
 
-- **The teams:** SG-1 (every specialty), SG-2 (recon), SG-3 (combat) and SG-4 (science). Several can be out at once.
+- **The teams:** SG-1 (every specialty at half strength), SG-2 (recon), SG-3 (combat) and SG-4 (science) to start. Commission more, up to SG-12, and train a second specialty (see Requisitions and the roster).
 - **Missions:**
   - A world must be probed before a team can go.
-  - A survey takes 20–29 game hours. A contact mission takes 31–43 hours. It needs a diplomat, so only SG-1 can run one, and only on a world where contact has been unlocked (Abydos from the start, others through locals or allies met on a mission).
+  - A survey takes 20–29 game hours. A contact mission takes 31–43 hours. It needs a diplomat, so it takes SG-1 or a team with the diplomatic specialty, and only on a world where contact has been unlocked (Abydos from the start, others through locals or allies met on a mission).
   - SG-2 is a quarter faster than the others, and SG-1 an eighth.
 - **Check-ins:** every 8 game hours, or 6 for SG-2. A check-in is missed 3–25% of the time, depending on how dangerous the world is. Each rank takes 5 points off that chance, and recon takes 5 more.
 - **Rank:** Green, then Seasoned at 3 completed missions, Veteran at 8 and Elite at 15. A few check-in events count as one more mission.
@@ -170,9 +172,79 @@ A missed check-in plays out as follows:
   | `INJURED 1D 20H` | 2 days in the infirmary |
   | `CAPTURED 4D` | presumed lost after 5 days |
   | `RE-FORMING 2D 5H` | a lost team's number is re-formed, Green, after 3 days |
+  | `FORMING 1D 4H` | a commissioned SG-5 to SG-12 forms, Green, before it's on duty |
+  | `TRAINING 20H` | training a second specialty (half strength) |
   | `LOST` | lost, with no re-forming under way (rarely seen) |
 
+  A lost SG-5 to SG-12 is disbanded after 3 days; its number can be commissioned again. SG-1 to SG-4 always re-form.
+
   The gate room's team panel uses the same words in capitals, without the time left: `STOOD DOWN`, `INJURED`, `AWAY: ABYDOS`.
+
+### Missions
+
+| Type | Needs | About | Opened by |
+|---|---|---|---|
+| Survey | any team | 24 game hours | always |
+| Contact | a diplomat | 36 | locals or allies met on a survey |
+| Trade | a diplomat | 30 | a contact mission; a deal needs the locals' trust |
+| Raid | a combat team | 18 | a survey that finds a Jaffa garrison or a stronghold |
+| Study | a science team | 36 | ruins or technology found on a survey |
+| Rescue | any team | 20 | a team captured there |
+| Recover | any team | 12 | one of our drones located there |
+| Mine | any team | 48 | a naquadah seam found on a survey |
+| Aid | a medic | 30 | locals in need |
+
+Recon shortens a mission by a quarter (an eighth for SG-1, or for a team trained in recon). While a rescue is out, the captive's 5-day clock waits for it.
+
+### Funding and requisitions
+
+- The SGC starts with 500 funding. Every 7 game days a funding review grants 300, plus or minus how the week went:
+
+  | Since the last review | Change |
+  |---|---|
+  | each piece of intel filed (an address, a name, a faction) | +10, up to +100 |
+  | each technology recovered | +25 |
+  | each ally made | +40 |
+  | each mission completed | +5, up to +60 |
+  | each arc resolved | +60 |
+  | each team lost / captured | −40 / −20 |
+  | each security breach | −15 |
+  | each incident the NID hears about | −30 |
+
+  Recruit gets ×1.25, Commander ×0.8, and no review grants less than 50. The log itemizes it.
+- **Naquadah** comes from mining and trade, and pays for the advanced upgrades.
+- **Requisitions** (in the briefing room): buy drones, set the midnight reserve, and approve upgrades:
+
+  | Upgrade | Cost | Effect |
+  |---|---|---|
+  | UAV program | 150 | UAV flights, with one UAV |
+  | Security detail | 120 | Security recovers twice as fast |
+  | Iris reinforcement | 100 + 5 naquadah | a quarter less damage from impacts and breaches |
+  | Database analysts | 150 | one more chance of a new address in every debrief |
+  | Infirmary, Research lab | 200 each | open in a later build |
+  | Naquadah generator | 10 naquadah | the iris and defenses hold longer (another quarter) |
+
+- **The roster:** commission a new team for 200 (it forms, Green, in 2 days), or train a team's second specialty for 100 (half strength, a day off duty).
+
+### The Goa'uld
+
+- Every Goa'uld pays attention to Earth, or doesn't. You never see a number. A Goa'uld you've never heard of stays anonymous ("a Goa'uld") until intel names it: a survey that reads a garrison's marks, a captured Jaffa, a debrief.
+- What draws attention: a team seen on their world, a drone or a team captured there, raids, stolen technology, freed prisoners, their spies and probes reporting home. A quiet day lets it fade.
+- As attention grows, a Goa'uld acts: first probes, scouts, spies and stolen IDC codes; then incursions, bombs and ambushes on teams in their territory; at the last, assaults on the mountain. Your standing orders answer all of it.
+- The FACTIONS tab describes each known Goa'uld in words: "shows no sign of knowing about Earth", "knows our gate address", "has put a price on the SG teams", "means to destroy Earth". The header's DEFCON follows what you know.
+
+### Allies and trade
+
+- The Tok'ra, the Asgard, the Tollan, the Nox, the Free Jaffa and local peoples each trust Earth more or less: wary, cautious, friendly, allied. You meet them only through intel, and alliances come through their stories.
+- A friendly ally sometimes shares an address at a funding review.
+- A trade mission with people who trust us can set up a deal: naquadah through the gate every 3 days, 6 times. Deliveries can be lost to raiders; two in a row cut the route. The TRADE tab shows each deal and its risk, judged from what you know.
+
+### Arcs and victory
+
+- A Campaign hides three stories from SG-1's first seasons. Each wakes only when your teams find its first clue, and moves on through missions, alarms and time. The ARCS tab follows the ones you've woken, with any deadline.
+- One of them is a major arc. Resolve it, with nothing else still in play, and the campaign is won. You can stay in command after victory or retire.
+- An arc can also fail. Most failures only close the story. The worst ends the game.
+- **Retire from command** (briefing room) ends a campaign whenever you like. The hall of records ranks runs by score: 10 per world surveyed, 50 per ally, 20 per team beyond the first four, 2 per mission completed, and in a Campaign 200 or 100 per arc resolved.
 
 ### The briefing room
 
@@ -189,25 +261,30 @@ What's in the briefing room:
   - Recall drone
   - Assign team
   - Add note
-- **Assign a team:** shows all four teams. Unavailable ones are greyed out with the reason. Then pick the mission type.
-- **Teams:** the roster. A team can have its IDC revoked and reissued, after a confirmation that says whether the team stands down.
+- **Assign a team:** shows every team on the roster. Unavailable ones are greyed out with the reason. Then pick the mission type.
+- **Teams:** the roster: every team on it, and "commission a new team" underneath. A team's own screen offers revoking and reissuing its IDC, after a confirmation that says whether the team stands down, and training a second specialty.
   - A team at base stands down for 12 game hours.
   - An injured or re-forming team keeps the longer of its own timer and 12 hours. (The roster can't revoke a lost or re-forming team's code; a scenario can.)
   - A captured team's timer doesn't change, and the confirmation says `… DOES NOT STAND DOWN.` Neither does a team that's away.
 - **Standing orders:** choose a situation to cycle through its options.
 - **Pace:** Relaxed, Standard or Busy. It shows `PACE · LOCKED` when `game_pace` is set.
+- **Requisitions:** buy a MALP or a UAV from funding, set the midnight reserve of each, and approve the upgrades. The screen shows your funding, naquadah and the next review. What each row costs and does is under *Funding and requisitions*.
+- **Retire from command:** ends the campaign whenever you want; it shows your score so far and asks to confirm. The run goes into the hall of records.
 
 An action you can't take yet is greyed out and tells you why when you choose it.
 
 ### The SGC Database
 
-Press `d` for the full-screen SGC Database. It has six tabs:
+Press `d` for the full-screen SGC Database. It has nine tabs:
 
 - **Addresses:** name, glyphs, status, last visit, flags and drone. The flags are `T` for a team there, `N` for notes and `L` for an address from intel.
 - **World file:** names and where they came from, telemetry, mission options, reports and your notes.
 - **Missions:** team, world, type, start, outcome, casualties and findings.
 - **Teams:** specialty, rank, status, location and history.
 - **Intel:** names learned, and leads to addresses not yet visited.
+- **Factions:** each Goa'uld and ally the SGC knows, in words never numbers: a Goa'uld's standing, or an ally's trust, and where the file came from.
+- **Trade:** each deal, its goods, the next delivery and how many are left, and its risk, judged from what the SGC knows.
+- **Arcs:** the story arcs you've woken, with their stage and any deadline.
 - **Queue:** what's scheduled, soonest first:
   - dial-outs waiting for the gate, in the order the gate will take them
   - drones through the gate, with the window their report is due in
@@ -272,7 +349,7 @@ An alarm closes the Database but keeps it, and `d` brings back the same tab, sea
 |---|---|
 | `←` `→` Tab | switch tabs |
 | `↑` `↓` | select a row; scroll a world file |
-| Enter | open the selected world's file (Addresses, Missions, Intel) |
+| Enter | open the selected world's file (Addresses, Missions, Intel, Trade, Arcs) |
 | `/` `s` `f` | search, sort, filter the addresses (/ also searches the Queue) |
 | `x` | cancel the selected dial-out on the Queue tab (press twice) |
 | `[` `]` | move the selected dial-out up or down the gate queue |
@@ -308,9 +385,12 @@ Kinds:
 
 - `incoming`: an unscheduled wormhole, every 36–96 game hours. The first comes 36–96 hours in.
   - `team = "compromised" | "captured" | "base" | "any"` picks a team for it.
+    - `territory`: a team out on a world of the Goa'uld whose scenario this is (`faction` scenarios only).
   - `on = "team_return"` plays it as a team comes home from a dangerous world instead.
 - `probe`: plays after a drone's telemetry, chosen by the world's traits in `when`. The text never names the drone ("Telemetry from…").
-- `checkin` and `debrief`: during and after a mission. `mission_type = "survey" | "contact"` narrows them.
+- `checkin` and `debrief`: during and after a mission. `mission_type` narrows them to one mission type (`survey`, `contact`, `trade`, `raid`, `study`, `rescue`, `recover`, `mine` or `aid`). Rescue and recover missions play only scenarios with their own `mission_type`.
+- `faction`: plays from a Goa'uld's attention, at the stage given by `stage = "curious" | "hostile" | "seeking"`.
+- `arc`: plays a stage of a story arc, with `arc = "<id>"` and `arc_stage = N`.
 
 A node that answers to a standing order names its `situation`: `unknown_idc`, `hostiles_following`, `bad_idc`, `object`, `under_fire` or `contact_offer`. Its `default` must be that situation's first option, and it needs a choice keyed for every option.
 
@@ -320,19 +400,27 @@ Placeholders must be bound:
 - `{team}` and `{specialty}`: in check-ins, debriefs and `team_return` scenarios.
 - `{team}` and `{captured_at}`: with `team = ...`.
 - `{goauld}`: with `goauld = "any"`.
+- `{faction}`: in `faction` and `arc` scenarios. It reads "a Goa'uld" until the SGC knows the name.
+- `{owner}`: the world's Goa'uld, in effects and conditions only, never in text.
+- `{captive}`: in rescue missions.
 
 Visuals: `incoming`, `dial_out`, `iris_hold`, `arrival`, `team_return`, `firefight`, `firefight_win`, `bomb` and `asgard_beam`. Any ambient event name works too (`science`, `code_red`, `kawoosh_hazard`, …).
 
 Effects:
 - meters: `security -10`, `personnel +5`. `breach 20` lowers Security; if it's already 0, the base falls.
+- funding: `funding +100`, `naquadah -5`; `incident +1` files an incident with the NID.
+- factions and arcs:
+  - `attention apophis +10`, `trust locals +5` (the ids are `apophis`, `heruur`, `sokar`, `cronus`, `baal`, `yu`, `nirrti`, `svarog`, `olokun`, `bastet` for the Goa'uld, and `tokra`, `asgard`, `tollan`, `nox`, `jaffa`, `locals` for the allies; `{faction}` and `{owner}` stand for one)
+  - `reveal faction apophis from jaffa`, `reveal address @Name` (a canon world by name, such as `@Chulak`)
+  - `arc <id> start|advance|resolve|fail`
 - teams:
   - `team {team} captured` (or `base`, `offworld`, `injured`, `lost`)
   - `idc {team} revoke`, `idc {team} compromise`
   - `xp {team} +1`, `recall {team}`, `reinforce {team}` (a free team joins for 6 hours)
 - worlds:
-  - `reveal address`
   - `reveal name {world} from locals`, with an optional `"A Name"` before `from`. The sources are `locals`, `ruins`, `jaffa`, `goauld`, `comms`, `allies` and `records`.
-  - `unlock contact {world}`, `status {world} hostile`, `drone {world} lost` (or `captured`)
+  - `unlock <type> {world}` for every mission type (survey, contact, trade, raid, study, rescue, recover, mine, aid), `status {world} hostile`, `drone {world} lost` (or `captured`)
+  - `deal {world} naquadah 10` sets up a trade route; `locate {world}` finds a drone held there, and `recover {world}` brings it home.
 - other:
   - `schedule incoming in 6h`, `game_over <text>`
   - `gain ally.tokra` (allies: `tokra`, `asgard`, `tollan`, `nox`, `jaffa`; tech: `tech.zat`, `tech.naquadah_generator`, `tech.lrs`)
@@ -341,11 +429,19 @@ Effects:
 
 Conditions (used in `when`, and most also in a choice's `requires` or a roll's `mods`):
 - `security >= 30`, `day >= 5`, `ally.tokra`, `not tech.zat`
+- `funding >= 500`, `naquadah >= 10`, `upgrade uav_program`
 - teams:
   - `team SG-1 base`, `team {team} specialty combat`, `rank {team} >= veteran`
   - `team_available`, `any_compromised_idc`, `any_captured`
+- factions:
+  - `trust locals >= 50`, `attention apophis >= 50`, `stage apophis hostile`, `aware apophis`
+  - `held {world}` (a captured team, or a located captured drone, is held there), `is {world} @Name`
+- arcs:
+  - `arc <id> active` (the states are `dormant`, `active`, `resolved`, `failed`), `arc <id> stage >= 2`
 - worlds: `known {world}`, `status {world} probed`, `unlocked contact {world}`
 - hidden world traits, which pick which scenario plays and so may only appear in `when`: `world {world} env toxic`, `world {world} inhabitants jaffa`, `world {world} feature ruins`
+
+Hidden conditions (`world … env/inhabitants/feature`, `attention`, `stage`, `is`) may only appear in `when`. A name may appear in a scenario's text only if its `when` guarantees the SGC already knows it.
 
 A world can be `{world}` or a designation like `P3X-866`. A team can be `{team}` or a name like `SG-1`.
 
