@@ -2,6 +2,7 @@ import json
 
 from sgc.game import clock
 from sgc.game import engine as eng
+from sgc.game import rules
 from sgc.game import schedule
 from sgc.game.schedule import QueueItem
 from sgc.game.state import available_teams, from_dict, to_dict
@@ -121,6 +122,18 @@ def test_teams_standing_down_show_when_they_are_back_and_rows_go_by_time():
     assert sg3.status == f"BACK {clock.short(until)}" and sg3.reason == "NOTHING TO CANCEL: SG-3 IS INJURED"
 
 
+def test_drones_past_their_earliest_report_list_in_a_public_order_not_their_rolled_one():
+    def rows(dues, sent=(70, 70)):
+        r = Rig()
+        for i, due, ago in zip((3, 4), dues, sent):
+            w = r.world(i, env="normal")
+            r.c.events.push(r.c.now + due, "malp_return", {"world": w.id, "drone": "malp", "sent": r.c.now - ago})
+        return [i.cells for i in view(r)]
+    assert rows((10, 40)) == rows((40, 10))
+    assert rows((10, 40), (65, 70)) == rows((40, 10), (65, 70))           # the window's end breaks the tie
+    assert rows((10, 40), (65, 70))[0][2].endswith("08:50")
+
+
 def test_incoming_wormholes_and_other_hidden_events_are_never_listed():
     r = Rig()
     r.c.events.push(r.c.now + 5, "incoming")
@@ -193,6 +206,27 @@ def test_cancelling_a_search_team_brings_it_back_to_base(monkeypatch):
     assert helper.what == f"SG-1 → {w.name.upper()} FOR SG-3"
     r.e.cancel(helper.id, confirm=True)
     assert r.c.teams["SG-1"].status == "base" and r.c.teams["SG-1"].where == ""
+
+
+def test_a_recall_withdraws_a_queued_malp_search_and_puts_the_malp_back(monkeypatch):
+    r = Rig(CHECKIN)
+    w, m = missed(monkeypatch, r)
+    r.e.key("1")
+    assert r.c.stock["malp"] == 3
+    assert rules.recall(r.c, m) == []
+    assert r.c.stock["malp"] == 4 and m.state == "aborted"
+    assert not r.c.events.find(lambda e: e.kind in ("dial_out", "overdue"))     # no 12-hour wait for a recalled team
+
+
+def test_a_recall_brings_a_queued_search_team_back_to_base(monkeypatch):
+    r = Rig(CHECKIN)
+    w, m = missed(monkeypatch, r)
+    r.e.key("2")
+    assert r.c.teams["SG-1"].status == "offworld"
+    rules.recall(r.c, m)
+    r.e.advance(clock.DAY)
+    assert r.c.teams["SG-1"].status == "base" and r.c.teams["SG-1"].where == ""
+    assert "SG-1" in available_teams(r.c) and not any(i.kind == "dial_out" for i in view(r))
 
 
 def test_rows_that_cant_be_cancelled_say_why_even_when_confirmed():

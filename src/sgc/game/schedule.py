@@ -18,7 +18,7 @@ class QueueItem:
     when: str
     what: str
     status: str
-    sort: tuple[int, float]          # dial-outs first, in gate order; then everything else by time
+    sort: tuple[float, ...]          # dial-outs first, in gate order; then everything else by time (ties by id)
     cancellable: bool = False
     movable: bool = False
     reason: str = ""                 # why x can't cancel it
@@ -100,7 +100,7 @@ def _drone(c: Campaign, ev: Event, travel: Travel) -> QueueItem:
         start, end = c.now, c.now + hi
     status = f"REPORT EXPECTED {at(start, c.now)}–{at(end, start)}" if end > c.now else SOON
     what = f"{d['drone'].upper()} AT {_name(c, d['world'])}"
-    return QueueItem(f"drone:{d['world']}", "drone", at(start, c.now), what, status, (1, start),
+    return QueueItem(f"drone:{d['world']}", "drone", at(start, c.now), what, status, (1, start, end),
                      reason=f"{THROUGH}: RECALL FROM THE BRIEFING ROOM")
 
 
@@ -146,7 +146,8 @@ def view(c: Campaign, travel: Travel) -> list[QueueItem]:
             items.append(QueueItem(f"team:{name}", "team", at(t.until, c.now), f"{name} {label}",
                                    f"{word} {short(t.until)}", (1, t.until),
                                    reason=f"NOTHING TO CANCEL: {name} IS {label}"))
-    return sorted(items, key=lambda i: i.sort)
+    # every key is public: the event heap's order (the rolled times) must never decide a tie
+    return sorted(items, key=lambda i: (i.sort, i.id))
 
 
 def _find(c: Campaign, item_id: str) -> Event | None:
@@ -172,12 +173,7 @@ def _undo(c: Campaign, d: dict) -> list[str]:
         m.state = "cancelled"
         c.record["missions"] -= 1
         return [f"{m.team} STANDING BY AT BASE"]
-    if d["by"] == "malp":
-        lines = rules.stow(c, "malp")
-    else:
-        ht = c.teams[d["by"]]
-        ht.status, ht.where = "base", ""
-        lines = []
+    lines = rules.withdraw_search(c, d)
     if m.state == "active":                          # the missing team is left to the 12-hour wait
         c.events.push(c.now + WAIT_HOURS * HOUR, "overdue", {"mission": m.id})
         lines.append(f"WAITING {WAIT_HOURS} HOURS FOR {m.team}")

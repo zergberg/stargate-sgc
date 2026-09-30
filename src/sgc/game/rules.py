@@ -347,11 +347,24 @@ def new_address(c: Campaign, found: str) -> wd.World:
 _MISSION_TIMED_KINDS = ("checkin", "team_return", "dial_out", "overdue")
 
 
-def recall(c: Campaign, m: Mission) -> None:
-    """End an active mission early: its pending check-ins, searches and dials are cancelled, home now."""
+def withdraw_search(c: Campaign, d: dict) -> list[str]:
+    """Take back a search queued for a missing team: the MALP goes back to stores, a helper team stands down."""
+    if d["by"] == "malp":
+        return stow(c, "malp")
+    ht = c.teams[d["by"]]
+    ht.status, ht.where = "base", ""
+    return []
+
+
+def recall(c: Campaign, m: Mission) -> list[str]:
+    """End an active mission early: its pending check-ins and dials are cancelled, home now. A search still
+    waiting for the gate is withdrawn as the QUEUE tab's cancel would (its MALP or helper team back at base)."""
+    searches = c.events.remove(lambda e: e.kind == "dial_out" and e.data.get("op") == "search"
+                               and e.data.get("mission") == m.id)
     c.events.cancel(lambda e: e.data.get("mission") == m.id and e.kind in _MISSION_TIMED_KINDS)
     m.end, m.state = c.now, "aborted"
     c.events.push(c.now, "team_return", {"mission": m.id})
+    return [line for ev in searches for line in withdraw_search(c, ev.data)]
 
 
 def _reveal_address(c: Campaign, b: dict) -> list[str]:
@@ -431,8 +444,7 @@ def _recall(tok: str):
         m = c.mission(tm.mission)
         if m is None or m.state != "active":
             return []
-        recall(c, m)
-        return [f"{name} RECALLED"]
+        return [f"{name} RECALLED", *recall(c, m)]
     return fn
 
 
