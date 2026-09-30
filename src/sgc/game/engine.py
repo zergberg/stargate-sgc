@@ -23,13 +23,21 @@ from .content import TEXT_LEVELS, Node, Outcome, Scenario
 from .database import team_status
 from .orders import SITUATIONS
 from .state import Campaign, Mission, available_teams, demote, has_specialty, rank_index, team_names
-from .world import GOAULD, World, faction_name, readings
+from .world import GOAULD, World, faction_name, readings, subsurface
 from . import schedule
 
 DETAIL = {"recruit": "full", "officer": "partial", "commander": "minimal"}
 INCOMING_EVERY = (36, 96)            # game hours between random incoming wormholes
 MALP_FEED_S = 20.0                   # real seconds the side panel takes to fill with a MALP's readings
 UAV_FEED_S = 90.0                    # real seconds of a UAV's aerial feed
+UPLINK_FEED_S = 10.0                 # real seconds an uplink's extended data takes to fill the side panel
+EXTENDED = {"malp": "MALP EXTENDED REPORT", "uav": "UAV EXTENSIVE SURVEY"}
+UPLINK_HOURS = {"malp": (4, 6), "uav": (3, 5)}    # game hours an extended report collects before its uplink
+UPLINK_ODDS = {                      # an uplink's (full, partial, lost) %, by drone and who lives on the world
+    "malp": {"calm": (85, 10, 5), "jaffa": (75, 10, 15), "goauld": (65, 10, 25)},
+    "uav": {"calm": (75, 20, 5), "jaffa": (60, 20, 20), "goauld": (45, 20, 35)},
+}
+HARSH = ("radiation", "extreme")     # a world this harsh moves 10 more points from full to lost
 UAV_RAIL = 0.12                      # the UAV's launch rail stands here, at the foot of the ramp
 UAV_CRUISE = 0.8                     # the UAV's altitude as it reaches the horizon (0..1)
 DESTROYED = {"normal": 3, "toxic": 8, "radiation": 12, "extreme": 25, "no_lock": 0}
@@ -59,7 +67,7 @@ SEEN = 4                                      # attention when a team departs fo
 MISS = (3, 8, 15, 25)                # % chance of a missed check-in, by world danger
 SEARCH = {"malp": (60, 85), "team": (80, 95)}     # a search finds the team / finds it pinned down (cumulative %)
 OVERDUE = (50, 80)                   # after 12 hours: the team turns up / is captured (cumulative %); else lost
-UNSEEN = ("recovery_tick",)          # events with nothing to show, which never wait for the gate scene
+UNSEEN = ("recovery_tick", "uplink")   # events with nothing to show, which never wait for the gate scene
 _TIME_LEFT = re.compile(r"( \d+[DH])+$")        # team_status's trailing '1D 20H'
 PLANNABLE = ("probed", "surveyed", "contact", "hostile")
 FOLLOWED = 0.15                      # chance hostiles follow a team home from a dangerous world
@@ -76,6 +84,20 @@ def team_label(c: Campaign, name: str, timer: bool = True) -> str:
         return f"{'AWAY' if t.status == 'offworld' else 'STAGING'}: {w.name if w is not None else t.where}"
     status = team_status(c, name)
     return status if timer else _TIME_LEFT.sub("", status)
+
+
+def uplink_odds(w: World, drone: str) -> tuple[int, int, int]:
+    """An extended report's (full, partial, lost) odds at its uplink, in %."""
+    full, partial, lost = UPLINK_ODDS[drone].get(w.inhabitants, UPLINK_ODDS[drone]["calm"])
+    if w.env in HARSH:
+        full, lost = full - 10, lost + 10
+    return full, partial, lost
+
+
+def uplink_outcome(w: World, drone: str, roll: float) -> str:
+    """The uplink's outcome for a roll in [0, 100)."""
+    full, partial, _ = uplink_odds(w, drone)
+    return "full" if roll < full else "partial" if roll < full + partial else "lost"
 
 
 def _shown(n: int, p: float) -> int:
@@ -116,7 +138,7 @@ class Engine:
         self._save_failed = False        # the last save failed; logged once until one succeeds
         self._handlers: dict[str, Callable[[dict], None]] = {
             "recovery_tick": self._recovery, "incoming": self._incoming, "dial_out": self._dial_out,
-            "drone_report": self._drone_report,
+            "drone_report": self._drone_report, "uplink": self._uplink, "uplink_report": self._uplink_report,
             "malp_return": self._malp_return, "checkin": self._checkin, "team_return": self._team_return,
             "search_report": self._search_report, "overdue": self._overdue,
             "funding_review": self._funding_review, "faction_action": self._faction_action,
@@ -324,13 +346,14 @@ class Engine:
             self._log(f"{arc.title.upper()}: NO WORD")
 
     # ------------------------------------------------------------------ player actions (the briefing room)
-    def probe(self, wid: str) -> str:
-        return self._launch(wid, "malp")
+    def probe(self, wid: str, extended: bool = False) -> str:
+        return self._launch(wid, "malp", extended)
 
-    def send_uav(self, wid: str) -> str:
-        return self._launch(wid, "uav")
+    def send_uav(self, wid: str, extended: bool = False) -> str:
+        return self._launch(wid, "uav", extended)
 
-    def _launch(self, wid: str, drone: str) -> str:
+    def _launch(self, wid: str, drone: str, extended: bool = False) -> str:
+        """Queue a probe; an extended one stays on to collect, and reports again at its uplink."""
         c = self.c
         w = c.worlds[wid]
         if self.ended:
@@ -345,8 +368,8 @@ class Engine:
         if drone == "uav" and "uav_program" not in c.upgrades:
             return "NEEDS THE UAV PROGRAM"
         c.stock[drone] -= 1
-        c.events.push(c.now, "dial_out", {"op": drone, "world": wid})
-        msg = f"{drone.upper()} QUEUED FOR {w.name.upper()}"
+        c.events.push(c.now, "dial_out", {"op": drone, "world": wid, **({"extended": True} if extended else {})})
+        msg = f"{EXTENDED[drone] if extended else drone.upper()} QUEUED FOR {w.name.upper()}"
         self._log(msg)
         self.save_now()
         return msg
@@ -447,7 +470,9 @@ class Engine:
     def _dial_out(self, data: dict) -> None:
         op = data["op"]
         if op in ("malp", "uav"):
-            self._drone_out(data["world"], op)
+            self._drone_out(data["world"], op, data.get("extended", False))
+        elif op == "uplink":
+            self._uplink_out(data)
         elif op == "recall":
             self._recall_out(data["world"], data.get("wear", 0))
         elif op == "depart":
@@ -455,7 +480,7 @@ class Engine:
         elif op == "search":
             self._search_out(data)
 
-    def _drone_out(self, wid: str, drone: str) -> None:
+    def _drone_out(self, wid: str, drone: str, extended: bool = False) -> None:
         """The probe's one connection: the drone goes through and its readings stream back live while the gate
         stays open. Its fate is rolled now; drone_report applies it when the gate shuts."""
         c = self.c
@@ -477,7 +502,8 @@ class Engine:
         captured = destroyed + CAPTURED.get(w.inhabitants, 0)
         fate = "destroyed" if roll < destroyed else "captured" if roll < captured else "ok"
         seen = readings(w, drone, DETAIL[c.difficulty], self.rng)
-        c.events.push(c.gate_until, "drone_report", {"world": wid, "drone": drone, "fate": fate, "seen": seen})
+        c.events.push(c.gate_until, "drone_report", {"world": wid, "drone": drone, "fate": fate, "seen": seen,
+                                                     **({"extended": True} if extended else {})})
         self._show(self._v_probe(w, drone, seen, fate))
 
     def _drone_report(self, data: dict) -> None:
@@ -514,9 +540,91 @@ class Engine:
         if drone == "uav" and w.inhabitants != "none" and self.rng.random() < 0.4:
             for line in rules.parse_effect("reveal name {world} from comms")(c, self._wbind(w)):
                 self._log(line)
+        if data.get("extended"):                           # it stays on collecting; the SGC dials back for it
+            lo, hi = UPLINK_HOURS[drone]
+            c.events.push(c.now + self.rng.randint(lo * clock.HOUR, hi * clock.HOUR), "uplink",
+                          {"world": w.id, "drone": drone, "from": c.now + lo * clock.HOUR,
+                           "to": c.now + hi * clock.HOUR})
+            self._log(f"{drone.upper()} COLLECTING ON {w.name.upper()} — UPLINK IN {lo}-{hi} HOURS")
         drawn = self._draw("probe", self._wbind(w))
         if drawn:
             self._start(*drawn)
+
+    def _uplink(self, data: dict) -> None:
+        """An extended report has collected long enough: its uplink joins the gate queue as a dial-out."""
+        w = self.c.worlds[data["world"]]
+        if w.drone == data["drone"]:
+            self.c.events.push(self.c.now, "dial_out", {"op": "uplink", "world": w.id, "drone": data["drone"]})
+
+    def _uplink_out(self, data: dict) -> None:
+        """The uplink dial: the gate holds while the drone sends its extended data. The outcome is rolled now
+        and lands when the gate shuts (uplink_report)."""
+        c = self.c
+        w, drone = c.worlds[data["world"]], data["drone"]
+        if w.drone != drone:                                 # a team brought it home first
+            return
+        self._occupy("uplink")
+        self._log(f"UPLINK TO THE {drone.upper()} ON {w.name.upper()}")
+        outcome = uplink_outcome(w, drone, self.rng.random() * 100)
+        seen = self._extended_readings(w, drone) if outcome == "full" else {}
+        c.events.push(c.gate_until, "uplink_report", {"world": w.id, "drone": drone, "outcome": outcome,
+                                                      "seen": seen})
+        self._show(self._v_uplink(w, outcome, seen))
+
+    def _extended_readings(self, w: World, drone: str) -> dict[str, str]:
+        """An extended report's readings: everything, at full detail, with what lies under the surface."""
+        seen = readings(w, drone, "full", self.rng)
+        seen["subsurface"] = subsurface(w, drone, "full")
+        return seen
+
+    def _uplink_report(self, data: dict) -> None:
+        """The uplink's gate shuts: the extended data is on file, garbled, or the drone is gone."""
+        c = self.c
+        w, drone, outcome = c.worlds[data["world"]], data["drone"], data["outcome"]
+        if w.drone != drone:
+            return
+        name = w.name.upper()
+        if outcome == "full":
+            for line in self._extended(w, drone, data["seen"]):
+                self._log(line)
+            return
+        if outcome == "partial":
+            w.reports.append((c.now, f"{drone.upper()} uplink garbled. Only the live pass is on file."))
+            self._log(f"{drone.upper()} UPLINK GARBLED — {name}")
+            return
+        w.drone = None
+        if w.inhabitants in CAPTURED:
+            w.reports.append((c.now, f"{drone.upper()} captured before its uplink."))
+            self._log(f"{drone.upper()} CAPTURED ON {name}")
+            for line in rules.capture_drone(c, w, drone):
+                self._log(line)
+        elif drone == "malp":
+            w.reports.append((c.now, "MALP destroyed before its uplink."))
+            self._log(f"MALP LOST ON {name} — NO CARRIER")
+        else:
+            cause = "out of fuel" if self.rng.random() < 0.5 else "crashed"
+            w.wreck = "crashed"
+            w.reports.append((c.now, f"UAV {cause} before its uplink. The wreck is on site."))
+            self._log(f"UAV DOWN ON {name} — {cause.upper()}")
+
+    def _extended(self, w: World, drone: str, seen: dict[str, str]) -> list[str]:
+        """An extended report's data on file, from its uplink or brought home by a team. A UAV's also names an
+        inhabited world, finds any drone of ours held there, and gets an intel roll for a new address."""
+        c = self.c
+        w.seen.update(seen)
+        w.telemetry = [f"{k.upper()}: {v}" for k, v in seen.items()]
+        w.reports.append((c.now, f"{drone.upper()} extended report: " + "; ".join(f"{k} {v}"
+                                                                                   for k, v in seen.items())))
+        lines = [f"{drone.upper()} EXTENDED REPORT FROM {w.name.upper()}"]
+        if drone == "uav":
+            bind = self._wbind(w)
+            if w.inhabitants != "none":
+                lines += rules.parse_effect("reveal name {world} from comms")(c, bind)
+            lines += rules.parse_effect("locate {world}")(c, bind)
+            for _ in range(1 + (1 if "database_analysts" in c.upgrades else 0)):
+                if self.rng.random() < INTEL_ROLL:
+                    lines += rules.parse_effect("reveal address")(c, bind)
+        return lines
 
     def _malp_return(self, data: dict) -> None:
         """Legacy: a report from before probes went live, still pending in an older save."""
@@ -1088,15 +1196,31 @@ class Engine:
             self._hold("team_return")                      # after the hostiles: the team's own arrival
         else:
             self._show(self._v_team_return(m.team))
-        if w.drone:
-            self._log(f"{m.team} BROUGHT THE {w.drone.upper()} HOME")
-            self._stow(w.drone)
-            w.drone = None
+        for line in self._bring_home(m, w):
+            self._log(line)
+            m.findings.append(line)
         if m.state == "active":
             m.state = "complete"
             self._debrief(m, w)
         else:
             self._log(f"{m.team} HOME EARLY FROM {w.name.upper()}")
+
+    def _bring_home(self, m: Mission, w: World) -> list[str]:
+        """What a team brings home from the world: a parked drone, with an extended report's data if its uplink
+        hadn't come yet (a full return)."""
+        c = self.c
+        if not w.drone:
+            return []
+        drone, lines = w.drone, []
+        waiting = c.events.remove(lambda e: e.data.get("world") == w.id and (
+            e.kind in ("uplink", "uplink_report") or (e.kind == "dial_out" and e.data.get("op") == "uplink")))
+        if waiting:
+            lines += self._extended(w, drone, self._extended_readings(w, drone))
+            lines.append(f"{m.team} BROUGHT THE {drone.upper()} AND ITS DATA HOME")
+        else:
+            lines.append(f"{m.team} BROUGHT THE {drone.upper()} HOME")
+        w.drone = None
+        return lines + rules.stow(c, drone)
 
     def _debrief(self, m: Mission, w: World) -> None:
         c = self.c
@@ -1352,6 +1476,21 @@ class Engine:
         if fate != "ok":
             steps.append(sq.hold(1.0))
         return [*steps, *sq.shutdown(), cleanup()]
+
+    def _v_uplink(self, w: World, outcome: str, seen: dict[str, str]) -> list[Step]:
+        """The uplink: the SGC dials the drone, and the side panel fills with its extended data. Garbled data
+        says so; a drone that's gone answers with no carrier."""
+        if self.d is None:
+            return []
+        rows = [(k.upper(), v) for k, v in seen.items()] if outcome == "full" else \
+            [("DATA", "GARBLED")] if outcome == "partial" else []
+
+        def show(s, p):
+            s.panel_title = f"UPLINK · {w.name.upper()}"
+            s.panel_rows = rows[:_shown(len(rows), p)] if rows else [("SIGNAL", "LOST")]
+        if not rows:
+            return [*self._outgoing(w), Step(3.0, show, "NO CARRIER"), *sq.shutdown(), cleanup()]
+        return [*self._outgoing(w), Step(UPLINK_FEED_S, show, "EXTENDED DATA RECEIVED"), *sq.shutdown(), cleanup()]
 
     def _uav_launch(self) -> list[Step]:
         """The rail at the foot of the ramp, the UAV firing off it and climbing, then through the horizon.

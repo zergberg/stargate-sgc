@@ -406,8 +406,9 @@ def _captured_drone(d: dict, world_ids: set[str]) -> CapturedDrone:
                          minute=_int(d["minute"], "capture minute"), located=_bool(d["located"], "located"))
 
 
-DIAL_OPS = ("malp", "uav", "recall", "depart", "search")
+DIAL_OPS = ("malp", "uav", "recall", "depart", "search", "uplink")
 PROBE_FATES = ("ok", "destroyed", "captured")  # how a probe's dial ends: rolled at the dial, applied at shutdown
+UPLINK_OUTCOMES = ("full", "partial", "lost")  # how an extended report's uplink ends
 SEARCHERS = ("malp", *ALL_TEAMS)               # a MALP, or the team sent to look
 
 
@@ -438,10 +439,14 @@ def _event(e, world_ids: set[str], mission_ids: set[int], deal_ids: set[int] = f
         if not isinstance(v, dict) or not all(isinstance(k, str) and isinstance(x, str) for k, x in v.items()):
             raise ValueError(f"{kind} readings must map text to text, got {v!r}")
 
+    if "extended" in d:
+        _bool(d["extended"], f"{kind} extended")
     if kind == "dial_out":
         op = _one_of(need("op"), DIAL_OPS, "dial-out op")
-        if op in ("malp", "uav", "recall"):
+        if op in ("malp", "uav", "recall", "uplink"):
             world()
+            if op == "uplink":
+                _one_of(need("drone"), DRONES, "drone")
         else:
             mission()
             if op == "search":
@@ -453,6 +458,16 @@ def _event(e, world_ids: set[str], mission_ids: set[int], deal_ids: set[int] = f
         readings(need("seen"))
         if "env" not in d["seen"]:
             raise ValueError(f"a drone report's readings start with env, got {d['seen']!r}")
+    elif kind == "uplink":
+        world()
+        _one_of(need("drone"), DRONES, "drone")
+        if _int(need("from"), "uplink from") > _int(need("to"), "uplink to"):
+            raise ValueError("an uplink's window must not end before it starts")
+    elif kind == "uplink_report":
+        world()
+        _one_of(need("drone"), DRONES, "drone")
+        _one_of(need("outcome"), UPLINK_OUTCOMES, "uplink outcome")
+        readings(need("seen"))
     elif kind == "malp_return":                      # legacy: a report from before probes went live
         world()
         _one_of(need("drone"), DRONES, "drone")

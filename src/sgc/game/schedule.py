@@ -13,8 +13,8 @@ from .state import Campaign, Mission, team_names
 @dataclass(frozen=True)
 class QueueItem:
     id: str                          # "dial:<op>:<world>", "dial:depart:<mission>", "dial:search:<mission>:<by>",
-                                     # "mission:<id>", "team:<name>" or "deal:<id>"
-    kind: str                        # "dial_out" | "mission" | "team" | "delivery"
+                                     # "uplink:<world>", "mission:<id>", "team:<name>" or "deal:<id>"
+    kind: str                        # "dial_out" | "uplink" | "mission" | "team" | "delivery"
     when: str
     what: str
     status: str
@@ -33,6 +33,7 @@ WAITING = "WAITING FOR THE GATE"
 THROUGH = "ALREADY THROUGH THE GATE"
 GONE = "NO LONGER SCHEDULED"
 NOT_MOVABLE = "ONLY DIAL-OUTS WAITING FOR THE GATE CAN BE MOVED"
+COLLECTING = "THE DRONE IS ALREADY COLLECTING"
 WAIT_HOURS = 12                              # a withdrawn search leaves the team to the 12-hour wait
 TEAM_WORDS = {"base": ("STOOD DOWN", "BACK"), "injured": ("INJURED", "BACK"),
               "captured": ("CAPTURED", "PRESUMED LOST"), "lost": ("RE-FORMING", "READY"),
@@ -63,7 +64,7 @@ def gate_order(c: Campaign) -> list[Event]:
 def dial_id(ev: Event) -> str:
     """A queued dial-out's id, from what it is, so it survives being re-queued or moved."""
     d = ev.data
-    if d["op"] in ("malp", "uav", "recall"):
+    if d["op"] in ("malp", "uav", "recall", "uplink"):
         return f"dial:{d['op']}:{d['world']}"
     if d["op"] == "search":
         return f"dial:search:{d['mission']}:{d['by']}"
@@ -76,7 +77,12 @@ def _words(c: Campaign, ev: Event) -> tuple[str, str]:
     op = d["op"]
     if op in ("malp", "uav"):
         name = _name(c, d["world"])
+        if d.get("extended"):
+            return f"{op.upper()} → {name} (EXTENDED)", f"{op.upper()} EXTENDED REPORT TO {name}"
         return f"{op.upper()} → {name}", f"{op.upper()} TO {name}"
+    if op == "uplink":
+        name, drone = _name(c, d["world"]), d["drone"].upper()
+        return f"{drone} UPLINK · {name}", f"{drone} UPLINK FROM {name}"
     if op == "recall":
         w = c.worlds[d["world"]]
         drone, name = (w.drone or "drone").upper(), _name(c, w.id)
@@ -128,7 +134,16 @@ def view(c: Campaign) -> list[QueueItem]:
     the recovery tick, a probe's report and rolled times never appear."""
     dials = gate_order(c)
     items = [QueueItem(dial_id(ev), "dial_out", str(i + 1), _words(c, ev)[0], WAITING, (0, i),
-                       cancellable=True, movable=True, brief=f"{i + 1} {_brief(c, ev)}") for i, ev in enumerate(dials)]
+                       cancellable=ev.data["op"] != "uplink", movable=True,
+                       reason=COLLECTING if ev.data["op"] == "uplink" else "", brief=f"{i + 1} {_brief(c, ev)}")
+             for i, ev in enumerate(dials)]
+    for ev in c.events.find(lambda e: e.kind == "uplink"):       # its window, never the rolled time
+        d = ev.data
+        start, end = max(c.now, d["from"]), d["to"]
+        window = f"{at(start, c.now)}–{at(end, start)}"
+        items.append(QueueItem(f"uplink:{d['world']}", "uplink", at(start, c.now),
+                               f"{d['drone'].upper()} UPLINK · {_name(c, d['world'])}", f"EXPECTED {window}",
+                               (1, start, end), reason=COLLECTING, brief=f"{d['drone'].upper()} UPLINK {window}"))
     for m in c.missions:
         if m.state not in ("active", "aborted"):
             continue                                 # history, perhaps of a team since disbanded
@@ -192,6 +207,8 @@ def cancel(c: Campaign, item_id: str, confirm: bool) -> tuple[str, list[str], bo
     ev = _find(c, item_id)
     if ev is None:
         return _refusal(c, item_id, lambda i: i.reason), [], False
+    if ev.data["op"] == "uplink":
+        return COLLECTING, [], False
     said = _words(c, ev)[1]
     if not confirm:
         return f"CANCEL THE {said}?  x AGAIN TO CONFIRM", [], False

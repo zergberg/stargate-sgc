@@ -14,7 +14,7 @@ WINDOW = 3 * HOUR                                         # an alarm's decision 
 WINDOW_REAL = 60.0                                        # ...and never less than this many real seconds
 GATE_MINUTES = {"probe": 15, "uav": 25, "depart": 15, "recall": 30, "search": 10, "checkin": 10,
                 "team_return": 15, "incoming": 30, "malp_return": 20,
-                "trade_delivery": 20, "faction_action": 30}
+                "trade_delivery": 20, "faction_action": 30, "uplink": 10}
 
 
 def seconds_per_hour(pace: str, override: int | None = None) -> int:
