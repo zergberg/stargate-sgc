@@ -8,8 +8,9 @@ def changed(g, figures, t=0.0):
     """Pixels the figures change, against an empty gate."""
     base = g.render(Scene(), t)
     img = g.render(Scene(figures=figures), t)
-    return [(i % g.S, i // g.S, q) for i, (p, q) in enumerate(zip(base.getdata(), img.getdata()))
-            if sum(abs(u - v) for u, v in zip(p, q)) > 24]
+    a, b = base.load(), img.load()
+    return [(x, y, b[x, y]) for y in range(g.S) for x in range(g.S)
+            if sum(abs(u - v) for u, v in zip(a[x, y], b[x, y])) > 24]
 
 
 def image(g, figures):
