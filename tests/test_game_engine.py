@@ -21,7 +21,7 @@ kind = "incoming"
 goauld = "any"
 visual = "incoming"
 [node.start]
-text.full = "No IDC. {goauld}'s Jaffa, probably."
+text.full = "No IDC. Jaffa, probably."
 situation = "unknown_idc"
 default = "closed"
 [[node.start.choice]]
@@ -34,7 +34,7 @@ label = "Open under guard"
 outcome = { effects = ["personnel -10"], end = true }
 [[node.start.choice]]
 key = "locked"
-label = "Call the Asgard"
+label = "Call in our allies"
 requires = ["ally.asgard"]
 outcome = { end = true }
 """

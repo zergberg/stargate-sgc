@@ -6,25 +6,36 @@ Every problem is reported as "<file>:<path>: <message>", e.g.
 from __future__ import annotations
 
 import math
+import re
 import string
 import tomllib
 from dataclasses import dataclass, field
+from functools import cache
 from pathlib import Path
 
 from ..events import REGISTRY
 from . import rules
+from . import world as wd
+from .arcs import ARCS
+from .factions import STAGE_NAMES
 from .orders import SITUATIONS
 from .state import MISSION_TYPES
 
-KINDS = ("incoming", "probe", "checkin", "debrief")
+KINDS = ("incoming", "probe", "checkin", "debrief", "faction", "arc")
 GAME_VISUALS = ("incoming", "dial_out", "iris_hold", "arrival", "team_return", "firefight", "firefight_win",
                 "bomb", "asgard_beam")
 VISUALS = frozenset(GAME_VISUALS) | frozenset(REGISTRY)
-TEAM_PICKS = ("compromised", "captured", "base", "any")
+TEAM_PICKS = ("compromised", "captured", "base", "any", "territory")
 TRIGGERS = ("random", "team_return")            # when an incoming scenario plays
-PLACEHOLDERS = frozenset({"team", "goauld", "world", "designation", "specialty", "captured_at"})
+PLACEHOLDERS = frozenset({"team", "goauld", "world", "designation", "specialty", "captured_at", "faction",
+                          "captive", "owner"})
+# Placeholders that are never shown: {owner} is a hidden trait, and {goauld} names a random Goa'uld whom the
+# SGC may never have heard of ({faction} says "a Goa'uld" until it has).
+HIDDEN_IN_TEXT = {"owner": "is a hidden trait: use it only in effects and conditions",
+                  "goauld": "names a Goa'uld the SGC may not know: use it only in effects and conditions"}
 TEXT_LEVELS = ("full", "partial", "minimal")
-_TOP_KEYS = {"id", "kind", "weight", "when", "visual", "goauld", "team", "mission_type", "on", "node"}
+_TOP_KEYS = {"id", "kind", "weight", "when", "visual", "goauld", "team", "mission_type", "on", "node", "stage",
+             "arc", "arc_stage"}
 _OUTCOME_KEYS = {"goto", "visual", "effects", "end", "roll"}
 BUNDLED = Path(__file__).resolve().parent.parent / "data" / "scenarios"
 USER_DIR = Path.home() / ".config" / "stargate-sgc" / "scenarios"
@@ -86,8 +97,11 @@ class Scenario:
     visual: tuple[str, ...]
     goauld: bool
     team: str | None
-    mission_type: str | None                 # checkin/debrief: survey or contact (None: any mission)
+    mission_type: str | None                 # checkin/debrief: one of MISSION_TYPES (None: any mission)
     on: str = "random"                       # incoming: "random", or "team_return" (a team coming home)
+    stage: str | None = None                 # faction: the stage it plays at
+    arc: str | None = None                   # arc: which arc...
+    arc_stage: int | None = None             # ...and at which of its stages
     nodes: dict[str, Node] = field(default_factory=dict)
     source: str = ""
 
@@ -110,7 +124,7 @@ class _Parser:
             self.fail(path, f"{what} must be {name}")
         return value
 
-    def text(self, value, path: str) -> str:
+    def text(self, value, path: str, display: bool = True) -> str:
         self.expect(value, str, path, "text")
         try:
             parsed = list(string.Formatter().parse(value))
@@ -125,24 +139,25 @@ class _Parser:
                 self.fail(path, f'unknown placeholder "{{{name}}}"')
             if name not in self.bound:
                 self.fail(path, f"'{{{name}}}' is used but the scenario doesn't bind it (set {name} = ...)")
+            if display and name in HIDDEN_IN_TEXT:
+                self.fail(path, f"{{{name}}} {HIDDEN_IN_TEXT[name]}")
         return value
 
-    def strings(self, value, path: str) -> list[str]:
+    def strings(self, value, path: str, display: bool = True) -> list[str]:
         self.expect(value, list, path, "value")
         for i, v in enumerate(value):
-            self.text(v, f"{path}[{i}]")
+            self.text(v, f"{path}[{i}]", display)
         return value
 
     def conds(self, value, path: str, allow_hidden: bool = True) -> tuple[rules.Cond, ...]:
         out = []
-        for i, v in enumerate(self.strings(value, path)):
+        for i, v in enumerate(self.strings(value, path, display=False)):
             try:
                 cond = rules.parse_cond(v)
             except rules.RuleError as e:
                 self.fail(f"{path}[{i}]", str(e))
             if not allow_hidden and _hidden_trait(cond.text):
-                self.fail(f"{path}[{i}]", "hidden world traits (env, inhabitants, feature) may only "
-                                           "appear in a scenario's when")
+                self.fail(f"{path}[{i}]", HIDDEN_ONLY_IN_WHEN)
             out.append(cond)
         return tuple(out)
 
@@ -169,25 +184,26 @@ class _Parser:
             if not 1 <= odds <= 99:
                 self.fail(f"{path}.roll.odds", "odds must be 1-99")
             mods = []
-            for i, m in enumerate(self.strings(r.get("mods", []), f"{path}.roll.mods")):
+            for i, m in enumerate(self.strings(r.get("mods", []), f"{path}.roll.mods", display=False)):
                 try:
                     mod = rules.parse_mod(m)
                 except rules.RuleError as e:
                     self.fail(f"{path}.roll.mods[{i}]", str(e))
                 if _hidden_trait(mod.cond.text):
-                    self.fail(f"{path}.roll.mods[{i}]", "hidden world traits (env, inhabitants, feature) may only "
-                                                         "appear in a scenario's when")
+                    self.fail(f"{path}.roll.mods[{i}]", HIDDEN_ONLY_IN_WHEN)
                 mods.append(mod)
             if "win" not in r or "lose" not in r:
                 self.fail(f"{path}.roll", "a roll needs both win and lose")
             return Outcome(roll=Roll(odds, tuple(mods), self.outcome(r["win"], f"{path}.roll.win", nodes),
                                      self.outcome(r["lose"], f"{path}.roll.lose", nodes)))
         effects = []
-        for i, e in enumerate(self.strings(d.get("effects", []), f"{path}.effects")):
+        for i, e in enumerate(self.strings(d.get("effects", []), f"{path}.effects", display=False)):
             try:
                 effects.append(rules.parse_effect(e))
             except rules.RuleError as err:
                 self.fail(f"{path}.effects[{i}]", str(err))
+            if e.split(None, 1)[:1] == ["game_over"]:           # its message is shown
+                self.text(e.split(None, 1)[1], f"{path}.effects[{i}]")
         goto = d.get("goto")
         if goto is not None:
             self.expect(goto, str, f"{path}.goto", "goto")
@@ -250,10 +266,153 @@ class _Parser:
         return Node(name, dict(text), default, choices, situation)
 
 
+HIDDEN_ONLY_IN_WHEN = ("hidden conditions (world traits, attention, stage, is, {owner}) may only appear in a "
+                       "scenario's when")
+
+
 def _hidden_trait(text: str) -> bool:
-    """True for a condition like "world {world} env normal": it selects a scenario, so it only belongs in `when`."""
-    t = text.split()
-    return len(t) >= 3 and t[0] == "world" and t[2] in ("env", "inhabitants", "feature")
+    """A condition on something the SGC may not know (rules.hidden): it picks a scenario, so only `when`.
+    Anything about {owner} asks who holds the world, a hidden trait."""
+    return rules.hidden(text) or "{owner}" in text
+
+
+# ------------------------------------------------------------------ continuity
+# Nobody is known before first contact. A text, label or game_over message may name a Goa'uld, an ally, a named
+# world or an arc's hero only where the SGC is sure to know it: the scenario's kind or `when` guarantees it (an
+# arc under way, `aware`, an ally flag), every path to the node filed it, or every way out of the node files it
+# (the scenario that reveals a name). `requires` guarantees nothing: a greyed-out label is still shown.
+
+_FACTION_WORDS = {**{fid: name for name, fid in wd.GOAULD_IDS.items()},
+                  **{fid: name.removeprefix("the ") for fid, name in wd.ALLY_NAMES.items() if fid != "locals"}}
+_KNOWN_AT_START = ("Abydos",)
+_WORLD_WORDS = {n for place, spec in (*wd.CANON.items(), *wd.ARC_WORLDS.items()) if place not in _KNOWN_AT_START
+                for n in (place, *spec[-1].values())}
+NAMES = frozenset({*_FACTION_WORDS.values(), *_WORLD_WORDS, "Thor"})
+_NAME_RE = re.compile(r"(?<!\w)(" + "|".join(re.escape(n) for n in sorted(NAMES, key=len, reverse=True))
+                      + r")(?!\w)", re.IGNORECASE)
+_BY_LOWER = {n.lower(): n for n in NAMES}
+_REVEAL_NAME = re.compile(r'^reveal name (\S+)(?: "([^"]+)")? from (\S+)$')
+# Arcs run only in Campaign (Sandbox has none, so "arc <id> start" does nothing there), and in Campaign the canon
+# worlds are on the dialing list ("@Name": a world a name reveal can reach).
+_CAMPAIGN = frozenset({"#campaign", *(f"@{n}" for n in (*_KNOWN_AT_START, *wd.CAMPAIGN_CANON))})
+
+
+def _names_in(text: str) -> set[str]:
+    return {_BY_LOWER[m.lower()] for m in _NAME_RE.findall(text)}
+
+
+def _faction_names(fid: str | None) -> set[str]:
+    return {_FACTION_WORDS[fid]} if fid in _FACTION_WORDS else set()
+
+
+def _arc_names(aid: str) -> set[str]:
+    """What an arc under way tells the SGC: the names in its title (logged when it starts) and its faction."""
+    arc = ARCS[aid]
+    return _names_in(arc.title) | _faction_names(arc.faction)
+
+
+@cache
+def _designated() -> dict[str, str]:
+    return {wd.place_id(n): n for n in wd.PLACES}
+
+
+def _place_of(tok: str, sc: Scenario) -> str | None:
+    """The named world a world token stands for, if the checker can tell."""
+    if tok.startswith("@"):
+        return tok[1:]
+    if tok == rules.WORLD_SLOT:
+        return ARCS[sc.arc].world if sc.kind == "arc" else None
+    return _designated().get(tok)
+
+
+def _fid_of(tok: str, sc: Scenario) -> str | None:
+    if tok == "{faction}" and sc.kind == "arc":
+        return ARCS[sc.arc].faction
+    return tok if tok in wd.FACTION_IDS else None
+
+
+def _guaranteed(sc: Scenario) -> frozenset[str]:
+    """What the SGC surely knows whenever this scenario plays."""
+    known = _arc_names(sc.arc) | _CAMPAIGN if sc.kind == "arc" else set()
+    for cond in sc.when:
+        t = cond.text.split()
+        if t[0] == "aware":
+            known |= _faction_names(_fid_of(t[1], sc))
+        elif len(t) == 1 and t[0].startswith("ally."):
+            known |= _faction_names(t[0].removeprefix("ally."))
+        elif t[0] == "arc":                                # any arc condition holds only in Campaign
+            known |= _CAMPAIGN | (_arc_names(t[1]) if t[2] != "dormant" else set())
+        elif t[0] == "known" and (place := _place_of(t[1], sc)) is not None:
+            known.add(f"@{place}")
+    return frozenset(known)
+
+
+def _check_names(p: _Parser, path: str, text: str, known: frozenset[str] | set[str]) -> None:
+    for name in sorted(_names_in(text) - set(known)):
+        p.fail(path, f'"{name}" is named before the SGC knows it: guarantee it in when (aware, an ally flag, '
+                     "an arc under way), or reveal it on every choice here")
+
+
+def _after(effects, known: frozenset[str], sc: Scenario, p: _Parser | None, path: str) -> frozenset[str]:
+    """What the SGC surely knows once these effects have run (a guarded "unless" effect may not run)."""
+    out = set(known)
+    for i, e in enumerate(effects):
+        t = e.text.split()
+        if t[0] == "game_over":
+            if p is not None:
+                _check_names(p, f"{path}.effects[{i}]", e.text.split(None, 1)[1], out)
+            continue
+        if " unless " in e.text:
+            continue
+        if t[:2] == ["reveal", "faction"]:
+            out |= _faction_names(_fid_of(t[2], sc))
+        elif t[0] == "gain" and t[1].startswith("ally."):
+            out |= _faction_names(t[1].removeprefix("ally."))
+        elif t[0] == "arc" and t[2] == "start" and "#campaign" in out:
+            out |= _arc_names(t[1])
+        elif t[:2] == ["reveal", "address"] and len(t) == 3:
+            out.add(t[2])
+        elif (m := _REVEAL_NAME.match(e.text)) is not None:
+            place = _place_of(m[1], sc)
+            if place is None:                          # a world only the engine can pick: its given name, if any
+                out |= _names_in(m[2] or "") if m[1] == rules.WORLD_SLOT else set()
+            elif f"@{place}" in out:                   # an unlisted world can't be named yet
+                names = (wd.CANON[place] if place in wd.CANON else wd.ARC_WORLDS[place])[-1]
+                out |= _names_in(m[2] or names.get(m[3]) or names.get("locals") or "")
+    return frozenset(out)
+
+
+def _leaves(o: Outcome, known: frozenset[str], sc: Scenario, p: _Parser | None,
+            path: str) -> list[tuple[Outcome, frozenset[str]]]:
+    """Every way an outcome can end (a roll's win and lose), with what the SGC surely knows after it."""
+    if o.roll:
+        return (_leaves(o.roll.win, known, sc, p, f"{path}.roll.win")
+                + _leaves(o.roll.lose, known, sc, p, f"{path}.roll.lose"))
+    return [(o, _after(o.effects, known, sc, p, path))]
+
+
+def _check_continuity(p: _Parser, sc: Scenario) -> None:
+    start = _guaranteed(sc)
+    at = {"start": start}                  # what the SGC surely knows on entering each node, over every path
+    changed = True
+    while changed:
+        changed = False
+        for name, node in sc.nodes.items():
+            if name not in at:
+                continue
+            for ch in node.choices:
+                for o, known in _leaves(ch.outcome, at[name], sc, None, ""):
+                    if o.goto and (new := known & at.get(o.goto, known)) != at.get(o.goto):
+                        at[o.goto], changed = new, True
+    for name, node in sc.nodes.items():
+        path = f"node.{name}"
+        leaves = [known for i, ch in enumerate(node.choices)
+                  for _, known in _leaves(ch.outcome, at.get(name, start), sc, p, f"{path}.choice[{i}].outcome")]
+        shown = frozenset.intersection(*leaves)       # every way out of the node files these
+        for level, text in node.text.items():
+            _check_names(p, f"{path}.text.{level}", text, shown)
+        for i, ch in enumerate(node.choices):
+            _check_names(p, f"{path}.choice[{i}].label", ch.label, shown)
 
 
 def _terminates(o: Outcome, ends: set[str]) -> bool:
@@ -262,17 +421,27 @@ def _terminates(o: Outcome, ends: set[str]) -> bool:
     return o.end or o.game_over or (o.goto is not None and o.goto in ends)
 
 
-def _bound_placeholders(kind: str | None, team: str | None, goauld: bool, on: str) -> frozenset[str]:
+def _bound_placeholders(kind: str | None, team: str | None, goauld: bool, on: str,
+                        mission_type: str | None) -> frozenset[str]:
     """Which {placeholders} a scenario may use, given its kind and its own top-level fields."""
     bound: set[str] = set()
+    world = {"world", "designation", "owner"}
     if kind in ("probe", "checkin", "debrief") or on == "team_return":
-        bound |= {"world", "designation"}
+        bound |= world
     if kind in ("checkin", "debrief") or on == "team_return":
         bound |= {"team", "specialty"}
+    if mission_type == "rescue":
+        bound.add("captive")
     if team is not None:
         bound |= {"team", "captured_at"}
+    if team == "territory":
+        bound |= world | {"specialty"}
     if goauld:
         bound.add("goauld")
+    if kind in ("faction", "arc"):
+        bound.add("faction")
+    if kind == "arc":
+        bound |= world
     return frozenset(bound)
 
 
@@ -292,8 +461,10 @@ def parse_scenario(data: dict, source: str) -> Scenario:
     if goauld is not None and goauld != "any":
         p.fail("goauld", 'goauld must be "any"')
     team = data.get("team")
-    if team is not None and (team not in TEAM_PICKS or kind != "incoming"):
-        p.fail("team", f"team must be one of {', '.join(TEAM_PICKS)}, and only on incoming scenarios")
+    if team is not None and (team not in TEAM_PICKS or kind not in ("incoming", "faction")
+                             or (team == "territory" and kind != "faction")):
+        p.fail("team", f"team must be one of {', '.join(TEAM_PICKS)}, only on incoming or faction scenarios "
+                       "(territory: faction only)")
     on = data.get("on", "random")
     if on not in TRIGGERS or (on != "random" and kind != "incoming"):
         p.fail("on", f"on must be one of {', '.join(TRIGGERS)}, and only on incoming scenarios")
@@ -302,7 +473,20 @@ def parse_scenario(data: dict, source: str) -> Scenario:
     mission_type = data.get("mission_type")
     if mission_type is not None and (mission_type not in MISSION_TYPES or kind not in ("checkin", "debrief")):
         p.fail("mission_type", f"mission_type must be one of {', '.join(MISSION_TYPES)}, on checkin or debrief")
-    p.bound = _bound_placeholders(kind, team, goauld is not None, on)
+    stage = data.get("stage")
+    if (kind == "faction") != (stage is not None) or (stage is not None and stage not in STAGE_NAMES[1:]):
+        p.fail("stage", f"a faction scenario needs stage = one of {', '.join(STAGE_NAMES[1:])}; other kinds "
+                        "take no stage")
+    arc, arc_stage = data.get("arc"), data.get("arc_stage")
+    if kind == "arc":
+        if not isinstance(arc, str) or arc not in ARCS:
+            p.fail("arc", f"arc must be one of {', '.join(ARCS)}")
+        if not isinstance(arc_stage, int) or isinstance(arc_stage, bool) \
+                or not 1 <= arc_stage <= len(ARCS[arc].stages):
+            p.fail("arc_stage", f"arc_stage must be 1-{len(ARCS[arc].stages)} for arc {arc}")
+    elif arc is not None or arc_stage is not None:
+        p.fail("arc", "only arc scenarios take arc and arc_stage")
+    p.bound = _bound_placeholders(kind, team, goauld is not None, on, mission_type)
     raw_nodes = p.expect(data.get("node"), dict, "node", "node table")
     if "start" not in raw_nodes:
         p.fail("node", "a scenario needs a node named start")
@@ -322,11 +506,13 @@ def parse_scenario(data: dict, source: str) -> Scenario:
     for name in nodes:
         if name not in ends:
             p.fail(f"node.{name}", "this node can never reach an end")
-    return Scenario(
+    sc = Scenario(
         id=sid, kind=kind, weight=float(weight), when=p.conds(data.get("when", []), "when"),
         visual=p.visuals(data["visual"], "visual") if "visual" in data else (),
         goauld=goauld is not None, team=team,
-        mission_type=mission_type, on=on, nodes=nodes, source=source)
+        mission_type=mission_type, on=on, nodes=nodes, source=source, stage=stage, arc=arc, arc_stage=arc_stage)
+    _check_continuity(p, sc)
+    return sc
 
 
 def load_file(path: Path) -> Scenario:
