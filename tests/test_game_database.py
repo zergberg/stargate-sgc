@@ -1,4 +1,5 @@
 from sgc.game.database import TABS, Database
+from sgc.game.schedule import QueueItem
 from sgc.game.state import Mission, new_campaign
 
 
@@ -90,10 +91,91 @@ def test_tabs_cycle_both_ways_and_q_closes():
         db.key("right")
         assert db.tab == tab
     db.key("left")
-    assert db.tab == "intel"
+    assert db.tab == "queue"
     assert db.key("q") == ("close",)
-    db.key("/")                                    # only on the Addresses tab
+    db.tab = "intel"
+    db.key("/")                                    # only on the Addresses and Queue tabs
     assert not db.text_mode
+
+
+QUEUE = [
+    QueueItem("dial:uav:P3X-774", "dial_out", "1", "UAV → P3X-774", "WAITING FOR THE GATE", (0, 0), True, True),
+    QueueItem("dial:malp:P2A-018", "dial_out", "2", "MALP → P2A-018", "WAITING FOR THE GATE", (0, 1), True, True),
+    QueueItem("mission:3", "mission", "14:00", "SG-2 SURVEY OF ABYDOS", "CHECK-IN 14:00 · DUE HOME D3 09:00",
+              (1, 840), reason="ALREADY THROUGH THE GATE"),
+]
+
+
+def queue_db(items=QUEUE):
+    c, _ = camp()
+    db = Database(c, lambda: list(items))
+    db.tab = "queue"
+    return db
+
+
+def test_the_queue_tab_lists_the_schedule_it_is_given():
+    db = queue_db()
+    assert [r.cells for r in db.rows()] == [i.cells for i in QUEUE] and db.rows()[0].key == "dial:uav:P3X-774"
+    assert Database(camp()[0]).tab == "addresses"
+    bare = Database(camp()[0])
+    bare.tab = "queue"
+    assert bare.rows() == []                       # no schedule given: nothing listed
+
+
+def test_search_matches_the_queue_rows_text():
+    db = queue_db()
+    db.key("/")
+    for ch in "abydos":
+        db.key(f"ch:{ch}")
+    assert [r.key for r in db.rows()] == ["mission:3"]
+
+
+def test_x_asks_then_confirms_and_any_other_key_disarms():
+    db = queue_db()
+    assert db.key("x") == ("cancel", "dial:uav:P3X-774", False)
+    assert db.key("x") == ("cancel", "dial:uav:P3X-774", True)
+    assert db.key("x") == ("cancel", "dial:uav:P3X-774", False)
+    db.key("down")
+    assert db.key("x") == ("cancel", "dial:malp:P2A-018", False)
+    db.key("up")
+    db.key("down")
+    assert db.key("x") == ("cancel", "dial:malp:P2A-018", False)
+    db.armed = "dial:malp:P2A-018"
+    db.key("tab")
+    assert db.armed is None
+
+
+def test_brackets_move_the_selected_row_and_select_follows_a_key():
+    db = queue_db()
+    db.key("down")
+    assert db.key("[") == ("move", "dial:malp:P2A-018", -1)
+    assert db.key("]") == ("move", "dial:malp:P2A-018", 1)
+    db.select("mission:3")
+    assert db.sel == 2
+    db.select("gone")
+    assert db.sel == 2
+
+
+def test_the_engines_reply_shows_until_the_next_key_and_queue_keys_do_nothing_elsewhere():
+    db = queue_db()
+    db.message = "CANCEL THE UAV TO P3X-774?  x AGAIN TO CONFIRM"
+    db.key("down")
+    assert db.message == ""
+    empty = queue_db([])
+    empty.key("x")
+    assert empty.message == "NOTHING SCHEDULED"
+    other = queue_db()
+    other.tab = "addresses"
+    assert other.key("x") is None and other.key("[") is None and other.armed is None
+
+
+def test_a_cancelled_mission_is_not_in_a_teams_history():
+    c, ws = camp()
+    c.missions.append(Mission(3, "SG-2", ws[4].id, "survey", 900, 2300, state="cancelled"))
+    db = Database(c)
+    db.tab = "teams"
+    sg2 = next(r for r in db.rows() if r.key == "SG-2")
+    assert sg2.cells[5] == f"1 missions, last {db._world_name(ws[2].id)}"
 
 
 def test_world_file_scroll_moves_and_clamps_at_zero():

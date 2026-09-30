@@ -9,7 +9,7 @@ from ..model import Prompt, Scene
 from ..panels import AMBER, CYAN, DIM, GREEN, RED, WHITE
 from ..term.canvas import Canvas
 from .clock import stamp
-from .database import COLUMNS, TAB_TITLES, TABS, Database
+from .database import COLUMNS, SEARCHABLE, TAB_TITLES, TABS, Database
 from .menu import Menu
 from .room import Room
 from .state import Campaign
@@ -21,7 +21,7 @@ METER_W = 10
 STATUS_H = 6
 LEGENDS = ("bar", "full", "off")
 WIDTHS = {"addresses": (0, 18, 10, 10, 5, 5), "missions": (5, 16, 8, 10, 9, 4, 0),
-          "teams": (5, 10, 9, 17, 16, 0), "intel": (5, 22, 8, 0)}
+          "teams": (5, 10, 9, 17, 16, 0), "intel": (5, 22, 8, 0), "queue": (9, 0, 39)}
 KEYS_HELP = (("b", "briefing room"), ("d", "SGC Database"), ("1-9", "give an order"), ("↑↓ ⏎", "choose"),
              ("←→", "Database tabs"), ("/", "search"), ("s f", "sort, filter"), ("?", "legend"),
              ("m + -", "mute, volume"), ("p", "pause (Recruit)"), ("^C Esc", "cancel typing"),
@@ -60,6 +60,8 @@ def _db_keys(tab: str) -> list[tuple[str, str]]:
         keys.append(("⏎", "OPEN"))
     if tab == "addresses":
         keys += [("/", "SEARCH"), ("s", "SORT"), ("f", "FILTER")]
+    if tab == "queue":
+        keys += [("/", "SEARCH"), ("x", "CANCEL"), ("[ ]", "MOVE")]
     keys.append(("q", "BACK"))
     return keys
 
@@ -67,11 +69,12 @@ def _db_keys(tab: str) -> list[tuple[str, str]]:
 DB_HELP = (("←→", "switch tabs"), ("↑↓", "select, or scroll a world file"),
            ("⏎", "open a world's file"), ("/", "search names, ids and glyphs"), ("s", "sort by status or name"),
            ("f", "filter by status"), ("?", "legend: bar, full, off"), ("q", "close the Database"))
+DB_QUEUE_HELP = (("x", "cancel a dial-out, x to confirm"), ("[ ]", "move a dial-out up, down"))
 
 
-def _db_help_rows(cols: int) -> list[str]:
+def _db_help_rows(cols: int, tab: str = "addresses") -> list[str]:
     """The full Database legend: every key with what it does, in two columns when there's room."""
-    entries = [f"{k:<3} {label}" for k, label in DB_HELP]
+    entries = [f"{k:<3} {label}" for k, label in DB_HELP + (DB_QUEUE_HELP if tab == "queue" else ())]
     colw = max(len(e) for e in entries) + 3
     per = 2 if 2 * colw + 1 <= cols else 1
     rows = [entries[i:i + per] for i in range(0, len(entries), per)]
@@ -83,6 +86,8 @@ def _db_hint(tab: str) -> str:
     keys = [("←→", "TAB"), ("↑↓", "SCROLL" if tab == "world" else "MOVE")]
     if tab in ("addresses", "missions", "intel"):
         keys.append(("⏎", "OPEN"))
+    if tab == "queue":
+        keys += [("x", "CANCEL"), ("[ ]", "MOVE")]
     keys.append(("q", "BACK"))
     return " " + "  ".join(f"{k} {label}" for k, label in keys) + " "
 
@@ -380,12 +385,13 @@ def _draw_database_compact(canvas: Canvas, layout: Layout, db: Database) -> None
         first = max(0, db.sel - height + 1) if table else 0
         for i, row in enumerate(table[first:first + height], start=first):
             sel = i == db.sel
-            cell = row.cells[0] if row.cells else ""
+            cell = "  ".join(row.cells) if db.tab == "queue" else (row.cells[0] if row.cells else "")
             canvas.put(0, y + i - first, _clip(cell, cols), WHITE if sel else AMBER, HILITE if sel else None,
                        bold=sel)
         if not table:
-            canvas.put(0, y, "NOTHING ON FILE"[:cols], DIM)
-    canvas.put(0, bottom, _db_hint(db.tab)[:cols], AMBER, HEADER_BG, bold=True)
+            canvas.put(0, y, ("NOTHING SCHEDULED" if db.tab == "queue" else "NOTHING ON FILE")[:cols], DIM)
+    hint = f" {db.message} " if db.tab == "queue" and db.message else _db_hint(db.tab)
+    canvas.put(0, bottom, hint[:cols], AMBER, HEADER_BG, bold=True)
 
 
 def draw_database(canvas: Canvas, layout: Layout, db: Database, legend: str) -> None:
@@ -412,11 +418,14 @@ def draw_database(canvas: Canvas, layout: Layout, db: Database, legend: str) -> 
         x += len(label) + 1
     clock_text = f"{stamp(db.c.minutes)} SGC "
     canvas.put(max(0, cols - len(clock_text)), 1, clock_text, AMBER, bold=True)
-    help_rows = _db_help_rows(cols) if legend == "full" else []
+    help_rows = _db_help_rows(cols, db.tab) if legend == "full" else []
     top, bottom = 2, rows - (2 if legend != "off" else 1) - len(help_rows)
     if db.tab == "addresses":
         line = f"SORT {db.sort.upper()} · FILTER {(db.filter or 'all').upper()} · SEARCH: {db.query}"
         canvas.put(1, 1, (line + ("_" if db.searching else ""))[:max(0, cols - len(clock_text) - 2)], CYAN)
+    if db.tab == "queue":
+        line = f"SEARCH: {db.query}_" if db.searching else db.message or (f"SEARCH: {db.query}" if db.query else "")
+        canvas.put(1, 1, line[:max(0, cols - len(clock_text) - 2)], CYAN)
     if db.tab == "world":
         _draw_world_file(canvas, 2, top, bottom, max(1, cols - 4), db)
     else:
@@ -438,7 +447,7 @@ def draw_database(canvas: Canvas, layout: Layout, db: Database, legend: str) -> 
                 canvas.put(x, y, _clip(cell, wd), WHITE if sel else AMBER, HILITE if sel else None, bold=sel)
                 x += wd + 1
         if not table:
-            canvas.put(2, top + 1, "NOTHING ON FILE", DIM)
+            canvas.put(2, top + 1, "NOTHING SCHEDULED" if db.tab == "queue" else "NOTHING ON FILE", DIM)
     if legend != "off":
         text = " " + "  ".join(f"{k} {label}" for k, label in _db_keys(db.tab)) + " "
         canvas.fill(Rect(0, rows - 1, cols, 1), " ", AMBER, HEADER_BG)

@@ -391,7 +391,7 @@ def test_the_database_on_a_small_terminal():
     db = Database(db_campaign()[0])
     screens.draw_database(cv, layout, db, "bar")
     text = cv.text()
-    assert "TAB 1/5 ADDRESSES" in text and "Abydos" in text and "q BACK" in text
+    assert "TAB 1/6 ADDRESSES" in text and "Abydos" in text and "q BACK" in text
 
 
 def test_the_database_on_a_tiny_terminal():
@@ -400,3 +400,71 @@ def test_the_database_on_a_tiny_terminal():
     db = Database(db_campaign()[0])
     screens.draw_database(cv, layout, db, "bar")
     assert "ENLARGE PANE" in cv.text()
+
+
+from sgc.game.schedule import QueueItem
+
+WIDEST = [
+    QueueItem("dial:uav:P3X-774", "dial_out", "1", "UAV → P3X-774", "WAITING FOR THE GATE", (0, 0), True, True),
+    QueueItem("dial:search:3:SG-1", "dial_out", "2", "SG-1 → P3X-774 FOR SG-3", "WAITING FOR THE GATE", (0, 1),
+              True, True),
+    QueueItem("drone:P2A-018", "drone", "D12 23:40", "MALP AT P2A-018", "REPORT EXPECTED D12 23:40–D13 00:40",
+              (1, 1)),
+    QueueItem("mission:3", "mission", "D12 02:00", "SG-2 CONTACT OF P3X-774",
+              "CHECK-IN D12 02:00 · DUE HOME D13 09:00", (1, 2)),
+    QueueItem("team:SG-4", "team", "D13 18:00", "SG-4 RE-FORMING", "READY D13 18:00", (1, 3)),
+]
+
+
+@pytest.mark.parametrize("cols,rows", [(80, 22), (120, 36)])
+def test_the_queue_tab_draws_every_row_in_full(cols, rows):
+    layout, cv = small(cols, rows)
+    db = Database(db_campaign()[0], lambda: WIDEST)
+    db.tab = "queue"
+    screens.draw_database(cv, layout, db, "bar")
+    text = cv.text()
+    lines = text.split("\n")
+    assert "QUEUE" in lines[0] and "WHEN" in text and "WHAT" in text and "STATUS" in text
+    for item in WIDEST:
+        for cell in item.cells:
+            assert cell in text, cell
+    assert "…" not in text
+    assert "x CANCEL" in lines[-1] and "[ ] MOVE" in lines[-1] and "/ SEARCH" in lines[-1]
+    assert "s SORT" not in lines[-1]
+
+
+def test_the_queue_tab_shows_the_engines_reply_and_nothing_scheduled():
+    layout, cv = small(80, 22)
+    db = Database(db_campaign()[0], lambda: WIDEST)
+    db.tab = "queue"
+    db.message = "CANCEL THE UAV TO P3X-774?  x AGAIN TO CONFIRM"
+    screens.draw_database(cv, layout, db, "bar")
+    assert db.message in cv.text().split("\n")[1]
+    empty = Database(db_campaign()[0], lambda: [])
+    empty.tab = "queue"
+    screens.draw_database(cv, layout, empty, "bar")
+    assert "NOTHING SCHEDULED" in cv.text()
+
+
+def test_the_full_database_legend_explains_the_queue_keys_on_the_queue_tab():
+    layout, cv = small(80, 22)
+    db = Database(db_campaign()[0], lambda: WIDEST)
+    screens.draw_database(cv, layout, db, "full")
+    assert "cancel a dial-out" not in cv.text()
+    db.tab = "queue"
+    screens.draw_database(cv, layout, db, "full")
+    text = cv.text()
+    assert "cancel a dial-out, x to confirm" in text and "move a dial-out up, down" in text
+
+
+def test_the_queue_tab_on_a_small_terminal():
+    layout = compute_layout(60, 16, 9, 18)
+    cv = Canvas(layout.cols, layout.rows)
+    db = Database(db_campaign()[0], lambda: WIDEST)
+    db.tab = "queue"
+    screens.draw_database(cv, layout, db, "bar")
+    text = cv.text()
+    assert "TAB 6/6 QUEUE" in text and "UAV → P3X-774" in text and "x CANCEL" in text
+    db.message = "CANCELLED: UAV TO P3X-774"
+    screens.draw_database(cv, layout, db, "bar")
+    assert "CANCELLED: UAV TO P3X-774" in cv.text().split("\n")[-1]

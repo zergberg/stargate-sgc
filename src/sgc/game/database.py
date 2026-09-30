@@ -2,21 +2,25 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Callable
 
 from .clock import DAY, HOUR, short
+from .schedule import QueueItem
 from .state import TEAMS, Campaign, rank
 from .world import World
 
-TABS = ("addresses", "world", "missions", "teams", "intel")
+TABS = ("addresses", "world", "missions", "teams", "intel", "queue")
 TAB_TITLES = {"addresses": "ADDRESSES", "world": "WORLD FILE", "missions": "MISSIONS", "teams": "TEAMS",
-              "intel": "INTEL"}
+              "intel": "INTEL", "queue": "QUEUE"}
 COLUMNS = {
     "addresses": ("NAME", "GLYPHS", "STATUS", "LAST VISIT", "FLAGS", "DRONE"),
     "missions": ("TEAM", "WORLD", "TYPE", "STARTED", "OUTCOME", "CAS", "FINDINGS"),
     "teams": ("TEAM", "SPECIALTY", "RANK", "STATUS", "LOCATION", "HISTORY"),
     "intel": ("KIND", "WHAT", "WORLD", "SOURCE"),
+    "queue": ("WHEN", "WHAT", "STATUS"),
     "world": (),
 }
+SEARCHABLE = ("addresses", "queue")
 SORTS = ("status", "name")
 FILTERS = (None, "unexplored", "probed", "surveyed", "contact", "hostile", "lost")
 _STATUS_ORDER = {s: i for i, s in enumerate(("contact", "surveyed", "probed", "unexplored", "hostile", "lost"))}
@@ -59,8 +63,9 @@ class Row:
 
 
 class Database:
-    def __init__(self, c: Campaign):
+    def __init__(self, c: Campaign, schedule: Callable[[], list[QueueItem]] | None = None):
         self.c = c
+        self.schedule = schedule or (lambda: [])   # the engine's schedule_view: the QUEUE tab's only source
         self.tab = "addresses"
         self.sel = 0
         self.sort = "status"
@@ -69,6 +74,8 @@ class Database:
         self.searching = False
         self.world_id = next(iter(c.worlds))
         self.scroll = 0                 # the world tab's line offset; the draw clamps it to the content
+        self.armed: str | None = None   # the QUEUE row x was pressed on once: x again there confirms
+        self.message = ""               # the engine's reply to the last x, [ or ]
 
     # ------------------------------------------------------------------ rows
     def _team_on(self, w: World) -> bool:
@@ -109,7 +116,7 @@ class Database:
             out = []
             for name in TEAMS:
                 t = c.teams[name]
-                done = [m for m in c.missions if m.team == name and m.state != "active"]
+                done = [m for m in c.missions if m.team == name and m.state not in ("active", "cancelled")]
                 where = self._world_name(t.where) if t.where else "—" if t.status == "lost" else "SGC"
                 history = f"{len(done)} missions" + (f", last {self._world_name(done[-1].world)}" if done else "")
                 out.append(Row(name, (name, t.specialty.upper(), rank(t).upper(), team_status(c, name), where,
@@ -124,6 +131,9 @@ class Database:
                 if _lead(w) and w.status == "unexplored":
                     out.append(Row(w.id, ("LEAD", "address not yet visited", w.id, w.found)))
             return out
+        if self.tab == "queue":
+            q = self.query.strip().lower()
+            return [Row(i.id, i.cells) for i in self.schedule() if not q or q in "  ".join(i.cells).lower()]
         return []
 
     def _world_name(self, wid: str) -> str:
@@ -136,6 +146,13 @@ class Database:
             return None
         self.sel = max(0, min(self.sel, len(rows) - 1))
         return rows[self.sel]
+
+    def select(self, key: str) -> None:
+        """Put the selection on the row with this key, if it's still listed: it follows a moved row."""
+        for i, row in enumerate(self.rows()):
+            if row.key == key:
+                self.sel = i
+                return
 
     # ------------------------------------------------------------------ the world file
     def detail(self) -> list[str]:
@@ -162,7 +179,7 @@ class Database:
         return self.searching
 
     def key(self, k: str) -> tuple | None:
-        """Handle a key; returns ("close",) when the player leaves the Database."""
+        """Handle a key; returns ("close",), ("cancel", id, confirm) or ("move", id, delta)."""
         if self.searching:
             if k in ("ctrl-c", "escape"):                 # cancel: clear the search and close it
                 self.searching, self.query, self.sel = False, "", 0
@@ -174,6 +191,18 @@ class Database:
             elif k == "enter":
                 self.searching = False
             return None
+        if self.tab == "queue" and k in ("x", "[", "]"):
+            row = self.selected()
+            if row is None:
+                self.message = "NOTHING SCHEDULED"
+                return None
+            if k == "x":
+                confirm = self.armed == row.key
+                self.armed = None if confirm else row.key
+                return ("cancel", row.key, confirm)
+            self.armed = None
+            return ("move", row.key, -1 if k == "[" else 1)
+        self.armed, self.message = None, ""
         if k == "q":
             return ("close",)
         if k in ("right", "tab", "left"):
@@ -192,7 +221,7 @@ class Database:
             if row is not None:
                 self.world_id = self.c.mission(int(row.key)).world if self.tab == "missions" else row.key
                 self.tab, self.scroll = "world", 0
-        elif k == "/" and self.tab == "addresses":
+        elif k == "/" and self.tab in SEARCHABLE:
             self.searching, self.query, self.sel = True, "", 0
         elif k == "s" and self.tab == "addresses":
             self.sort = SORTS[(SORTS.index(self.sort) + 1) % len(SORTS)]
