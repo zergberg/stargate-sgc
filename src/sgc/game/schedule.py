@@ -22,6 +22,7 @@ class QueueItem:
     cancellable: bool = False
     movable: bool = False
     reason: str = ""                 # why x can't cancel it
+    brief: str = ""                  # the GATE QUEUE box's row: '1 SG-2 STAGING ABYDOS', 'SG-1 CHECK-IN 14:00'
 
     @property
     def cells(self) -> tuple[str, str, str]:
@@ -91,6 +92,15 @@ def _words(c: Campaign, ev: Event) -> tuple[str, str]:
     return f"{by} → {name} FOR {m.team}", f"{by} SEARCH FOR {m.team}"
 
 
+def _brief(c: Campaign, ev: Event) -> str:
+    """A queued dial-out as the GATE QUEUE box says it: a departure is a team staging."""
+    d = ev.data
+    if d["op"] == "depart":
+        m = c.mission(d["mission"])
+        return f"{m.team} STAGING {_name(c, m.world)}"
+    return _words(c, ev)[0]
+
+
 def _drone(c: Campaign, ev: Event, travel: Travel) -> QueueItem:
     """A drone through the gate: only its report window, never the exact rolled time."""
     d = ev.data
@@ -102,7 +112,8 @@ def _drone(c: Campaign, ev: Event, travel: Travel) -> QueueItem:
     status = f"REPORT EXPECTED {at(start, c.now)}–{at(end, start)}" if end > c.now else SOON
     what = f"{d['drone'].upper()} AT {_name(c, d['world'])}"
     return QueueItem(f"drone:{d['world']}", "drone", at(start, c.now), what, status, (1, start, end),
-                     reason=f"{THROUGH}: WAIT FOR ITS REPORT")
+                     reason=f"{THROUGH}: WAIT FOR ITS REPORT",
+                     brief=f"{d['drone'].upper()} REPORT {at(start, c.now)}–{at(end, start)}")
 
 
 def _mission(c: Campaign, m: Mission) -> QueueItem:
@@ -112,19 +123,22 @@ def _mission(c: Campaign, m: Mission) -> QueueItem:
     home = f"DUE HOME {short(m.end)}"
     checkin, overdue = mine("checkin"), mine("overdue")
     if m.state == "aborted":
-        status, nxt = "RECALLED · COMING HOME", c.now
+        status, nxt, brief = "RECALLED · COMING HOME", c.now, "COMING HOME"
     elif checkin:
         status, nxt = f"CHECK-IN {at(checkin[0].due, c.now)} · {home}", checkin[0].due
+        brief = f"CHECK-IN {at(nxt, c.now)}"
     elif overdue:
         status, nxt = f"NO CONTACT · WAITING UNTIL {short(overdue[0].due)}", overdue[0].due
+        brief = "NO CONTACT"
     elif mine("search_report") or mine("dial_out", "search"):
-        status, nxt = "NO CONTACT · SEARCH UNDER WAY", c.now
+        status, nxt, brief = "NO CONTACT · SEARCH UNDER WAY", c.now, "SEARCH UNDER WAY"
     elif mine("team_return"):
-        status, nxt = home, m.end
+        status, nxt, brief = home, m.end, f"HOME {at(m.end, c.now)}"
     else:                                            # a missed check-in waiting for orders
-        status, nxt = "NO CONTACT", c.now
+        status, nxt, brief = "NO CONTACT", c.now, "NO CONTACT"
     return QueueItem(f"mission:{m.id}", "mission", at(nxt, c.now),
-                     f"{m.team} {m.type.upper()} OF {_name(c, m.world)}", status, (1, nxt), reason=THROUGH)
+                     f"{m.team} {m.type.upper()} OF {_name(c, m.world)}", status, (1, nxt), reason=THROUGH,
+                     brief=f"{m.team} {brief}")
 
 
 def view(c: Campaign, travel: Travel) -> list[QueueItem]:
@@ -132,7 +146,7 @@ def view(c: Campaign, travel: Travel) -> list[QueueItem]:
     the recovery tick and rolled times never appear."""
     dials = gate_order(c)
     items = [QueueItem(dial_id(ev), "dial_out", str(i + 1), _words(c, ev)[0], WAITING, (0, i),
-                       cancellable=True, movable=True) for i, ev in enumerate(dials)]
+                       cancellable=True, movable=True, brief=f"{i + 1} {_brief(c, ev)}") for i, ev in enumerate(dials)]
     items += [_drone(c, ev, travel) for ev in c.events.find(lambda e: e.kind == "malp_return")]
     for m in c.missions:
         if m.state not in ("active", "aborted"):
@@ -146,12 +160,14 @@ def view(c: Campaign, travel: Travel) -> list[QueueItem]:
             label, word = TEAM_WORDS[t.status]
             items.append(QueueItem(f"team:{name}", "team", at(t.until, c.now), f"{name} {label}",
                                    f"{word} {short(t.until)}", (1, t.until),
-                                   reason=f"NOTHING TO CANCEL: {name} IS {label}"))
+                                   reason=f"NOTHING TO CANCEL: {name} IS {label}",
+                                   brief=f"{name} {label} {at(t.until, c.now)}"))
     for d in c.deals:                                # announced when made; the disruption odds never show
         if d.state == "active":
             items.append(QueueItem(f"deal:{d.id}", "delivery", at(d.next, c.now), f"DELIVERY FROM {_name(c, d.world)}",
                                    f"{d.amount} {d.goods.upper()} · {d.left} TO COME", (1, d.next),
-                                   reason="NOTHING TO CANCEL: A TRADE PARTNER'S DELIVERY"))
+                                   reason="NOTHING TO CANCEL: A TRADE PARTNER'S DELIVERY",
+                                   brief=f"DELIVERY {_name(c, d.world)} {at(d.next, c.now)}"))
     # every key is public: the event heap's order (the rolled times) must never decide a tie
     return sorted(items, key=lambda i: (i.sort, i.id))
 

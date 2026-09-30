@@ -369,3 +369,34 @@ def test_cancelling_a_queued_recall_refunds_its_wear():
     assert r.c.funding == 500 and "RECALL WEAR REFUNDED (15)" in r.logs
     r.e.advance(60)
     assert r.c.funding == 500                             # refunded once, never again later
+
+
+# ---------------------------------------------------------------- the GATE QUEUE box's rows
+
+def test_each_row_has_a_brief_line_for_the_gate_queue_box():
+    r = Rig(CHECKIN)
+    busy(r)
+    w, v = probed(r), r.world(4, env="normal")
+    r.e.assign(w.id, "SG-2", "survey")
+    r.e.probe(v.id)
+    assert [i.brief for i in view(r)] == [f"1 SG-2 STAGING {w.name.upper()}", f"2 MALP → {v.name.upper()}"]
+    r.c.teams["SG-3"].status, r.c.teams["SG-3"].until = "injured", r.c.now + 3 * clock.DAY + 10 * clock.HOUR
+    r.e.advance(60)
+    rows = {i.id: i.brief for i in view(r)}
+    checkin = r.c.events.find(lambda e: e.kind == "checkin")[0].due
+    assert rows["mission:1"] == f"SG-2 CHECK-IN {schedule.at(checkin, r.c.now)}"
+    assert rows["team:SG-3"] == "SG-3 INJURED D4 18:00"
+
+
+def test_a_mission_with_no_check_in_left_is_due_home_and_a_delivery_is_listed_by_world():
+    r = Rig()
+    w = probed(r)
+    r.e.assign(w.id, "SG-2", "survey")
+    r.e.advance(1)
+    r.c.events.cancel(lambda e: e.kind == "checkin")
+    m = r.c.mission(1)
+    assert next(i for i in view(r) if i.kind == "mission").brief == f"SG-2 HOME {schedule.at(m.end, r.c.now)}"
+    v = r.world(4, status="contact", env="normal", inhabitants="human", owner=None)
+    trade.new_deal(r.c, v.id, "naquadah", 2)
+    row = next(i for i in view(r) if i.kind == "delivery")
+    assert row.brief == f"DELIVERY {v.name.upper()} {schedule.at(r.c.deals[0].next, r.c.now)}"
