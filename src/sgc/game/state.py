@@ -442,6 +442,8 @@ def _event(e, world_ids: set[str], mission_ids: set[int], deal_ids: set[int] = f
     elif kind == "malp_return":
         world()
         _one_of(need("drone"), DRONES, "drone")
+        if "sent" in d:
+            _int(d["sent"], f"{kind} sent")
     elif kind == "search_report":
         mission()
         searcher()

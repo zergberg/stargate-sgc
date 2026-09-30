@@ -262,7 +262,7 @@ class Database:
         if self.tab == "queue" and k in ("x", "[", "]"):
             row = self.selected()
             if row is None:
-                self.message = "NOTHING SCHEDULED"
+                self.message = "NO MATCHES" if self.query.strip() else "NOTHING SCHEDULED"
                 return None
             if k == "x":
                 confirm = self.armed == row.key
@@ -292,6 +292,8 @@ class Database:
                 self.world_id, self.tab, self.scroll = self.c.mission(int(row.key)).world, "world", 0
             elif row is not None and row.key in self.c.worlds:    # a TECH or ally SOURCE row is not a world
                 self.world_id, self.tab, self.scroll = row.key, "world", 0
+        elif k == "escape" and self.tab in SEARCHABLE:   # a search kept with Enter: Esc clears it
+            self.query, self.sel = "", 0
         elif k == "/" and self.tab in SEARCHABLE:
             self.searching, self.query, self.sel = True, "", 0
         elif k == "s" and self.tab == "addresses":

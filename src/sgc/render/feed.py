@@ -14,19 +14,21 @@ FontLoader = Callable[[int], ImageFont.ImageFont]
 EDGE_MARGIN = 5           # pixels reserved on the right so text never touches the screen's edge
 
 RES = (48, 34)                       # the terrain is computed at this size, then scaled to the monitor
+CONTRAST = 1.5                       # the noise stretched about its middle, so the ground reads as it scrolls
 TINTS = {                            # (low ground, high ground)
-    "neutral": ((52, 60, 48), (120, 132, 104)),
+    "neutral": ((40, 48, 36), (136, 148, 118)),
     "desert": ((92, 70, 40), (200, 168, 110)),
     "ice": ((70, 84, 100), (210, 225, 238)),
     "forest": ((24, 52, 28), (96, 150, 80)),
     "toxic": ((50, 60, 16), (170, 190, 60)),
-    "ocean": ((12, 34, 70), (70, 130, 170)),
+    "ocean": ((10, 46, 52), (84, 186, 168)),     # teal: never the event horizon's blue
     "volcanic": ((40, 20, 16), (190, 80, 30)),
 }
 HUD = (140, 255, 150)
 REC = (230, 40, 30)
 CONTACT = (255, 190, 60)
 LOST = (255, 80, 60)
+BAND = (12, 12, 14)
 
 
 def _hash01(seed: int, x: int, y: int) -> float:
@@ -61,6 +63,7 @@ def terrain(seed: int, scroll: int, tint: str) -> Image.Image:
         gy = y - scroll
         for x in range(w):
             v = 0.65 * value_noise(seed, x / 9, gy / 9) + 0.35 * value_noise(seed + 1, x / 3.5, gy / 3.5)
+            v = max(0.0, min(1.0, 0.5 + (v - 0.5) * CONTRAST))
             px.append(tuple(int(a + (b - a) * v) for a, b in zip(lo, hi)))
     im = Image.new("RGB", RES)
     im.putdata(px)
@@ -134,5 +137,8 @@ def screen(feed: Feed, t: float, size: tuple[int, int], scroll: int, font_loader
         text = "SIGNAL LOST"
         max_w = max(1, w - EDGE_MARGIN)
         font = _fit(d, text, max_w, max(7, h // 6), max(6, h // 14), font_loader)
+        _, ty0, _, ty1 = d.textbbox((w / 2, h / 2), text, font=font, anchor="mm")
+        pad = max(2, (ty1 - ty0) // 3)
+        d.rectangle([0, ty0 - pad, w, ty1 + pad], fill=BAND)                # a dark band behind it on the static
         d.text((w / 2, h / 2), text, font=font, fill=LOST, anchor="mm")
     return img

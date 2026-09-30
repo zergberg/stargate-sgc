@@ -101,7 +101,7 @@ def _drone(c: Campaign, ev: Event, travel: Travel) -> QueueItem:
     status = f"REPORT EXPECTED {at(start, c.now)}–{at(end, start)}" if end > c.now else SOON
     what = f"{d['drone'].upper()} AT {_name(c, d['world'])}"
     return QueueItem(f"drone:{d['world']}", "drone", at(start, c.now), what, status, (1, start, end),
-                     reason=f"{THROUGH}: RECALL FROM THE BRIEFING ROOM")
+                     reason=f"{THROUGH}: WAIT FOR ITS REPORT")
 
 
 def _mission(c: Campaign, m: Mission) -> QueueItem:

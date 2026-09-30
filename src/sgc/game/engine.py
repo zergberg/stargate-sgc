@@ -1069,8 +1069,8 @@ class Engine:
             s.figures = [Figure("uav", 0.95 - 0.9 * p, alt=UAV_CRUISE * (1 - p * p), facing="toward")]
             s.splashes = [[0.0, 0.14, p / 0.2]] if p < 0.2 else []
 
-        def roll_out(s, p):
-            s.figures = [] if p >= 1 else [Figure("uav", 0.05 * (1 - p), alpha=1 - p, facing="toward")]
+        def roll_out(s, p):                  # it rolls on toward us and off the bottom of the picture
+            s.figures = [] if p >= 1 else [Figure("uav", 0.05 - 0.97 * p, facing="toward")]
         return [Step(4.2, descend, "UAV RETURNING THROUGH THE GATE"), Step(0.8, roll_out, "UAV RECOVERED")]
 
     def _v_signal_lost(self, w: World, seen: dict[str, str]) -> list[Step]:

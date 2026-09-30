@@ -682,15 +682,24 @@ def test_a_half_typed_search_survives_an_alarm(tmp_path):
     raise_alarm(app)
     assert app.view == "gate" and app.db is None
     app._grace_until = 0.0
+    app._handle_keys(["d"])                            # the alarm first: d doesn't hide it
+    assert app.view == "gate" and app.engine.prompt is not None
+    app._handle_keys(["2"])
     app._handle_keys(["d"])
     assert app.view == "database" and app.db is db and app._text_mode() and db.query == "aby"
     app._handle_keys(["enter", "right", "down", "down", "down"])
     tab, scroll = db.tab, db.scroll
     assert (tab, scroll) == ("world", 3)
     app.engine.c.alarms.clear()
-    raise_alarm(app)
+    c = app.engine.c
+    for _ in range(10):                                # not every incoming wormhole needs an order
+        assert run_until(app, 60, lambda a: a.director.idle)
+        c.events.push(c.now, "incoming")
+        if run_until(app, 5, lambda a: a.engine.prompt is not None):
+            break
+    assert app.engine.prompt is not None
     app._grace_until = 0.0
-    app._handle_keys(["d"])
+    app._handle_keys(["2", "d"])
     assert app.db is db and (db.tab, db.scroll, db.query) == (tab, scroll, "aby")
     app._handle_keys(["q", "d"])                       # closed by the player: the next visit starts afresh
     assert app.db is not db and app.db.query == ""

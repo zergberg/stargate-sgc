@@ -59,6 +59,17 @@ def _ripple_frames(lo: int = 64) -> tuple[Image.Image, ...]:
     return tuple(frames)
 
 
+def _rounded(d: ImageDraw.ImageDraw, box, radius: float, fill) -> None:
+    """A rounded rectangle on whole pixels, square when it's too small for its corners: older Pillow (10.2)
+    raises on fractional or cramped rounded rectangles."""
+    x0, y0, x1, y1 = (round(v) for v in box)
+    x1, y1, r = max(x0, x1), max(y0, y1), int(radius)
+    if r >= 1 and x1 - x0 >= 2 * r + 2 and y1 - y0 >= 2 * r + 2:
+        d.rounded_rectangle([x0, y0, x1, y1], radius=r, fill=fill)
+    else:
+        d.rectangle([x0, y0, x1, y1], fill=fill)
+
+
 def _cw(cx: float, cy: float, r: float, deg: float) -> tuple[float, float]:
     """Point at radius r, `deg` degrees clockwise from the top."""
     a = math.radians(deg)
@@ -219,7 +230,7 @@ class GateRenderer:
 
     def figure_point(self, pos: float, lane: float) -> tuple[float, float, float]:
         top_y, bot_y, top_hw, bot_hw = self._ramp
-        pos = max(0.0, min(1.0, pos))
+        pos = max(-1.0, min(1.0, pos))           # below 0: off the front of the ramp, toward the viewer
         y = bot_y + (top_y - bot_y) * pos
         hw = bot_hw + (top_hw - bot_hw) * pos
         return self.cx + lane * hw * 0.8, y, 1 - 0.68 * pos
@@ -271,8 +282,8 @@ class GateRenderer:
         rgba.alpha_composite(self.ramp_layer)
         if scene.horizon == "kawoosh":
             self._draw_kawoosh(rgba, scene.horizon_p, t)
-        for f in sorted(scene.figures, key=lambda f: (f.kind != "rail", -f.pos)):   # a drone sits on its rail
-            self._draw_figure(rgba, f, t)
+        if scene.figures:
+            self._draw_figures(rgba, sorted(scene.figures, key=lambda f: (f.kind != "rail", -f.pos)), t)
         if scene.muzzle:
             self._draw_muzzle(rgba, scene.muzzle)
         if scene.vaporize > 0:
@@ -356,6 +367,22 @@ class GateRenderer:
             d.polygon(pts, fill=col)
         im.alpha_composite(over)
 
+    def _draw_figures(self, im: Image.Image, figures: list[Figure], t: float) -> None:
+        """Draw figures on an overlay and composite it, so a figure's alpha fades it (ImageDraw on the frame
+        itself replaces pixels, alpha and all). Consecutive figures sharing an alpha share an overlay."""
+        run: list[Figure] = []
+        for f in [*figures, None]:
+            if run and (f is None or f.alpha != run[0].alpha):
+                over = Image.new("RGBA", im.size, (0, 0, 0, 0))
+                for g in run:
+                    self._draw_figure(over, g, t)
+                box = over.getchannel("A").getbbox()           # composite only where something was drawn
+                if box:
+                    im.alpha_composite(over, box[:2], box)
+                run = []
+            if f is not None:
+                run.append(f)
+
     def _draw_figure(self, im: Image.Image, f: Figure, t: float) -> None:
         x, y, s = self.figure_point(f.pos, f.lane)
         S = self.S
@@ -368,7 +395,7 @@ class GateRenderer:
             body, dark = (72, 80, 60, a), (44, 48, 38, a)
             d.line([(x - h * 0.06, y - h * 0.45), (x - h * 0.06 + stride, y)], fill=dark, width=lw)
             d.line([(x + h * 0.06, y - h * 0.45), (x + h * 0.06 - stride, y)], fill=dark, width=lw)
-            d.rounded_rectangle([x - h * 0.16, y - h * 0.84, x + h * 0.16, y - h * 0.42], radius=h * 0.06, fill=body)
+            _rounded(d, [x - h * 0.16, y - h * 0.84, x + h * 0.16, y - h * 0.42], h * 0.06, body)
             d.rectangle([x - h * 0.11, y - h * 0.8, x + h * 0.11, y - h * 0.55], fill=(58, 54, 42, a))   # pack
             d.line([(x - h * 0.17, y - h * 0.8), (x - h * 0.2 - stride * 0.5, y - h * 0.5)], fill=body, width=lw)
             d.line([(x + h * 0.17, y - h * 0.8), (x + h * 0.2 + stride * 0.5, y - h * 0.5)], fill=body, width=lw)
@@ -382,8 +409,8 @@ class GateRenderer:
                     k = 1 - 0.1 * i
                     wx = x + side * (w / 2 + tw * 0.45)
                     top, bot = y - h * (1.25 + 0.3 * i), y - h * 0.3 * i
-                    d.rounded_rectangle([wx - tw / 2 * k, top, wx + tw / 2 * k, bot], radius=tw * 0.3,
-                                        fill=(30 + 8 * i, 30 + 8 * i, 32 + 8 * i, a))
+                    _rounded(d, [wx - tw / 2 * k, top, wx + tw / 2 * k, bot], tw * 0.3,
+                             (30 + 8 * i, 30 + 8 * i, 32 + 8 * i, a))
             d.rectangle([x - w / 2, y - h * 1.9, x + w / 2, y - h * 0.55], fill=(150, 150, 140, a))
             d.rectangle([x - w * 0.36, y - h * 1.65, x + w * 0.36, y - h * 0.8], fill=(118, 118, 110, a))
             for side in (-1, 1):                     # tail lights
@@ -447,10 +474,12 @@ class GateRenderer:
         w = self.S * 0.16 * s
         top = y - w * 0.3
         for side in (-1, 1):                                   # trestle legs
-            d.line([(x + side * w * 0.3, y), (x + side * w * 0.12, top)], fill=(112, 116, 124, a),
-                   width=max(1, int(w * 0.04)))
-        d.polygon([(x - w * 0.14, top + w * 0.06), (x + w * 0.14, top + w * 0.06),
-                   (x + w * 0.07, top - w * 0.3), (x - w * 0.07, top - w * 0.3)], fill=(74, 78, 86, a))
+            d.line([(x + side * w * 0.3, y), (x + side * w * 0.12, top)], fill=(176, 180, 188, a),
+                   width=max(1, int(w * 0.05)))
+        deck = [(x - w * 0.14, top + w * 0.06), (x + w * 0.14, top + w * 0.06),
+                (x + w * 0.07, top - w * 0.3), (x - w * 0.07, top - w * 0.3)]
+        d.polygon(deck, fill=(196, 188, 150, a), outline=(34, 34, 38, a))    # a pale deck, outlined against the ramp
+        d.line([(x, top + w * 0.04), (x, top - w * 0.28)], fill=(90, 86, 70, a), width=max(1, int(w * 0.03)))
 
     def _draw_muzzle(self, im: Image.Image, flashes) -> None:
         over = Image.new("RGBA", im.size, (0, 0, 0, 0))

@@ -91,7 +91,7 @@ def test_a_uav_flies_home_nose_first_and_lands():
     assert uav_of(s).pos == pytest.approx(0.05) and uav_of(s).alt == 0.0
     landed = step(steps, "UAV RECOVERED")
     landed.update(s, 0.5)
-    assert uav_of(s).alt == 0.0 and uav_of(s).alpha < 1
+    assert uav_of(s).alt == 0.0 and uav_of(s).pos < 0.05
     landed.update(s, 1.0)
     assert s.figures == []
 

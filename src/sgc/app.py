@@ -222,16 +222,16 @@ class App:
         if k == "?":
             self._cycle_legend()
             return True
-        if k == "d":
-            self._open_database()
-            return True
-        if k == "b":
+        if k in ("d", "b"):
             if self.view == "gate" and (prompt := e.prompt) is not None:
                 if self._open_told is not prompt:           # answer the alarm before leaving it
                     self._open_told = prompt
                     self.log("ALARM OPEN — GIVE AN ORDER FIRST")
                 return True
-            self._walk("gate" if self.view == "briefing" else "briefing")
+            if k == "d":
+                self._open_database()
+            else:
+                self._walk("gate" if self.view == "briefing" else "briefing")
             return True
         if self.view == "briefing":
             if k in ("m", "+", "-"):
@@ -261,7 +261,7 @@ class App:
 
     def _open_database(self) -> None:
         self.db, self._kept_db = self._kept_db or Database(self.engine.c, self.engine.schedule_view), None
-        self.db.armed = None                      # a cancel is confirmed in one sitting
+        self.db.disarm()                          # a cancel is confirmed in one sitting
         self._db_from, self.view = self.view, "database"
         self.canvas.set_holes([])
         self.canvas.invalidate()

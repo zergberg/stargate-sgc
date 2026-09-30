@@ -111,9 +111,10 @@ class Director:
             take = min(remaining, self._cur.duration - self._cur_t)
             self._cur_t += take
             remaining -= take
-            if self._cur.update:
-                self._cur.update(self.scene, min(1.0, self._cur_t / self._cur.duration))
-            if self._cur_t >= self._cur.duration - 1e-9:
+            done = self._cur_t >= self._cur.duration - 1e-9
+            if self._cur.update:                 # a finished step always sees p == 1 exactly
+                self._cur.update(self.scene, 1.0 if done else min(1.0, self._cur_t / self._cur.duration))
+            if done:
                 self._cur = None
         return logs, cues
 

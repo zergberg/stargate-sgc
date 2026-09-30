@@ -67,7 +67,7 @@ def test_a_drone_out_shows_only_its_report_window():
     item = next(i for i in view(r) if i.kind == "drone")
     assert item.what == f"MALP AT {w.name.upper()}" and item.status == "REPORT EXPECTED 09:00–10:00"
     assert item.when == "09:00" and not item.cancellable
-    assert item.reason == "ALREADY THROUGH THE GATE: RECALL FROM THE BRIEFING ROOM"
+    assert item.reason == "ALREADY THROUGH THE GATE: WAIT FOR ITS REPORT"
     ev = r.c.events.find(lambda e: e.kind == "malp_return")[0]
     ev.due += 7                                           # the exact rolled time never shows
     assert next(i for i in view(r) if i.kind == "drone").status == item.status

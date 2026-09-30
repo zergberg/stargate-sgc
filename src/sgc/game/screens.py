@@ -408,6 +408,24 @@ def _draw_world_file(canvas: Canvas, x0: int, top: int, bottom: int, width: int,
         canvas.put(x0, top + i, text[:width], WHITE if idx == 0 else AMBER, bold=idx == 0)
 
 
+def _nothing(db: Database) -> str:
+    """What an empty table says: a search that found nothing, an empty queue, or an empty file."""
+    if db.tab != "queue":
+        return "NOTHING ON FILE"
+    return "NO MATCHES" if db.query.strip() else "NOTHING SCHEDULED"
+
+
+def _clip_reply(text: str, width: int) -> str:
+    """Clip a QUEUE reply to width; a question keeps its tail ('?  x AGAIN TO CONFIRM') and loses its middle."""
+    if len(text) <= width or "?" not in text:
+        return _clip(text, width)
+    head, tail = text.rsplit("?", 1)
+    tail = "?" + tail
+    if len(tail) + 2 > width:
+        return _clip(text, width)
+    return _clip(head, width - len(tail)) + tail
+
+
 def _draw_database_compact(canvas: Canvas, layout: Layout, db: Database) -> None:
     """A single-column list: the tab (indicated even though the others aren't shown), rows, a key hint."""
     cols, rows = layout.cols, layout.rows
@@ -427,7 +445,7 @@ def _draw_database_compact(canvas: Canvas, layout: Layout, db: Database) -> None
             canvas.put(0, y + i - first, _clip(cell, cols), WHITE if sel else AMBER, HILITE if sel else None,
                        bold=sel)
         if not table:
-            canvas.put(0, y, ("NOTHING SCHEDULED" if db.tab == "queue" else "NOTHING ON FILE")[:cols], DIM)
+            canvas.put(0, y, _nothing(db)[:cols], DIM)
     hint = f" {db.message} " if db.tab == "queue" and db.message else _db_hint(db.tab)
     canvas.put(0, bottom, _clip(hint, cols), AMBER, HEADER_BG, bold=True)
 
@@ -463,8 +481,8 @@ def draw_database(canvas: Canvas, layout: Layout, db: Database, legend: str) -> 
         if db.searching:
             canvas.put(1, 1, _clip(f"SEARCH: {db.query}_", max(0, cols - len(clock_text) - 2)), CYAN)
         elif db.message:
-            # the engine's reply takes priority over the clock, and is always clipped visibly, never silently
-            canvas.put(1, 1, _clip(db.message, max(0, cols - 2)), CYAN)
+            # the engine's reply, left of the clock: a long question keeps its "x AGAIN TO CONFIRM"
+            canvas.put(1, 1, _clip_reply(db.message, max(0, cols - len(clock_text) - 3)), CYAN)
         elif db.query:
             canvas.put(1, 1, _clip(f"SEARCH: {db.query}", max(0, cols - len(clock_text) - 2)), CYAN)
     if db.tab == "world":
@@ -488,7 +506,7 @@ def draw_database(canvas: Canvas, layout: Layout, db: Database, legend: str) -> 
                 canvas.put(x, y, _clip(cell, wd), WHITE if sel else AMBER, HILITE if sel else None, bold=sel)
                 x += wd + 1
         if not table:
-            canvas.put(2, top + 1, "NOTHING SCHEDULED" if db.tab == "queue" else "NOTHING ON FILE", DIM)
+            canvas.put(2, top + 1, _nothing(db), DIM)
     if legend != "off":
         text = " " + "  ".join(f"{k} {label}" for k, label in _db_keys(db.tab)) + " "
         canvas.fill(Rect(0, rows - 1, cols, 1), " ", AMBER, HEADER_BG)
