@@ -87,6 +87,10 @@ def adjust_attention(c: Campaign, fid: str, delta: int) -> list[str]:
     after = stage(f)
     if after == before:
         return []
+    if STAGE_NAMES.index(after) > STAGE_NAMES.index(before):
+        # A pending action drawn at the old, slower stage may be due later than the new stage allows: redraw it.
+        latest = c.now + round(EVERY[after][1] * HOUR * TEMPO[c.difficulty])
+        c.events.cancel(lambda e: e.kind == "faction_action" and e.data.get("faction") == fid and e.due > latest)
     ensure_action(c, fid)
     return [_headline(fid, WORDS[after])] if f.known else []
 

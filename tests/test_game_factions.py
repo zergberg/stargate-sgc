@@ -144,3 +144,31 @@ def test_owner_of_a_world():
     c = camp()
     chulak = next(w for w in c.worlds.values() if w.owner == "Apophis")
     assert factions.owner_of(c, chulak.id) == "apophis" and factions.owner_of(c, "nowhere") is None
+
+
+def test_a_rising_stage_redraws_an_action_pending_too_far_off():
+    a, b = camp(), camp()
+    for c in (a, b):
+        factions.adjust_attention(c, "apophis", 25)                 # curious: 72-120 h away
+        [ev] = pending(c, "apophis")
+        assert ev.due - c.now >= 72 * 60
+        factions.adjust_attention(c, "apophis", 60)                 # seeking: 18-36 h
+        [ev] = pending(c, "apophis")
+        assert 18 * 60 <= ev.due - c.now <= 36 * 60
+    assert [e.due for e in pending(a, "apophis")] == [e.due for e in pending(b, "apophis")]
+
+
+def test_a_rising_stage_keeps_an_action_already_due_soon_enough():
+    c = camp()
+    c.factions["apophis"].attention = 30
+    c.events.push(c.now + 10 * 60, "faction_action", {"faction": "apophis"})
+    factions.adjust_attention(c, "apophis", 30)                     # hostile: within 72 h, 10 h is kept
+    assert [e.due - c.now for e in pending(c, "apophis")] == [10 * 60]
+
+
+def test_a_falling_stage_keeps_the_pending_action():
+    c = camp()
+    c.factions["apophis"].attention = 60
+    c.events.push(c.now + 10 * 60, "faction_action", {"faction": "apophis"})
+    factions.adjust_attention(c, "apophis", -20)
+    assert [e.due - c.now for e in pending(c, "apophis")] == [10 * 60]

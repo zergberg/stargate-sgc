@@ -77,8 +77,8 @@ def test_a_review_itemizes_performance_scales_by_difficulty_and_schedules_the_ne
     c.ledger.update(intel=12, missions=3, lost=1)
     lines = economy.review(c)
     # intel 12 x 10 capped at 100, missions +15, one team lost -40: (300 + 75) x 0.8 = 300
-    assert lines == ["FUNDING REVIEW: +300 (BASE 300 · INTEL +100 · MISSIONS +15 · TEAMS LOST -40 · ×0.8)",
-                     "FUNDING 800"]
+    assert lines == ["FUNDING REVIEW: +300 — FUNDING 800",
+                     "BASE 300 · INTEL +100 · MISSIONS +15 · TEAMS LOST -40 · ×0.8"]
     assert c.funding == 800 and set(c.ledger.values()) == {0}
     assert c.reviews == [(c.now, 300, "BASE 300 · INTEL +100 · MISSIONS +15 · TEAMS LOST -40 · ×0.8")]
     assert any(e.kind == "funding_review" and e.due == c.now + 7 * clock.DAY for e in c.events)
@@ -96,7 +96,32 @@ def test_a_grant_is_at_least_fifty_and_three_reviews_are_kept():
 
 def test_a_recruit_review_is_scaled_up():
     c = camp("recruit")
-    assert economy.review(c)[0] == "FUNDING REVIEW: +375 (BASE 300 · ×1.25)"
+    assert economy.review(c) == ["FUNDING REVIEW: +375 — FUNDING 875", "BASE 300 · ×1.25"]
+
+
+def test_a_half_rounds_up():
+    c = camp("recruit")
+    c.ledger["intel"] = 3                                   # (300 + 30) x 1.25 = 412.5
+    economy.review(c)
+    assert c.reviews[-1][1] == 413
+
+
+def test_a_long_review_is_wrapped_for_the_log():
+    c = camp("recruit")
+    c.ledger.update(intel=12, tech=2, allies=1, missions=3, arcs=1, lost=1, captured=1, breaches=1, incidents=1)
+    lines = economy.review(c)
+    assert lines[0].startswith("FUNDING REVIEW: +") and len(lines) >= 3
+    assert all(len(line) <= 66 for line in lines)
+    assert " · ".join(lines[1:]) == c.reviews[-1][2]
+
+
+def test_a_late_review_keeps_to_the_seven_day_grid():
+    c = camp()
+    c.minutes = clock.START + 7 * clock.DAY + 5 * clock.HOUR           # a review that fired five hours late
+    c.events.cancel(lambda e: e.kind == "funding_review")
+    economy.review(c)
+    [ev] = [e for e in c.events if e.kind == "funding_review"]
+    assert ev.due == clock.START + 14 * clock.DAY
 
 
 def test_note_counts_for_the_next_review():

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from . import factions
 from .clock import HOUR, short
 from .state import ARC_IDS, Campaign
 from .world import World, place_id
@@ -19,6 +20,7 @@ ENDGAME_ATTENTION = 80
 @dataclass(frozen=True)
 class Stage:
     text: str                          # the ARCS tab's line while the arc is at this stage
+    log: str                           # the log's short phrase on entering it (the log box clips past 66)
     step_hours: int | None = None      # an arc_step plays this stage's scenario this long after it begins
 
 
@@ -37,21 +39,30 @@ class Arc:
 
 ARCS: dict[str, Arc] = {a.id: a for a in (
     Arc("apophis", "Apophis and Chulak", True, "apophis", "Chulak", (
-        Stage("Chulak is Apophis's garrison world. A raid could reach the prisoners."),
-        Stage("Teal'c has turned on Apophis. Apophis will want revenge.", step_hours=48),
-        Stage("Apophis is gathering his fleet. Raids on Chulak slow him; allies can warn us."),
-        Stage("Two ha'taks are on course for Earth. Strike at Chulak before they arrive."),
+        Stage("Chulak is Apophis's garrison world. A raid could reach the prisoners.",
+              "a raid could reach the prisoners"),
+        Stage("Teal'c has turned on Apophis. Apophis will want revenge.", "Teal'c has turned on Apophis",
+              step_hours=48),
+        Stage("Apophis is gathering his fleet. Raids on Chulak slow him; allies can warn us.",
+              "Apophis is gathering his fleet"),
+        Stage("Two ha'taks are on course for Earth. Strike at Chulak before they arrive.",
+              "two ha'taks on course for Earth"),
     ), endgame=4, countdown=120,
         catastrophe="Apophis's ha'taks reached Earth orbit, and the SGC had no answer."),
     Arc("thor", "Cimmeria and Thor's Hammer", False, "asgard", "Cimmeria", (
-        Stage("The Cimmerians speak of Thor, whose Hammer guards them. The ruins beneath it want studying."),
-        Stage("A hologram of Thor spoke to our team. The Asgard have noticed us.", step_hours=72),
-        Stage("Heru'ur has come to Cimmeria. Find Thor's chariot before the world falls.", step_hours=168),
+        Stage("The Cimmerians speak of Thor, whose Hammer guards them. The ruins beneath it want studying.",
+              "Thor's Hammer guards Cimmeria"),
+        Stage("A hologram of Thor spoke to our team. The Asgard have noticed us.", "the Asgard have noticed us",
+              step_hours=72),
+        Stage("Heru'ur has come to Cimmeria. Find Thor's chariot before the world falls.",
+              "Heru'ur has come to Cimmeria", step_hours=168),
     )),
     Arc("tokra", "The Tok'ra", False, "tokra", "Vorash", (
-        Stage("A prisoner whispered of the Tok'ra, and gave an address. Someone should go and talk."),
-        Stage("The Tok'ra are wary. They will ask something of us.", step_hours=48),
-        Stage("The Tok'ra are weighing an alliance. Keep our promises.", step_hours=336),
+        Stage("A prisoner whispered of the Tok'ra, and gave an address. Someone should go and talk.",
+              "a prisoner gave us an address"),
+        Stage("The Tok'ra are wary. They will ask something of us.", "the Tok'ra are wary", step_hours=48),
+        Stage("The Tok'ra are weighing an alliance. Keep our promises.", "an alliance is in reach",
+              step_hours=336),
     )),
 )}
 assert set(ARCS) == set(ARC_IDS), "state.ARC_IDS and arcs.ARCS must name the same arcs"
@@ -73,7 +84,8 @@ def _enter(c: Campaign, arc: Arc, n: int) -> None:
 
 
 def _line(arc: Arc, n: int) -> str:
-    return f"{arc.title.upper()}: {arc.stages[n - 1].text.upper()}"
+    """The log's line for a stage: the title and a short phrase; the ARCS tab has the full text (stage_text)."""
+    return f"{arc.title.upper()}: {arc.stages[n - 1].log.upper()}"
 
 
 def start(c: Campaign, aid: str) -> list[str]:
@@ -84,7 +96,8 @@ def start(c: Campaign, aid: str) -> list[str]:
     arc = ARCS[aid]
     st.state, st.started = "active", c.now
     _enter(c, arc, 1)
-    return [f"NEW LEAD: {arc.title.upper()}", *on_attention(c, arc.faction)]
+    known = factions.know(c, arc.faction, "a new lead") if arc.faction in c.factions else []
+    return [f"NEW LEAD: {arc.title.upper()}", *known, *on_attention(c, arc.faction)]
 
 
 def advance(c: Campaign, aid: str) -> list[str]:
@@ -138,7 +151,9 @@ def on_attention(c: Campaign, fid: str) -> list[str]:
 
 def stage_text(c: Campaign, aid: str) -> str:
     """The ARCS tab's words for where an arc stands."""
-    st, arc = c.arcs[aid], ARCS[aid]
+    st, arc = c.arcs.get(aid), ARCS[aid]
+    if st is None:                     # Sandbox has no arcs
+        return ""
     if st.state in ("resolved", "failed"):
         return f"{st.state.capitalize()}."
     if st.state == "dormant":

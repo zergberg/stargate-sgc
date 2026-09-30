@@ -47,6 +47,37 @@ def test_a_new_deal_with_the_same_world_renews_it():
     assert len(c.deals) == 1 and c.deals[0].left == 6 and c.deals[0].amount == 3
 
 
+def test_renewing_a_deal_clears_its_misses():
+    c, w = camp()
+    trade.new_deal(c, w.id, "naquadah", 2)
+    trade.deliver(c, 1, roll=0.0)
+    assert c.deals[0].misses == 1
+    trade.new_deal(c, w.id, "naquadah", 2)
+    assert c.deals[0].misses == 0
+
+
+def test_a_lost_world_cuts_the_route_and_reads_high():
+    c, w = camp()
+    trade.new_deal(c, w.id, "naquadah", 2)
+    w.status = "lost"
+    assert trade.risk_words(c, c.deals[0]) == "HIGH"
+    c.events.cancel(lambda e: e.kind == "trade_delivery")          # the engine takes the due event
+    lines, arrived = trade.deliver(c, 1, roll=99.0)
+    assert not arrived and c.naquadah == 0 and c.deals[0].state == "cut"
+    assert lines == [f"{w.name.upper()} IS LOST — THE TRADE ROUTE IS CUT"]
+    assert deliveries(c) == []
+
+
+def test_risk_words_take_the_owner_the_sgc_has_learned():
+    c, w = camp()
+    trade.new_deal(c, w.id, "naquadah", 2)
+    d = c.deals[0]
+    w.inhabitants, w.owner = "jaffa", "Apophis"                     # the true, hidden owner is calm
+    w.seen["owner"] = "Cronus"                                      # the SGC believes it is Cronus
+    c.factions["cronus"].known, c.factions["cronus"].attention = True, 60
+    assert trade.risk_words(c, d) == "HIGH"
+
+
 def test_disruption_grows_with_danger_hostility_and_a_hostile_owner():
     c, w = camp()
     trade.new_deal(c, w.id, "naquadah", 2)

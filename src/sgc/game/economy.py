@@ -1,8 +1,10 @@
 """Funding, naquadah, drone purchases, upgrades, requisitions and the weekly funding review."""
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
+from .clock import START
 from .state import DRONES, RESERVE_MAX, REVIEW_EVERY, STOCK, UPGRADE_IDS, Campaign
 
 PRICES = {"malp": 20, "uav": 60}
@@ -14,6 +16,7 @@ SCALE = {"recruit": 1.25, "officer": 1.0, "commander": 0.8}
 PERF = {"intel": 10, "tech": 25, "allies": 40, "missions": 5, "arcs": 60, "lost": -40, "captured": -20,
         "breaches": -15, "incidents": -30}
 CAPS = {"intel": 100, "missions": 60}
+LOG_WIDTH = 66                  # the log box's width: longer lines are clipped
 PERF_WORDS = {"intel": "INTEL", "tech": "TECH", "allies": "ALLIES", "missions": "MISSIONS", "arcs": "ARCS",
               "lost": "TEAMS LOST", "captured": "CAPTURED", "breaches": "BREACHES", "incidents": "INCIDENTS"}
 
@@ -150,10 +153,29 @@ def review(c: Campaign) -> list[str]:
     """The weekly funding review: base grant plus performance, scaled by difficulty; the next one is scheduled."""
     perf, parts = performance(c)
     scale = SCALE[c.difficulty]
-    grant = max(MIN_GRANT, int((GRANT + perf) * scale + 0.5))
+    # Half-up rounding on purpose (412.5 -> 413), not Python's round(), which rounds halves to even.
+    grant = max(MIN_GRANT, math.floor((GRANT + perf) * scale + 0.5))
     c.funding += grant
-    summary = " · ".join([f"BASE {GRANT}", *parts, *([f"×{scale:g}"] if scale != 1 else [])])
+    items = [f"BASE {GRANT}", *parts, *([f"×{scale:g}"] if scale != 1 else [])]
+    summary = " · ".join(items)
     c.reviews = [*c.reviews, (c.now, grant, summary)][-3:]
     c.ledger = dict.fromkeys(c.ledger, 0)
-    c.events.push(c.now + REVIEW_EVERY, "funding_review")
-    return [f"FUNDING REVIEW: +{grant} ({summary})", f"FUNDING {c.funding}"]
+    c.events.push(next_review(c.now), "funding_review")
+    return [f"FUNDING REVIEW: +{grant} — FUNDING {c.funding}", *_wrap(items)]
+
+
+def next_review(now: int) -> int:
+    """The first review after now on the fixed grid START + k × REVIEW_EVERY (day 8 at 08:00, day 15, ...). The
+    same grid state.new_campaign and the save migration use; engine.py has no grid of its own."""
+    return START + (max(0, now - START) // REVIEW_EVERY + 1) * REVIEW_EVERY
+
+
+def _wrap(items: list[str]) -> list[str]:
+    """The review's items joined by ' · ' into log lines of at most LOG_WIDTH characters."""
+    lines: list[str] = []
+    for item in items:
+        if lines and len(lines[-1]) + 3 + len(item) <= LOG_WIDTH:
+            lines[-1] += " · " + item
+        else:
+            lines.append(item)
+    return lines

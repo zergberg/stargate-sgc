@@ -16,7 +16,7 @@ def new_deal(c: Campaign, wid: str, goods: str, amount: int) -> list[str]:
     w = c.worlds[wid]
     for d in c.deals:
         if d.world == wid and d.state == "active":
-            d.left, d.amount = DELIVERIES, max(d.amount, amount)
+            d.left, d.amount, d.misses = DELIVERIES, max(d.amount, amount), 0
             return [f"TRADE WITH {w.name.upper()} RENEWED"]
     did = max((d.id for d in c.deals), default=0) + 1
     d = Deal(did, wid, goods, amount, c.now + EVERY, DELIVERIES)
@@ -41,6 +41,9 @@ def deliver(c: Campaign, did: int, roll: float) -> tuple[list[str], bool]:
     if d is None or d.state != "active":
         return [], False
     w = c.worlds[d.world]
+    if w.status == "lost":
+        d.state = "cut"
+        return [f"{w.name.upper()} IS LOST — THE TRADE ROUTE IS CUT"], False
     d.left -= 1
     if roll < disruption(c, d):
         d.misses += 1
@@ -63,13 +66,13 @@ def deliver(c: Campaign, did: int, roll: float) -> tuple[list[str], bool]:
 
 
 def risk_words(c: Campaign, d: Deal) -> str:
-    """The TRADE tab's risk, from what the SGC knows only: the world's status, a known owner's stage (once the
+    """The TRADE tab's risk, from what the SGC knows only: the world's status (hostile or lost), a known owner's stage (once the
     owner is on file), and recent disruptions."""
     if d.state != "active":
         return "—"
     w = c.worlds[d.world]
-    fid = faction_id(w.owner) if w.seen.get("owner") else None
+    fid = faction_id(w.seen.get("owner"))
     known_hostile = fid is not None and c.factions[fid].known and c.factions[fid].attention >= HOSTILE
-    if w.status == "hostile" or known_hostile:
+    if w.status in ("hostile", "lost") or known_hostile:
         return "HIGH"
     return "RAISED" if d.misses else "LOW"

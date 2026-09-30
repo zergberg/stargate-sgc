@@ -20,7 +20,9 @@ def test_the_arcs_match_the_saved_ids_and_their_places_exist():
 
 def test_start_enters_stage_one_once():
     c = camp()
-    assert arcs.start(c, "apophis") == ["NEW LEAD: APOPHIS AND CHULAK"]
+    assert arcs.start(c, "apophis") == ["NEW LEAD: APOPHIS AND CHULAK",
+                                        "NEW FACTION ON FILE: APOPHIS — FROM A NEW LEAD"]
+    assert c.factions["apophis"].known
     st = c.arcs["apophis"]
     assert (st.state, st.stage, st.started) == ("active", 1, c.now) and steps(c, "apophis") == []
     assert arcs.start(c, "apophis") == []
@@ -31,7 +33,7 @@ def test_advancing_into_a_stage_with_a_step_schedules_it():
     arcs.start(c, "apophis")
     lines = arcs.advance(c, "apophis")
     assert c.arcs["apophis"].stage == 2 and steps(c, "apophis") == [(48 * 60, 2)]
-    assert lines == ["APOPHIS AND CHULAK: TEAL'C HAS TURNED ON APOPHIS. APOPHIS WILL WANT REVENGE."]
+    assert lines == ["APOPHIS AND CHULAK: TEAL'C HAS TURNED ON APOPHIS"]
     arcs.advance(c, "apophis")
     assert c.arcs["apophis"].stage == 3 and steps(c, "apophis") == []          # stage 3 waits
 
@@ -88,6 +90,23 @@ def test_failing_the_major_arc_is_a_catastrophe_and_a_minor_one_is_not():
 def test_sandbox_has_no_arcs():
     c = new_campaign("sandbox", "officer", 3)
     assert arcs.start(c, "apophis") == [] and arcs.on_attention(c, "apophis") == []
+    assert arcs.stage_text(c, "apophis") == ""
+
+
+def test_start_names_an_ally_it_puts_on_file():
+    c = camp()
+    lines = arcs.start(c, "tokra")
+    assert lines[0] == "NEW LEAD: THE TOK'RA" and c.factions["tokra"].known
+    assert arcs.start(c, "tokra") == []
+
+
+def test_every_arc_log_line_fits_the_log():
+    c = camp()
+    for aid, arc in arcs.ARCS.items():
+        lines = arcs.start(c, aid)
+        for n in range(1, len(arc.stages) + 1):
+            lines.append(arcs._line(arc, n))
+        assert all(len(line) <= 66 for line in lines), [line for line in lines if len(line) > 66]
 
 
 def test_arc_world_finds_listed_and_unlisted_worlds():
