@@ -166,7 +166,8 @@ def draw_menu(canvas: Canvas, layout: Layout, menu: Menu, records: list[dict]) -
         for rec in records:
             if y >= bottom:
                 break
-            line = (f"{str(rec.get('result', '')).upper():<7} {rec['surveyed']}W {rec['days']}D "
+            score = rec["score"] if isinstance(rec.get("score"), int) else 10 * rec["surveyed"]
+            line = (f"{str(rec.get('result', '')).upper():<8}{score:>5} {rec['surveyed']}W {rec['days']}D "
                     f"{str(rec.get('mode', ''))[:4].upper()} {str(rec.get('difficulty', ''))[:3].upper()}")
             canvas.put(x, y, line[:w], DIM)
             y += 1

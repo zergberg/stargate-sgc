@@ -146,3 +146,13 @@ def test_a_damaged_stage_1_save_is_set_aside(tmp_path):
     s.path.write_text(json.dumps({"version": 2, "mode": "campaign"}))
     c, notice = s.load()
     assert c is None and "DAMAGED" in notice and len(list(tmp_path.glob("campaign.json.bad-*"))) == 1
+
+
+def test_records_rank_by_score_and_older_entries_score_by_worlds(tmp_path):
+    s = Saves(tmp_path)
+    s.add_record(entry(9, 10))                                        # no score: counts as 90
+    s.add_record({**entry(2, 40, "victory"), "score": 500})
+    s.add_record({**entry(5, 12), "score": 60})
+    assert [r.get("score", r["surveyed"] * 10) for r in s.records()] == [500, 90, 60]
+    s.add_record({**entry(1, 1), "score": "lots"})                    # malformed score: ignored
+    assert len(s.records()) == 3

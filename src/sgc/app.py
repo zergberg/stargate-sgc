@@ -25,7 +25,7 @@ from .audio.mixer import Mixer, NullMixer
 from .config import Config, load_config, save_setting
 from .director import Director
 from .events import REGISTRY
-from .game import clock, screens
+from .game import clock, scoring, screens
 from .game import content as game_content
 from .game.database import Database
 from .game.engine import Engine
@@ -373,6 +373,8 @@ class App:
                 self.menu.notice = notice or "NO SAVED GAME"
             else:
                 self._start_game(c)
+                if notice:
+                    self.log(notice)
         elif action[0] == "new":
             _, mode, difficulty, pace = action
             self._start_game(new_campaign(mode, difficulty, self.rng.randrange(2 ** 31), pace))
@@ -386,7 +388,7 @@ class App:
         for w in warnings:
             self.log(w.upper())
         engine = Engine(c, scenarios, self.director, self.cfg.game_pace,
-                        save=self.saves.save, on_end=self._game_ended, log=self.log, on_alarm=self._alarm)
+                        save=self.saves.save, on_end=self._game_ended, on_victory=self._game_won, log=self.log, on_alarm=self._alarm)
         self.engine, self.mode, self.view = engine, "game", "gate"
         engine.save_now()
         pace = (f"PACE {self.cfg.game_pace} S/HOUR (CONFIG)" if self.cfg.game_pace is not None
@@ -396,13 +398,21 @@ class App:
         self._resume_room = False
         self._set_off(sq.to_gateroom(self.cfg.transition_seconds), behind=False)
 
-    def _game_ended(self, c: Campaign) -> None:
-        self._back_to_the_gate_room()
+    def _file_record(self, c: Campaign) -> None:
         try:
-            self.saves.add_record({"mode": c.mode, "difficulty": c.difficulty, "result": "overrun",
-                                   "days": clock.day(c.minutes), "surveyed": c.record["surveyed"]})
+            self.saves.add_record(scoring.record(c))
         except OSError as e:
             self.log(f"RECORD NOT SAVED — {(e.strerror or type(e).__name__).upper()[:40]}")
+
+    def _game_won(self, c: Campaign) -> None:
+        """Victory goes into the hall of records at once; the campaign may carry on."""
+        self._file_record(c)
+        self.log("VICTORY — FILED IN THE HALL OF RECORDS")
+
+    def _game_ended(self, c: Campaign) -> None:
+        self._back_to_the_gate_room()
+        if c.won is None:                                   # a won campaign was filed when it was won
+            self._file_record(c)
         try:
             self.saves.delete()
         except OSError as e:

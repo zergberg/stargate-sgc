@@ -86,6 +86,11 @@ class Saves:
         except FileNotFoundError:
             pass
 
+    @staticmethod
+    def _score(r: dict) -> int:
+        """Older entries have no score: ten a world."""
+        return r["score"] if _is_int(r.get("score")) else 10 * r["surveyed"]
+
     def records(self, top: int = 5) -> list[dict]:
         try:
             recs = json.loads(self.records_path.read_text())
@@ -93,8 +98,9 @@ class Saves:
             return []
         if not isinstance(recs, list):
             return []
-        recs = [r for r in recs if isinstance(r, dict) and _is_int(r.get("surveyed")) and _is_int(r.get("days"))]
-        return sorted(recs, key=lambda r: (-r["surveyed"], -r["days"]))[:top]
+        recs = [r for r in recs if isinstance(r, dict) and _is_int(r.get("surveyed")) and _is_int(r.get("days"))
+                and ("score" not in r or _is_int(r["score"]))]
+        return sorted(recs, key=lambda r: (-self._score(r), -r["days"]))[:top]
 
     def add_record(self, entry: dict) -> None:
         """Add a finished campaign: mode, difficulty, result, days and surveyed (worlds); the date is added here."""

@@ -40,7 +40,7 @@ def test_menu_lists_items_notice_and_records():
     screens.draw_menu(cv, layout, m, [RECORD])
     text = cv.text()
     for bit in ("STARGATE COMMAND", "1  AMBIENCE", "2  MISSIONS", "SAVE DAMAGED", "HALL OF RECORDS",
-                "OVERRUN 7W 31D SAND OFF"):
+                "OVERRUN    70 7W 31D SAND OFF"):
         assert bit in text, bit
 
 

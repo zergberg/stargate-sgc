@@ -868,3 +868,37 @@ def test_reopening_the_database_disarms_a_half_made_cancel(tmp_path):
     assert app.db.message.startswith("CANCEL THE MALP") and c.stock["malp"] == 3
     app._handle_keys(["x"])
     assert app.db.message.startswith("CANCELLED: MALP") and c.stock["malp"] == 4
+
+
+def test_a_stage_1_save_continues_with_a_notice(tmp_path):
+    import shutil
+    shutil.copy("tests/data/stage1_save.json", tmp_path / "campaign.json")
+    app = make_app(tmp_path, "missions")
+    app._handle_keys(["1"])                                          # continue
+    assert app.mode == "game" and app.engine.c.funding == 500
+    assert any(line.endswith("STAGE 1 SAVE UPGRADED") for line in app.logs)
+
+
+def test_retiring_files_the_record_and_deletes_the_save(tmp_path):
+    app = start(tmp_path)
+    app._handle_keys(["b"])
+    assert run_until(app, 5, lambda a: not a._walking)
+    app._handle_keys(["6", "1"])                                     # retire, and confirm
+    assert app.engine.ended and not (tmp_path / "campaign.json").exists()
+    [rec] = app.saves.records()
+    assert rec["result"] == "retired" and "score" in rec
+    app._handle_keys(["1"])
+    tick(app)
+    assert app.mode == "menu"
+
+
+def test_victory_is_filed_at_once_and_only_once(tmp_path):
+    app = start(tmp_path)
+    c = app.engine.c
+    c.won = c.now
+    app._game_won(c)
+    assert app.saves.records()[0]["result"] == "victory"
+    c.over = "You handed over command of the SGC."
+    c.ending = "retired"
+    app.engine._game_over()
+    assert len(app.saves.records()) == 1 and not (tmp_path / "campaign.json").exists()
