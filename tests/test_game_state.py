@@ -418,3 +418,16 @@ def test_version_3_saves_carry_every_team_and_mission_key(path):
     del d[path[0]][path[1]][path[2]]
     with pytest.raises(ValueError):
         from_dict(d)
+
+
+def test_a_wreck_round_trips_and_an_old_save_has_none():
+    c = busy_campaign()[0]
+    w = list(c.worlds.values())[3]
+    w.wreck = "shot_down"
+    assert from_dict(json.loads(json.dumps(to_dict(c)))).worlds[w.id].wreck == "shot_down"
+    d = to_dict(c)
+    del d["worlds"][3]["wreck"]                            # a save from before wrecks
+    assert from_dict(d).worlds[w.id].wreck is None
+    d["worlds"][3]["wreck"] = "melted"
+    with pytest.raises(ValueError):
+        from_dict(d)

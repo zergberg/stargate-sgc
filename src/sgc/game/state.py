@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass, field
 from . import orders
 from .clock import DAY, HOUR, START, Scheduler
 from .world import (DRONES, ENVIRONMENTS, FACTION_IDS, FACTION_KIND, FEATURES, INHABITANTS,
-                    STATUSES as WORLD_STATUSES, World, cartouche, place)
+                    STATUSES as WORLD_STATUSES, WRECKS, World, cartouche, place)
 
 VERSION = 3
 CORE_TEAMS = ("SG-1", "SG-2", "SG-3", "SG-4")         # always on the roster; a lost one re-forms
@@ -328,6 +328,7 @@ def world_from_dict(d: dict) -> World:
     if not isinstance(seen, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in seen.items()):
         raise ValueError("seen must map text to text")
     last = d["last_visit"]
+    wreck = d.get("wreck")                          # absent from a save made before wrecks: none
     wid = _str(d["id"], "world id")
     if not wid:
         raise ValueError("world id must not be empty")
@@ -346,6 +347,7 @@ def world_from_dict(d: dict) -> World:
         seen=dict(seen), telemetry=_str_list(d["telemetry"], "telemetry"),
         reports=_pairs(d["reports"], "report"), notes=_pairs(d["notes"], "note"),
         drone=None if d["drone"] is None else _one_of(d["drone"], DRONES, "drone"),
+        wreck=None if wreck is None else _one_of(wreck, WRECKS, "wreck"),
         options=[_one_of(o, MISSION_TYPES, "mission type") for o in d["options"]],
         found=_str(d["found"], "found"), last_visit=None if last is None else _int(last, "last_visit"))
 

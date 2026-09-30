@@ -13,6 +13,7 @@ FEATURES = ("ruins", "technology", "naquadah")
 STATUSES = ("unexplored", "probed", "surveyed", "contact", "hostile", "lost")
 PROGRESS = ("unexplored", "probed", "surveyed", "contact")
 DRONES = ("malp", "uav")
+WRECKS = ("crashed", "shot_down")          # how a UAV wreck came down
 NAME_SOURCES = ("locals", "ruins", "jaffa", "goauld", "comms", "allies", "records")
 SOURCE_TEXT = {"locals": "the locals", "ruins": "inscriptions in the ruins", "jaffa": "the Jaffa",
                "goauld": "a Goa'uld database", "comms": "a UAV comms intercept", "allies": "allied intelligence",
@@ -71,6 +72,7 @@ class World:
     reports: list[tuple[int, str]] = field(default_factory=list)  # (game minute, text), oldest first
     notes: list[tuple[int, str]] = field(default_factory=list)
     drone: str | None = None                 # an intact MALP or UAV left on the world
+    wreck: str | None = None                 # a UAV wreck on the world, a WRECK, until a team brings it home
     options: list[str] = field(default_factory=lambda: ["survey"])   # mission types unlocked here
     found: str = CARTOUCHE                   # where the address came from
     last_visit: int | None = None
@@ -231,6 +233,8 @@ _ENV_TEXT = {"normal": "breathable atmosphere", "toxic": "toxic atmosphere", "ra
 _LIFE = {"none": "none detected", "human": "humanoid life signs", "unas": "large reptilian life signs",
          "jaffa": "humanoid life signs", "goauld": "humanoid life signs", "ally": "humanoid life signs"}
 _FEATURE_TEXT = {"ruins": "ruins", "technology": "energy readings", "naquadah": "naquadah traces"}
+_SUBSURFACE_TEXT = {"naquadah": "naquadah deposit", "ruins": "buried structures",
+                    "technology": "shielded power source"}
 _SETTLEMENT = {"none": "no settlements", "human": "settlement", "unas": "Unas", "jaffa": "Jaffa garrison",
                "goauld": "Goa'uld stronghold", "ally": "outpost"}
 _COUNT = {"none": (0, 0), "human": (40, 900), "unas": (3, 30), "jaffa": (50, 400), "goauld": (200, 2000),
@@ -256,4 +260,14 @@ def readings(w: World, drone: str, detail: str, rng: random.Random) -> dict[str,
         if hi:
             n = rng.randint(lo, hi)
             out["count"] = f"about {round(n, -1) or n}" if detail == "full" else ("many" if n > 150 else "some")
+        out["subsurface"] = subsurface(w, drone, detail)
     return out
+
+
+def subsurface(w: World, drone: str, detail: str) -> str:
+    """What ground-penetrating radar (a UAV) or deep soil samples (a MALP's extended report) find under a world,
+    from its features, at the same level of detail as FEATURES: a MALP below full detail names only one."""
+    shown = [_SUBSURFACE_TEXT[f] for f in w.features]
+    if drone == "malp" and detail != "full":
+        shown = shown[:1]
+    return ", ".join(shown) or "no anomalies"

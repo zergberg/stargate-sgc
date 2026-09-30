@@ -131,3 +131,24 @@ def test_the_cartouche_never_uses_a_reserved_designation():
     reserved = {world.place_id("Vorash")}
     for seed in range(40):
         assert not reserved & set(world.cartouche("campaign", seed, 480, reserved=reserved))
+
+
+def test_subsurface_readings_come_from_the_features():
+    w = World("P3X-774", (1, 2, 3, 4, 5, 6), features=("ruins", "technology", "naquadah"))
+    full = "buried structures, shielded power source, naquadah deposit"
+    assert world.subsurface(w, "uav", "full") == full
+    assert world.subsurface(w, "uav", "minimal") == full           # a UAV sees every feature, as FEATURES does
+    assert world.subsurface(w, "malp", "full") == full             # a MALP's deep soil samples, at full detail
+    assert world.subsurface(w, "malp", "partial") == "buried structures"
+    assert world.subsurface(World("P2A-018", (7, 8, 9, 10, 11, 12)), "uav", "full") == "no anomalies"
+
+
+def test_a_uav_reads_the_subsurface_and_a_malp_never_does():
+    w = World("P3X-774", (1, 2, 3, 4, 5, 6), inhabitants="human", features=("naquadah",))
+    assert world.readings(w, "uav", "partial", random.Random(1))["subsurface"] == "naquadah deposit"
+    for detail in ("full", "partial", "minimal"):
+        assert "subsurface" not in world.readings(w, "malp", detail, random.Random(1))
+
+
+def test_a_world_starts_with_no_wreck():
+    assert World("P3X-774", (1, 2, 3, 4, 5, 6)).wreck is None and world.WRECKS == ("crashed", "shot_down")
