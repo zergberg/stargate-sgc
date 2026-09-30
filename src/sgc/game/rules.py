@@ -15,8 +15,8 @@ from typing import Callable
 
 from . import world as wd
 from .clock import DAY, HOUR
-from .state import (METERS, MISSION_TYPES, RANK_NAMES, SPECIALTIES, STATUSES, STOCK, TEAMS, Campaign, Mission, Team,
-                    available_teams, has_specialty, rank, rank_index)
+from .state import (ALL_TEAMS, METERS, MISSION_TYPES, RANK_NAMES, SPECIALTIES, STATUSES, STOCK, Campaign, Mission,
+                    Team, available_teams, has_specialty, rank, rank_index, team_names)
 
 FLAGS = frozenset({"ally.tokra", "ally.asgard", "ally.tollan", "ally.nox", "ally.jaffa",
                    "tech.zat", "tech.naquadah_generator", "tech.lrs"})
@@ -97,7 +97,7 @@ def _signed(tok: str, text: str) -> int:
 
 
 def _team_tok(tok: str, text: str) -> str:
-    if tok in TEAMS or tok in TEAM_SLOTS:
+    if tok in ALL_TEAMS or tok in TEAM_SLOTS:
         return tok
     raise RuleError(f'"{text}": unknown team "{tok}"')
 
@@ -546,10 +546,10 @@ def teams_matching(c: Campaign, which: str) -> list[str]:
     if which == "base":
         return available_teams(c)
     if which == "compromised":
-        return [t for t in TEAMS if c.teams[t].idc == "compromised" and c.teams[t].status != "lost"]
+        return [t for t in team_names(c) if c.teams[t].idc == "compromised" and c.teams[t].status != "lost"]
     if which == "captured":
-        return [t for t in TEAMS if c.teams[t].status == "captured"]
-    return [t for t in TEAMS if c.teams[t].status != "lost"]
+        return [t for t in team_names(c) if c.teams[t].status == "captured"]
+    return [t for t in team_names(c) if c.teams[t].status != "lost"]
 
 
 def deployed(c: Campaign, drone: str) -> int:

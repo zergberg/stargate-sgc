@@ -6,7 +6,7 @@ from typing import Callable
 
 from .clock import DAY, HOUR, short
 from .schedule import QueueItem
-from .state import TEAMS, Campaign, rank
+from .state import Campaign, rank, team_names
 from .world import World
 
 TABS = ("addresses", "world", "missions", "teams", "intel", "queue")
@@ -114,7 +114,7 @@ class Database:
                     for m in ms]
         if self.tab == "teams":
             out = []
-            for name in TEAMS:
+            for name in team_names(c):
                 t = c.teams[name]
                 done = [m for m in c.missions if m.team == name and m.state not in ("active", "cancelled")]
                 where = self._world_name(t.where) if t.where else "—" if t.status == "lost" else "SGC"

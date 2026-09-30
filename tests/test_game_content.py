@@ -114,7 +114,7 @@ def test_checkins_bind_the_team_and_the_world():
     with pytest.raises(ContentError, match="doesn't bind it"):
         parse(probe)
     with pytest.raises(ContentError, match="mission_type"):
-        parse(CHECKIN.replace('"survey"', '"raid"'))
+        parse(CHECKIN.replace('"survey"', '"picnic"'))
     with pytest.raises(ContentError, match="mission_type"):
         parse(GOOD.replace('kind = "incoming"', 'kind = "incoming"\nmission_type = "survey"'))
 

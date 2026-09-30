@@ -6,7 +6,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from .state import Campaign, from_dict, to_dict
+from .state import Campaign, from_dict, to_dict, upgrade_v2
 
 DATA_DIR = Path.home() / ".local" / "share" / "stargate-sgc"
 
@@ -64,8 +64,11 @@ class Saves:
         if isinstance(data, dict) and data.get("version") == 1:
             self._set_aside("v1")
             return None, "BUILD 1 SAVE SET ASIDE — START A NEW GAME"
+        notice = ""
         try:
-            return from_dict(data), ""
+            if isinstance(data, dict) and data.get("version") == 2:
+                data, notice = upgrade_v2(data), "STAGE 1 SAVE UPGRADED"
+            return from_dict(data), notice
         except Exception:
             self._set_aside("bad")
             return None, "SAVE DAMAGED — STARTING FRESH"

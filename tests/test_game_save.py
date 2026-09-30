@@ -126,3 +126,23 @@ def test_a_failed_save_raises_and_leaves_no_temporary_file(tmp_path, monkeypatch
     with pytest.raises(OSError):
         s.save(c)
     assert not list(tmp_path.glob("*.tmp")) and not s.exists()
+
+
+def test_a_stage_1_save_is_upgraded_on_load(tmp_path):
+    s = Saves(tmp_path)
+    s.path.parent.mkdir(parents=True, exist_ok=True)
+    with open("tests/data/stage1_save.json") as f:
+        s.path.write_text(f.read())
+    c, notice = s.load()
+    assert c is not None and notice == "STAGE 1 SAVE UPGRADED" and c.funding == 500
+    s.save(c)
+    assert json.loads(s.path.read_text())["version"] == 3
+    assert s.load() == (c, "")
+
+
+def test_a_damaged_stage_1_save_is_set_aside(tmp_path):
+    s = Saves(tmp_path)
+    s.path.parent.mkdir(parents=True, exist_ok=True)
+    s.path.write_text(json.dumps({"version": 2, "mode": "campaign"}))
+    c, notice = s.load()
+    assert c is None and "DAMAGED" in notice and len(list(tmp_path.glob("campaign.json.bad-*"))) == 1

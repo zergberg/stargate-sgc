@@ -9,7 +9,7 @@ from .clock import HOUR, PACE_NAMES
 from .engine import PLANNABLE, Engine, team_label
 from .orders import SITUATIONS
 from .rules import STAND_DOWN, stands_down
-from .state import TEAMS, available_teams, rank
+from .state import available_teams, rank, team_names
 
 Handler = Callable[[], "str | None"]
 
@@ -64,6 +64,9 @@ class Room:
     def _worlds(self) -> list[str]:
         return list(self.c.worlds)
 
+    def _teams(self) -> list[str]:
+        return team_names(self.c)
+
     def _types(self) -> list[str]:
         return self.e.mission_types(self.world_id, self.team) if self.world_id and self.team else []
 
@@ -111,11 +114,11 @@ class Room:
         if self.screen == "team_pick":
             free = available_teams(c)
             return [(self._team_line(t), True) if t in free else (f"{self._team_line(t)}\n{self._status(t)}", False)
-                    for t in TEAMS] + [("BACK", True)]
+                    for t in self._teams()] + [("BACK", True)]
         if self.screen == "type_pick":
             return [(t.upper(), True) for t in self._types()] + [("BACK", True)]
         if self.screen == "teams":
-            return [(f"{self._team_line(t)}\n{self._status(t)}", True) for t in TEAMS] + [("BACK", True)]
+            return [(f"{self._team_line(t)}\n{self._status(t)}", True) for t in self._teams()] + [("BACK", True)]
         if self.screen == "team":
             return [("REVOKE AND REISSUE THE IDC", c.teams[self.team].status != "lost"), ("BACK", True)]
         if self.screen == "revoke":
@@ -177,7 +180,8 @@ class Room:
         if self.screen == "team":
             return f"{self.team} IS LOST"
         if self.screen == "team_pick":
-            return f"{TEAMS[i]}: {self._status(TEAMS[i])}"
+            team = self._teams()[i]
+            return f"{team}: {self._status(team)}"
         if self.screen in ("main", "pace"):
             return PACE_LOCKED
         return ""
@@ -205,13 +209,13 @@ class Room:
             if result is not None:
                 self.notice = result
         elif self.screen == "team_pick":
-            self.team = TEAMS[i]
+            self.team = self._teams()[i]
             self._go("type_pick")
         elif self.screen == "type_pick":
             self.notice = self.e.assign(self.world_id, self.team, self._types()[i])
             self._go("world")
         elif self.screen == "teams":
-            self.team = TEAMS[i]
+            self.team = self._teams()[i]
             self._go("team")
         elif self.screen == "team":
             self._go("revoke")

@@ -1,0 +1,2797 @@
+{
+ "version": 2,
+ "mode": "campaign",
+ "difficulty": "officer",
+ "seed": 7,
+ "pace": "standard",
+ "minutes": 8100,
+ "events": [
+  {
+   "due": 8110,
+   "seq": 370,
+   "kind": "checkin",
+   "data": {
+    "mission": 23
+   }
+  },
+  {
+   "due": 8160,
+   "seq": 377,
+   "kind": "recovery_tick",
+   "data": {}
+  },
+  {
+   "due": 8205,
+   "seq": 312,
+   "kind": "team_return",
+   "data": {
+    "mission": 19
+   }
+  },
+  {
+   "due": 8237,
+   "seq": 321,
+   "kind": "team_return",
+   "data": {
+    "mission": 20
+   }
+  },
+  {
+   "due": 8411,
+   "seq": 344,
+   "kind": "team_return",
+   "data": {
+    "mission": 22
+   }
+  },
+  {
+   "due": 8748,
+   "seq": 371,
+   "kind": "team_return",
+   "data": {
+    "mission": 23
+   }
+  },
+  {
+   "due": 8940,
+   "seq": 180,
+   "kind": "incoming",
+   "data": {}
+  }
+ ],
+ "event_seq": 378,
+ "gate_until": 8060,
+ "worlds": [
+  {
+   "id": "P9W-161",
+   "glyphs": [
+    27,
+    7,
+    15,
+    32,
+    12,
+    30
+   ],
+   "env": "normal",
+   "inhabitants": "human",
+   "features": [
+    "ruins"
+   ],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Abydos"
+   },
+   "canon": true,
+   "status": "contact",
+   "surveyed": true,
+   "names": [
+    [
+     "Abydos",
+     "the Abydos expedition",
+     480
+    ],
+    [
+     "Abydos",
+     "inscriptions in the ruins",
+     1710
+    ]
+   ],
+   "seen": {
+    "env": "breathable atmosphere",
+    "life": "humanoid life signs",
+    "inhabitants": "settlement"
+   },
+   "telemetry": [],
+   "reports": [
+    [
+     970,
+     "SG-1 checks in from Abydos: all quiet. Next check-in on schedule."
+    ],
+    [
+     1450,
+     "SG-1 checks in from Abydos: all quiet. Next check-in on schedule."
+    ],
+    [
+     1710,
+     "SG-1 debrief: the ruins on Abydos include a cartouche wall. Dr. Jackson has already picked out a gate address we've never seen."
+    ],
+    [
+     2545,
+     "SG-4 checks in from Abydos: all quiet. Next check-in on schedule."
+    ],
+    [
+     3025,
+     "SG-4 checks in from Abydos: all quiet. Next check-in on schedule."
+    ],
+    [
+     3510,
+     "SG-4 checks in from Abydos: all quiet. Next check-in on schedule."
+    ],
+    [
+     3783,
+     "SG-4 debrief: the ruins on Abydos include a cartouche wall. Dr. Jackson has already picked out a gate address we've never seen."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey",
+    "contact"
+   ],
+   "found": "the Abydos expedition",
+   "last_visit": 3783
+  },
+  {
+   "id": "P8J-989",
+   "glyphs": [
+    36,
+    9,
+    21,
+    13,
+    8,
+    14
+   ],
+   "env": "normal",
+   "inhabitants": "human",
+   "features": [
+    "ruins",
+    "technology"
+   ],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Sace'vek"
+   },
+   "canon": false,
+   "status": "surveyed",
+   "surveyed": true,
+   "names": [
+    [
+     "Sace'vek",
+     "inscriptions in the ruins",
+     980
+    ]
+   ],
+   "seen": {
+    "env": "breathable atmosphere",
+    "life": "life signs",
+    "features": "ruins"
+   },
+   "telemetry": [
+    "ENV: breathable atmosphere",
+    "LIFE: life signs",
+    "FEATURES: ruins"
+   ],
+   "reports": [
+    [
+     550,
+     "MALP telemetry: env breathable atmosphere; life life signs; features ruins"
+    ],
+    [
+     550,
+     "Telemetry from P8J-989: the camera pans across broken columns around the gate. Dr. Jackson wants a closer look at the glyphs on the dais."
+    ],
+    [
+     980,
+     "SG-2 checks in from P8J-989: the ruins go on for kilometers. There's a name carved over every doorway."
+    ],
+    [
+     1340,
+     "SG-2 checks in from Sace'vek: all quiet. Next check-in on schedule."
+    ],
+    [
+     1880,
+     "SG-2 debrief: the ruins on Sace'vek include a cartouche wall. Dr. Jackson has already picked out a gate address we've never seen."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "the Abydos cartouche",
+   "last_visit": 1880
+  },
+  {
+   "id": "P4J-765",
+   "glyphs": [
+    13,
+    18,
+    20,
+    2,
+    11,
+    28
+   ],
+   "env": "normal",
+   "inhabitants": "human",
+   "features": [
+    "technology"
+   ],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Ranu'kor"
+   },
+   "canon": false,
+   "status": "surveyed",
+   "surveyed": true,
+   "names": [],
+   "seen": {
+    "env": "breathable atmosphere",
+    "life": "life signs",
+    "features": "energy readings"
+   },
+   "telemetry": [
+    "ENV: breathable atmosphere",
+    "LIFE: life signs",
+    "FEATURES: energy readings"
+   ],
+   "reports": [
+    [
+     625,
+     "MALP telemetry: env breathable atmosphere; life life signs; features energy readings"
+    ],
+    [
+     625,
+     "Telemetry from P4J-765: an energy source somewhere past the treeline, steady and strong. Nothing natural reads like that."
+    ],
+    [
+     1150,
+     "SG-3 checks in from P4J-765: all quiet. Next check-in on schedule."
+    ],
+    [
+     1630,
+     "SG-3 checks in from P4J-765: all quiet. Next check-in on schedule."
+    ],
+    [
+     2025,
+     "SG-3 debrief: P4J-765 is mapped out to five kilometers from the gate. Details are in the report."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "the Abydos cartouche",
+   "last_visit": 2025
+  },
+  {
+   "id": "P4R-324",
+   "glyphs": [
+    18,
+    2,
+    30,
+    12,
+    26,
+    33
+   ],
+   "env": "normal",
+   "inhabitants": "human",
+   "features": [
+    "technology"
+   ],
+   "owner": null,
+   "hidden_names": {
+    "locals": "K'tau"
+   },
+   "canon": true,
+   "status": "surveyed",
+   "surveyed": true,
+   "names": [],
+   "seen": {
+    "env": "breathable atmosphere",
+    "life": "life signs",
+    "features": "energy readings"
+   },
+   "telemetry": [
+    "ENV: breathable atmosphere",
+    "LIFE: life signs",
+    "FEATURES: energy readings"
+   ],
+   "reports": [
+    [
+     685,
+     "MALP telemetry: env breathable atmosphere; life life signs; features energy readings"
+    ],
+    [
+     685,
+     "Telemetry from P4R-324: smoke on the horizon and a worn path leading from the gate."
+    ],
+    [
+     1860,
+     "SG-4 checks in from P4R-324: all quiet. Next check-in on schedule."
+    ],
+    [
+     1990,
+     "SG-4 debrief: P4R-324 is mapped out to five kilometers from the gate. Details are in the report."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "the Abydos cartouche",
+   "last_visit": 1990
+  },
+  {
+   "id": "P2J-155",
+   "glyphs": [
+    22,
+    11,
+    27,
+    5,
+    6,
+    8
+   ],
+   "env": "normal",
+   "inhabitants": "none",
+   "features": [
+    "technology"
+   ],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Dosnel"
+   },
+   "canon": false,
+   "status": "surveyed",
+   "surveyed": true,
+   "names": [],
+   "seen": {
+    "env": "breathable atmosphere",
+    "life": "none detected",
+    "features": "energy readings"
+   },
+   "telemetry": [
+    "ENV: breathable atmosphere",
+    "LIFE: none detected",
+    "FEATURES: energy readings"
+   ],
+   "reports": [
+    [
+     735,
+     "MALP telemetry: env breathable atmosphere; life none detected; features energy readings"
+    ],
+    [
+     735,
+     "Telemetry from P2J-155: an energy source somewhere past the treeline, steady and strong. Nothing natural reads like that."
+    ],
+    [
+     2220,
+     "SG-1 checks in from P2J-155: all quiet. Next check-in on schedule."
+    ],
+    [
+     2700,
+     "SG-1 checks in from P2J-155: all quiet. Next check-in on schedule."
+    ],
+    [
+     3035,
+     "SG-1 debrief: P2J-155 is mapped out to five kilometers from the gate. Details are in the report."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "the Abydos cartouche",
+   "last_visit": 3035
+  },
+  {
+   "id": "P7X-871",
+   "glyphs": [
+    29,
+    8,
+    18,
+    22,
+    4,
+    25
+   ],
+   "env": "normal",
+   "inhabitants": "human",
+   "features": [],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Juna"
+   },
+   "canon": true,
+   "status": "surveyed",
+   "surveyed": true,
+   "names": [],
+   "seen": {
+    "env": "breathable atmosphere",
+    "life": "life signs"
+   },
+   "telemetry": [
+    "ENV: breathable atmosphere",
+    "LIFE: life signs"
+   ],
+   "reports": [
+    [
+     1509,
+     "MALP telemetry: env breathable atmosphere; life life signs"
+    ],
+    [
+     1509,
+     "Telemetry from P7X-871: smoke on the horizon and a worn path leading from the gate."
+    ],
+    [
+     2290,
+     "SG-2 checks in from P7X-871: all quiet. Next check-in on schedule."
+    ],
+    [
+     2650,
+     "SG-2 checks in from P7X-871: all quiet. Next check-in on schedule."
+    ],
+    [
+     2990,
+     "SG-2 debrief: P7X-871 is mapped out to five kilometers from the gate. Details are in the report."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "the Abydos cartouche",
+   "last_visit": 2990
+  },
+  {
+   "id": "P5A-975",
+   "glyphs": [
+    26,
+    35,
+    6,
+    8,
+    23,
+    14
+   ],
+   "env": "normal",
+   "inhabitants": "none",
+   "features": [
+    "ruins"
+   ],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Kheb",
+    "jaffa": "Kheb"
+   },
+   "canon": true,
+   "status": "surveyed",
+   "surveyed": true,
+   "names": [
+    [
+     "Kheb",
+     "inscriptions in the ruins",
+     3420
+    ]
+   ],
+   "seen": {
+    "env": "breathable atmosphere",
+    "life": "none detected",
+    "features": "ruins"
+   },
+   "telemetry": [
+    "ENV: breathable atmosphere",
+    "LIFE: none detected",
+    "FEATURES: ruins"
+   ],
+   "reports": [
+    [
+     2005,
+     "MALP telemetry: env breathable atmosphere; life none detected; features ruins"
+    ],
+    [
+     2005,
+     "Telemetry from P5A-975: the camera pans across broken columns around the gate. Dr. Jackson wants a closer look at the glyphs on the dais."
+    ],
+    [
+     2530,
+     "SG-3 checks in from P5A-975: all quiet. Next check-in on schedule."
+    ],
+    [
+     3015,
+     "SG-3 checks in from P5A-975: all quiet. Next check-in on schedule."
+    ],
+    [
+     3420,
+     "SG-3 debrief: the ruins on P5A-975 include a cartouche wall. Dr. Jackson has already picked out a gate address we've never seen."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "the Abydos cartouche",
+   "last_visit": 3420
+  },
+  {
+   "id": "P5X-700",
+   "glyphs": [
+    5,
+    8,
+    2,
+    11,
+    38,
+    25
+   ],
+   "env": "toxic",
+   "inhabitants": "none",
+   "features": [
+    "ruins"
+   ],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Taul"
+   },
+   "canon": false,
+   "status": "surveyed",
+   "surveyed": true,
+   "names": [
+    [
+     "Taul",
+     "inscriptions in the ruins",
+     4201
+    ]
+   ],
+   "seen": {
+    "env": "toxic atmosphere",
+    "life": "none detected",
+    "features": "ruins"
+   },
+   "telemetry": [
+    "ENV: toxic atmosphere",
+    "LIFE: none detected",
+    "FEATURES: ruins"
+   ],
+   "reports": [
+    [
+     2110,
+     "MALP telemetry: env toxic atmosphere; life none detected; features ruins"
+    ],
+    [
+     2110,
+     "Telemetry from P5X-700: the air is thick with sulfur compounds. Anyone going through will need suits."
+    ],
+    [
+     3555,
+     "SG-1 checks in from P5X-700: all quiet. Next check-in on schedule."
+    ],
+    [
+     4035,
+     "SG-1 checks in from P5X-700: all quiet. Next check-in on schedule."
+    ],
+    [
+     4201,
+     "SG-1 debrief: the ruins on P5X-700 include a cartouche wall. Dr. Jackson has already picked out a gate address we've never seen."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "the Abydos cartouche",
+   "last_visit": 4201
+  },
+  {
+   "id": "P9J-824",
+   "glyphs": [
+    4,
+    29,
+    8,
+    22,
+    18,
+    25
+   ],
+   "env": "normal",
+   "inhabitants": "ally",
+   "features": [
+    "technology"
+   ],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Tollana",
+    "allies": "Tollana"
+   },
+   "canon": true,
+   "status": "surveyed",
+   "surveyed": true,
+   "names": [],
+   "seen": {
+    "env": "breathable atmosphere",
+    "life": "life signs",
+    "features": "energy readings"
+   },
+   "telemetry": [
+    "ENV: breathable atmosphere",
+    "LIFE: life signs",
+    "FEATURES: energy readings"
+   ],
+   "reports": [
+    [
+     2192,
+     "MALP telemetry: env breathable atmosphere; life life signs; features energy readings"
+    ],
+    [
+     2192,
+     "Telemetry from P9J-824: someone spoke to the camera."
+    ],
+    [
+     3410,
+     "SG-2 checks in from P9J-824: all quiet. Next check-in on schedule."
+    ],
+    [
+     3770,
+     "SG-2 checks in from P9J-824: all quiet. Next check-in on schedule."
+    ],
+    [
+     4130,
+     "SG-2 checks in from P9J-824: all quiet. Next check-in on schedule."
+    ],
+    [
+     4186,
+     "SG-2 debrief: P9J-824 is mapped out to five kilometers from the gate. Details are in the report."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "the Abydos cartouche",
+   "last_visit": 4186
+  },
+  {
+   "id": "P6M-988",
+   "glyphs": [
+    9,
+    33,
+    5,
+    15,
+    20,
+    10
+   ],
+   "env": "radiation",
+   "inhabitants": "none",
+   "features": [],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Saren"
+   },
+   "canon": false,
+   "status": "surveyed",
+   "surveyed": true,
+   "names": [],
+   "seen": {
+    "env": "high radiation",
+    "life": "none detected"
+   },
+   "telemetry": [
+    "ENV: high radiation",
+    "LIFE: none detected"
+   ],
+   "reports": [
+    [
+     2970,
+     "MALP telemetry: env high radiation; life none detected"
+    ],
+    [
+     2970,
+     "Telemetry from P6M-988: radiation readings climb steadily, well above safe limits. Short visits only."
+    ],
+    [
+     4595,
+     "SG-2 checks in from P6M-988: all quiet. Next check-in on schedule."
+    ],
+    [
+     4955,
+     "SG-2 checks in from P6M-988: all quiet. Next check-in on schedule."
+    ],
+    [
+     5315,
+     "SG-2 checks in from P6M-988: all quiet. Next check-in on schedule."
+    ],
+    [
+     5424,
+     "SG-2 debrief: P6M-988 is mapped out to five kilometers from the gate. Details are in the report."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "the Abydos cartouche",
+   "last_visit": 5424
+  },
+  {
+   "id": "P4Y-429",
+   "glyphs": [
+    10,
+    29,
+    37,
+    19,
+    28,
+    24
+   ],
+   "env": "toxic",
+   "inhabitants": "none",
+   "features": [
+    "ruins",
+    "technology"
+   ],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Doskakhe"
+   },
+   "canon": false,
+   "status": "surveyed",
+   "surveyed": true,
+   "names": [
+    [
+     "Doskakhe",
+     "inscriptions in the ruins",
+     4750
+    ]
+   ],
+   "seen": {
+    "env": "toxic atmosphere",
+    "life": "none detected",
+    "features": "ruins"
+   },
+   "telemetry": [
+    "ENV: toxic atmosphere",
+    "LIFE: none detected",
+    "FEATURES: ruins"
+   ],
+   "reports": [
+    [
+     3108,
+     "MALP telemetry: env toxic atmosphere; life none detected; features ruins"
+    ],
+    [
+     3108,
+     "Telemetry from P4Y-429: the camera pans across broken columns around the gate. Dr. Jackson wants a closer look at the glyphs on the dais."
+    ],
+    [
+     4750,
+     "SG-1 checks in from P4Y-429: the ruins go on for kilometers. There's a name carved over every doorway."
+    ],
+    [
+     5230,
+     "SG-1 checks in from Doskakhe: all quiet. Next check-in on schedule."
+    ],
+    [
+     5514,
+     "SG-1 debrief: Doskakhe is mapped out to five kilometers from the gate. Details are in the report."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "the Abydos cartouche",
+   "last_visit": 5514
+  },
+  {
+   "id": "P5X-356",
+   "glyphs": [
+    11,
+    35,
+    22,
+    17,
+    6,
+    26
+   ],
+   "env": "normal",
+   "inhabitants": "human",
+   "features": [
+    "ruins",
+    "technology"
+   ],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Cimmeria"
+   },
+   "canon": true,
+   "status": "surveyed",
+   "surveyed": true,
+   "names": [
+    [
+     "Cimmeria",
+     "inscriptions in the ruins",
+     4809
+    ]
+   ],
+   "seen": {
+    "env": "breathable atmosphere",
+    "life": "life signs",
+    "features": "ruins"
+   },
+   "telemetry": [
+    "ENV: breathable atmosphere",
+    "LIFE: life signs",
+    "FEATURES: ruins"
+   ],
+   "reports": [
+    [
+     3128,
+     "MALP telemetry: env breathable atmosphere; life life signs; features ruins"
+    ],
+    [
+     3128,
+     "Telemetry from P5X-356: smoke on the horizon and a worn path leading from the gate."
+    ],
+    [
+     4585,
+     "SG-3 checks in from P5X-356: all quiet. Next check-in on schedule."
+    ],
+    [
+     4809,
+     "SG-3 debrief: the ruins on P5X-356 include a cartouche wall. Dr. Jackson has already picked out a gate address we've never seen."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "the Abydos cartouche",
+   "last_visit": 4809
+  },
+  {
+   "id": "P4C-152",
+   "glyphs": [
+    31,
+    25,
+    21,
+    17,
+    13,
+    36
+   ],
+   "env": "normal",
+   "inhabitants": "none",
+   "features": [],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Nelab'em"
+   },
+   "canon": false,
+   "status": "surveyed",
+   "surveyed": true,
+   "names": [],
+   "seen": {
+    "env": "breathable atmosphere",
+    "life": "none detected"
+   },
+   "telemetry": [
+    "ENV: breathable atmosphere",
+    "LIFE: none detected"
+   ],
+   "reports": [
+    [
+     3520,
+     "MALP telemetry: env breathable atmosphere; life none detected"
+    ],
+    [
+     3520,
+     "Telemetry from P4C-152: breathable air, mild temperatures, forest right up to the gate. Nothing moving but the wind."
+    ],
+    [
+     4331,
+     "SG-4 checks in from P4C-152: all quiet. Next check-in on schedule."
+    ],
+    [
+     4824,
+     "SG-4 checks in from P4C-152: all quiet. Next check-in on schedule."
+    ],
+    [
+     5156,
+     "SG-4 debrief: P4C-152 is mapped out to five kilometers from the gate. Details are in the report."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "the Abydos cartouche",
+   "last_visit": 5156
+  },
+  {
+   "id": "P3X-673",
+   "glyphs": [
+    32,
+    9,
+    38,
+    33,
+    31,
+    39
+   ],
+   "env": "normal",
+   "inhabitants": "none",
+   "features": [
+    "ruins"
+   ],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Sharem'ka"
+   },
+   "canon": false,
+   "status": "surveyed",
+   "surveyed": true,
+   "names": [
+    [
+     "Sharem'ka",
+     "inscriptions in the ruins",
+     5350
+    ]
+   ],
+   "seen": {
+    "env": "breathable atmosphere",
+    "life": "none detected",
+    "features": "ruins"
+   },
+   "telemetry": [
+    "ENV: breathable atmosphere",
+    "LIFE: none detected",
+    "FEATURES: ruins"
+   ],
+   "reports": [
+    [
+     4311,
+     "MALP telemetry: env breathable atmosphere; life none detected; features ruins"
+    ],
+    [
+     4311,
+     "Telemetry from P3X-673: the camera pans across broken columns around the gate. Dr. Jackson wants a closer look at the glyphs on the dais."
+    ],
+    [
+     5350,
+     "SG-3 checks in from P3X-673: the ruins go on for kilometers. There's a name carved over every doorway."
+    ],
+    [
+     5830,
+     "SG-3 checks in from Sharem'ka: all quiet. Next check-in on schedule."
+    ],
+    [
+     6310,
+     "SG-3 checks in from Sharem'ka: all quiet. Next check-in on schedule."
+    ],
+    [
+     6576,
+     "SG-3 debrief: Sharem'ka is mapped out to five kilometers from the gate. Details are in the report."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "the Abydos cartouche",
+   "last_visit": 6576
+  },
+  {
+   "id": "P9M-125",
+   "glyphs": [
+    37,
+    29,
+    5,
+    9,
+    16,
+    39
+   ],
+   "env": "normal",
+   "inhabitants": "none",
+   "features": [
+    "technology"
+   ],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Ceys"
+   },
+   "canon": false,
+   "status": "surveyed",
+   "surveyed": true,
+   "names": [],
+   "seen": {
+    "env": "breathable atmosphere",
+    "life": "none detected",
+    "features": "energy readings"
+   },
+   "telemetry": [
+    "ENV: breathable atmosphere",
+    "LIFE: none detected",
+    "FEATURES: energy readings"
+   ],
+   "reports": [
+    [
+     4345,
+     "MALP telemetry: env breathable atmosphere; life none detected; features energy readings"
+    ],
+    [
+     4345,
+     "Telemetry from P9M-125: an energy source somewhere past the treeline, steady and strong. Nothing natural reads like that."
+    ],
+    [
+     5661,
+     "SG-4 checks in from P9M-125: all quiet. Next check-in on schedule."
+    ],
+    [
+     6141,
+     "SG-4 checks in from P9M-125: all quiet. Next check-in on schedule."
+    ],
+    [
+     6457,
+     "SG-4 debrief: P9M-125 is mapped out to five kilometers from the gate. Details are in the report."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "the Abydos cartouche",
+   "last_visit": 6457
+  },
+  {
+   "id": "P6C-845",
+   "glyphs": [
+    7,
+    19,
+    32,
+    6,
+    5,
+    21
+   ],
+   "env": "toxic",
+   "inhabitants": "ally",
+   "features": [],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Ulka'ri"
+   },
+   "canon": false,
+   "status": "surveyed",
+   "surveyed": true,
+   "names": [
+    [
+     "Ulka'ri",
+     "the locals",
+     6980
+    ]
+   ],
+   "seen": {
+    "env": "toxic atmosphere",
+    "life": "life signs"
+   },
+   "telemetry": [
+    "ENV: toxic atmosphere",
+    "LIFE: life signs"
+   ],
+   "reports": [
+    [
+     4965,
+     "MALP telemetry: env toxic atmosphere; life life signs"
+    ],
+    [
+     4965,
+     "Telemetry from P6C-845: the air is thick with sulfur compounds. Anyone going through will need suits."
+    ],
+    [
+     6039,
+     "SG-1 checks in from P6C-845: all quiet. Next check-in on schedule."
+    ],
+    [
+     6519,
+     "SG-1 checks in from P6C-845: all quiet. Next check-in on schedule."
+    ],
+    [
+     6980,
+     "SG-1 debrief: the people of P6C-845 are far more advanced than they let on. They listened politely, and asked a lot about the Goa'uld."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey",
+    "contact"
+   ],
+   "found": "the Abydos cartouche",
+   "last_visit": 6980
+  },
+  {
+   "id": "P9J-918",
+   "glyphs": [
+    9,
+    2,
+    23,
+    15,
+    37,
+    20
+   ],
+   "env": "normal",
+   "inhabitants": "jaffa",
+   "features": [
+    "ruins"
+   ],
+   "owner": "Apophis",
+   "hidden_names": {
+    "locals": "Chulak",
+    "jaffa": "Chulak"
+   },
+   "canon": true,
+   "status": "hostile",
+   "surveyed": true,
+   "names": [
+    [
+     "Chulak",
+     "inscriptions in the ruins",
+     5840
+    ],
+    [
+     "Chulak",
+     "the Jaffa",
+     6631
+    ]
+   ],
+   "seen": {
+    "env": "breathable atmosphere",
+    "life": "life signs",
+    "features": "ruins"
+   },
+   "telemetry": [
+    "ENV: breathable atmosphere",
+    "LIFE: life signs",
+    "FEATURES: ruins"
+   ],
+   "reports": [
+    [
+     5252,
+     "MALP telemetry: env breathable atmosphere; life life signs; features ruins"
+    ],
+    [
+     5252,
+     "Telemetry from P9J-918: the camera pans across broken columns around the gate. Dr. Jackson wants a closer look at the glyphs on the dais."
+    ],
+    [
+     5840,
+     "SG-2 checks in from P9J-918: the ruins go on for kilometers. There's a name carved over every doorway."
+    ],
+    [
+     6200,
+     "SG-2 checks in from Chulak: all quiet. Next check-in on schedule."
+    ],
+    [
+     6565,
+     "SG-2 checks in from Chulak: the ruins go on for kilometers. There's a name carved over every doorway."
+    ],
+    [
+     6631,
+     "SG-2 debrief: Chulak is a Jaffa garrison world. SG-2 listened in on the patrols long enough to learn what the Jaffa call it."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "the Abydos cartouche",
+   "last_visit": 6631
+  },
+  {
+   "id": "P7J-166",
+   "glyphs": [
+    25,
+    3,
+    11,
+    12,
+    21,
+    16
+   ],
+   "env": "normal",
+   "inhabitants": "human",
+   "features": [
+    "naquadah"
+   ],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Langara",
+    "comms": "Kelowna"
+   },
+   "canon": true,
+   "status": "probed",
+   "surveyed": false,
+   "names": [],
+   "seen": {
+    "env": "breathable atmosphere",
+    "life": "life signs",
+    "features": "naquadah traces"
+   },
+   "telemetry": [
+    "ENV: breathable atmosphere",
+    "LIFE: life signs",
+    "FEATURES: naquadah traces"
+   ],
+   "reports": [
+    [
+     5529,
+     "MALP telemetry: env breathable atmosphere; life life signs; features naquadah traces"
+    ],
+    [
+     5529,
+     "Telemetry from P7J-166: smoke on the horizon and a worn path leading from the gate."
+    ],
+    [
+     6970,
+     "SG-4 checks in from P7J-166: all quiet. Next check-in on schedule."
+    ],
+    [
+     7450,
+     "SG-4 checks in from P7J-166: all quiet. Next check-in on schedule."
+    ],
+    [
+     7930,
+     "SG-4 checks in from P7J-166: all quiet. Next check-in on schedule."
+    ]
+   ],
+   "notes": [],
+   "drone": "malp",
+   "options": [
+    "survey"
+   ],
+   "found": "the Abydos cartouche",
+   "last_visit": 5529
+  },
+  {
+   "id": "P5R-443",
+   "glyphs": [
+    23,
+    11,
+    33,
+    28,
+    4,
+    6
+   ],
+   "env": "radiation",
+   "inhabitants": "human",
+   "features": [],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Khehol'ri"
+   },
+   "canon": false,
+   "status": "surveyed",
+   "surveyed": true,
+   "names": [
+    [
+     "Khehol'ri",
+     "the locals",
+     7683
+    ]
+   ],
+   "seen": {
+    "env": "high radiation",
+    "life": "life signs"
+   },
+   "telemetry": [
+    "ENV: high radiation",
+    "LIFE: life signs"
+   ],
+   "reports": [
+    [
+     5630,
+     "MALP telemetry: env high radiation; life life signs"
+    ],
+    [
+     5630,
+     "Telemetry from P5R-443: smoke on the horizon and a worn path leading from the gate."
+    ],
+    [
+     7590,
+     "SG-2 checks in from P5R-443: all quiet. Next check-in on schedule."
+    ],
+    [
+     7683,
+     "SG-2 debrief: the people of P5R-443 know the gate and have seen it used before. They were cautious with us, but not hostile."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey",
+    "contact"
+   ],
+   "found": "the Abydos cartouche",
+   "last_visit": 7683
+  },
+  {
+   "id": "P4X-999",
+   "glyphs": [
+    37,
+    27,
+    38,
+    39,
+    36,
+    8
+   ],
+   "env": "normal",
+   "inhabitants": "human",
+   "features": [
+    "ruins"
+   ],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Vekta"
+   },
+   "canon": false,
+   "status": "probed",
+   "surveyed": false,
+   "names": [],
+   "seen": {
+    "env": "breathable atmosphere",
+    "life": "life signs",
+    "features": "ruins"
+   },
+   "telemetry": [
+    "ENV: breathable atmosphere",
+    "LIFE: life signs",
+    "FEATURES: ruins"
+   ],
+   "reports": [
+    [
+     6545,
+     "MALP telemetry: env breathable atmosphere; life life signs; features ruins"
+    ],
+    [
+     6545,
+     "Telemetry from P4X-999: the camera pans across broken columns around the gate. Dr. Jackson wants a closer look at the glyphs on the dais."
+    ],
+    [
+     7090,
+     "SG-3 checks in from P4X-999: all quiet. Next check-in on schedule."
+    ],
+    [
+     7570,
+     "SG-3 checks in from P4X-999: all quiet. Next check-in on schedule."
+    ]
+   ],
+   "notes": [],
+   "drone": "malp",
+   "options": [
+    "survey"
+   ],
+   "found": "the Abydos cartouche",
+   "last_visit": 6545
+  },
+  {
+   "id": "P3C-418",
+   "glyphs": [
+    33,
+    14,
+    12,
+    23,
+    36,
+    16
+   ],
+   "env": "extreme",
+   "inhabitants": "none",
+   "features": [],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Belta"
+   },
+   "canon": false,
+   "status": "probed",
+   "surveyed": false,
+   "names": [],
+   "seen": {
+    "env": "extreme temperatures"
+   },
+   "telemetry": [],
+   "reports": [
+    [
+     6670,
+     "MALP destroyed. Last reading: extreme temperatures."
+    ],
+    [
+     7500,
+     "SG-1 checks in from P3C-418: all quiet. Next check-in on schedule."
+    ],
+    [
+     7980,
+     "SG-1 checks in from P3C-418: all quiet. Next check-in on schedule."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "intel from SG-1",
+   "last_visit": 6670
+  },
+  {
+   "id": "P3Y-278",
+   "glyphs": [
+    38,
+    15,
+    6,
+    8,
+    28,
+    25
+   ],
+   "env": "radiation",
+   "inhabitants": "human",
+   "features": [
+    "naquadah"
+   ],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Torshar"
+   },
+   "canon": false,
+   "status": "probed",
+   "surveyed": false,
+   "names": [],
+   "seen": {
+    "env": "high radiation",
+    "life": "life signs",
+    "features": "naquadah traces"
+   },
+   "telemetry": [
+    "ENV: high radiation",
+    "LIFE: life signs",
+    "FEATURES: naquadah traces"
+   ],
+   "reports": [
+    [
+     6776,
+     "MALP telemetry: env high radiation; life life signs; features naquadah traces"
+    ],
+    [
+     6776,
+     "Telemetry from P3Y-278: Captain Carter nearly spilled her coffee. The spectrometer shows naquadah in the rocks around the gate."
+    ]
+   ],
+   "notes": [],
+   "drone": "malp",
+   "options": [
+    "survey"
+   ],
+   "found": "intel from SG-2",
+   "last_visit": 6776
+  },
+  {
+   "id": "P8R-537",
+   "glyphs": [
+    16,
+    25,
+    12,
+    36,
+    21,
+    7
+   ],
+   "env": "no_lock",
+   "inhabitants": "none",
+   "features": [],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Vekul"
+   },
+   "canon": false,
+   "status": "lost",
+   "surveyed": false,
+   "names": [],
+   "seen": {},
+   "telemetry": [],
+   "reports": [
+    [
+     7020,
+     "Dialing failed: the seventh chevron would not lock."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "intel from SG-3",
+   "last_visit": null
+  },
+  {
+   "id": "P7M-786",
+   "glyphs": [
+    2,
+    10,
+    12,
+    18,
+    11,
+    28
+   ],
+   "env": "normal",
+   "inhabitants": "none",
+   "features": [],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Holab"
+   },
+   "canon": false,
+   "status": "probed",
+   "surveyed": false,
+   "names": [],
+   "seen": {
+    "env": "breathable atmosphere",
+    "life": "none detected"
+   },
+   "telemetry": [
+    "ENV: breathable atmosphere",
+    "LIFE: none detected"
+   ],
+   "reports": [
+    [
+     7149,
+     "MALP telemetry: env breathable atmosphere; life none detected"
+    ],
+    [
+     7149,
+     "Telemetry from P7M-786: breathable air, mild temperatures, forest right up to the gate. Nothing moving but the wind."
+    ]
+   ],
+   "notes": [],
+   "drone": "malp",
+   "options": [
+    "survey"
+   ],
+   "found": "intel from SG-4",
+   "last_visit": 7149
+  },
+  {
+   "id": "P3C-439",
+   "glyphs": [
+    31,
+    25,
+    9,
+    3,
+    34,
+    21
+   ],
+   "env": "radiation",
+   "inhabitants": "ally",
+   "features": [
+    "technology"
+   ],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Dosri"
+   },
+   "canon": false,
+   "status": "probed",
+   "surveyed": false,
+   "names": [],
+   "seen": {
+    "env": "high radiation",
+    "life": "life signs",
+    "features": "energy readings"
+   },
+   "telemetry": [
+    "ENV: high radiation",
+    "LIFE: life signs",
+    "FEATURES: energy readings"
+   ],
+   "reports": [
+    [
+     7298,
+     "MALP telemetry: env high radiation; life life signs; features energy readings"
+    ],
+    [
+     7298,
+     "Telemetry from P3C-439: radiation readings climb steadily, well above safe limits. Short visits only."
+    ]
+   ],
+   "notes": [],
+   "drone": "malp",
+   "options": [
+    "survey"
+   ],
+   "found": "intel from SG-4",
+   "last_visit": 7298
+  },
+  {
+   "id": "P6C-929",
+   "glyphs": [
+    28,
+    26,
+    9,
+    3,
+    22,
+    6
+   ],
+   "env": "extreme",
+   "inhabitants": "ally",
+   "features": [
+    "ruins"
+   ],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Nelkhece"
+   },
+   "canon": false,
+   "status": "probed",
+   "surveyed": false,
+   "names": [],
+   "seen": {
+    "env": "extreme temperatures"
+   },
+   "telemetry": [],
+   "reports": [
+    [
+     7816,
+     "MALP destroyed. Last reading: extreme temperatures."
+    ]
+   ],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "intel from SG-1",
+   "last_visit": 7816
+  },
+  {
+   "id": "P8R-317",
+   "glyphs": [
+    14,
+    30,
+    32,
+    16,
+    18,
+    36
+   ],
+   "env": "normal",
+   "inhabitants": "ally",
+   "features": [],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Midos"
+   },
+   "canon": false,
+   "status": "unexplored",
+   "surveyed": false,
+   "names": [],
+   "seen": {},
+   "telemetry": [],
+   "reports": [],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "intel from SG-3",
+   "last_visit": null
+  },
+  {
+   "id": "P6R-342",
+   "glyphs": [
+    9,
+    34,
+    38,
+    5,
+    14,
+    23
+   ],
+   "env": "normal",
+   "inhabitants": "human",
+   "features": [
+    "ruins",
+    "technology"
+   ],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Abbel"
+   },
+   "canon": false,
+   "status": "unexplored",
+   "surveyed": false,
+   "names": [],
+   "seen": {},
+   "telemetry": [],
+   "reports": [],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "intel from SG-3",
+   "last_visit": null
+  },
+  {
+   "id": "P2W-821",
+   "glyphs": [
+    6,
+    34,
+    2,
+    16,
+    12,
+    15
+   ],
+   "env": "normal",
+   "inhabitants": "none",
+   "features": [
+    "naquadah"
+   ],
+   "owner": null,
+   "hidden_names": {
+    "locals": "Dosren"
+   },
+   "canon": false,
+   "status": "unexplored",
+   "surveyed": false,
+   "names": [],
+   "seen": {},
+   "telemetry": [],
+   "reports": [],
+   "notes": [],
+   "drone": null,
+   "options": [
+    "survey"
+   ],
+   "found": "intel from SG-4",
+   "last_visit": null
+  }
+ ],
+ "teams": {
+  "SG-1": {
+   "specialty": "elite",
+   "status": "offworld",
+   "idc": "valid",
+   "xp": 5,
+   "until": 0,
+   "where": "P3C-418",
+   "mission": 22
+  },
+  "SG-2": {
+   "specialty": "recon",
+   "status": "offworld",
+   "idc": "valid",
+   "xp": 6,
+   "until": 0,
+   "where": "P7M-786",
+   "mission": 23
+  },
+  "SG-3": {
+   "specialty": "combat",
+   "status": "offworld",
+   "idc": "valid",
+   "xp": 4,
+   "until": 0,
+   "where": "P4X-999",
+   "mission": 20
+  },
+  "SG-4": {
+   "specialty": "science",
+   "status": "offworld",
+   "idc": "valid",
+   "xp": 4,
+   "until": 0,
+   "where": "P7J-166",
+   "mission": 19
+  }
+ },
+ "missions": [
+  {
+   "id": 1,
+   "team": "SG-1",
+   "world": "P9W-161",
+   "type": "survey",
+   "start": 490,
+   "end": 1704,
+   "state": "complete",
+   "casualties": 0,
+   "findings": [
+    "P9W-161 IS CALLED ABYDOS BY INSCRIPTIONS IN THE RUINS",
+    "NEW ADDRESS: P3C-418"
+   ]
+  },
+  {
+   "id": 2,
+   "team": "SG-2",
+   "world": "P8J-989",
+   "type": "survey",
+   "start": 610,
+   "end": 1731,
+   "state": "complete",
+   "casualties": 0,
+   "findings": [
+    "P8J-989 IS CALLED SACE'VEK BY INSCRIPTIONS IN THE RUINS",
+    "NEW ADDRESS: P3Y-278",
+    "SACE'VEK: SURVEYED"
+   ]
+  },
+  {
+   "id": 3,
+   "team": "SG-3",
+   "world": "P4J-765",
+   "type": "survey",
+   "start": 670,
+   "end": 2002,
+   "state": "complete",
+   "casualties": 0,
+   "findings": [
+    "P4J-765: SURVEYED"
+   ]
+  },
+  {
+   "id": 4,
+   "team": "SG-4",
+   "world": "P4R-324",
+   "type": "survey",
+   "start": 720,
+   "end": 1990,
+   "state": "complete",
+   "casualties": 0,
+   "findings": [
+    "P4R-324: SURVEYED"
+   ]
+  },
+  {
+   "id": 5,
+   "team": "SG-1",
+   "world": "P2J-155",
+   "type": "survey",
+   "start": 1740,
+   "end": 3030,
+   "state": "complete",
+   "casualties": 0,
+   "findings": [
+    "P2J-155: SURVEYED"
+   ]
+  },
+  {
+   "id": 6,
+   "team": "SG-2",
+   "world": "P7X-871",
+   "type": "survey",
+   "start": 1930,
+   "end": 2985,
+   "state": "complete",
+   "casualties": 0,
+   "findings": [
+    "P7X-871: SURVEYED"
+   ]
+  },
+  {
+   "id": 7,
+   "team": "SG-3",
+   "world": "P5A-975",
+   "type": "survey",
+   "start": 2050,
+   "end": 3419,
+   "state": "complete",
+   "casualties": 0,
+   "findings": [
+    "P5A-975 IS CALLED KHEB BY INSCRIPTIONS IN THE RUINS",
+    "NEW ADDRESS: P8R-537",
+    "P5A-975: SURVEYED"
+   ]
+  },
+  {
+   "id": 8,
+   "team": "SG-4",
+   "world": "P9W-161",
+   "type": "survey",
+   "start": 2065,
+   "end": 3783,
+   "state": "complete",
+   "casualties": 0,
+   "findings": [
+    "NEW ADDRESS: P7M-786",
+    "NEW ADDRESS: P3C-439"
+   ]
+  },
+  {
+   "id": 9,
+   "team": "SG-2",
+   "world": "P9J-824",
+   "type": "survey",
+   "start": 3050,
+   "end": 4186,
+   "state": "complete",
+   "casualties": 0,
+   "findings": [
+    "SG-2 PROMOTED: SEASONED",
+    "P9J-824: SURVEYED"
+   ]
+  },
+  {
+   "id": 10,
+   "team": "SG-1",
+   "world": "P5X-700",
+   "type": "survey",
+   "start": 3075,
+   "end": 4198,
+   "state": "complete",
+   "casualties": 0,
+   "findings": [
+    "P5X-700 IS CALLED TAUL BY INSCRIPTIONS IN THE RUINS",
+    "NEW ADDRESS: P6C-929",
+    "SG-1 PROMOTED: SEASONED",
+    "P5X-700: SURVEYED"
+   ]
+  },
+  {
+   "id": 11,
+   "team": "SG-3",
+   "world": "P5X-356",
+   "type": "survey",
+   "start": 3445,
+   "end": 4809,
+   "state": "complete",
+   "casualties": 0,
+   "findings": [
+    "P5X-356 IS CALLED CIMMERIA BY INSCRIPTIONS IN THE RUINS",
+    "NEW ADDRESS: P8R-317",
+    "SG-3 PROMOTED: SEASONED",
+    "P5X-356: SURVEYED",
+    "NEW ADDRESS: P6R-342"
+   ]
+  },
+  {
+   "id": 12,
+   "team": "SG-4",
+   "world": "P4C-152",
+   "type": "survey",
+   "start": 3840,
+   "end": 5156,
+   "state": "complete",
+   "casualties": 0,
+   "findings": [
+    "SG-4 PROMOTED: SEASONED",
+    "P4C-152: SURVEYED",
+    "NEW ADDRESS: P2W-821"
+   ]
+  },
+  {
+   "id": 13,
+   "team": "SG-2",
+   "world": "P6M-988",
+   "type": "survey",
+   "start": 4226,
+   "end": 5424,
+   "state": "complete",
+   "casualties": 0,
+   "findings": [
+    "P6M-988: SURVEYED"
+   ]
+  },
+  {
+   "id": 14,
+   "team": "SG-1",
+   "world": "P4Y-429",
+   "type": "survey",
+   "start": 4270,
+   "end": 5514,
+   "state": "complete",
+   "casualties": 0,
+   "findings": [
+    "P4Y-429 IS CALLED DOSKAKHE BY INSCRIPTIONS IN THE RUINS",
+    "DOSKAKHE: SURVEYED"
+   ]
+  },
+  {
+   "id": 15,
+   "team": "SG-3",
+   "world": "P3X-673",
+   "type": "survey",
+   "start": 4870,
+   "end": 6576,
+   "state": "complete",
+   "casualties": 0,
+   "findings": [
+    "P3X-673 IS CALLED SHAREM'KA BY INSCRIPTIONS IN THE RUINS",
+    "SHAREM'KA: SURVEYED"
+   ]
+  },
+  {
+   "id": 16,
+   "team": "SG-4",
+   "world": "P9M-125",
+   "type": "survey",
+   "start": 5181,
+   "end": 6457,
+   "state": "complete",
+   "casualties": 0,
+   "findings": [
+    "P9M-125: SURVEYED"
+   ]
+  },
+  {
+   "id": 17,
+   "team": "SG-2",
+   "world": "P9J-918",
+   "type": "survey",
+   "start": 5470,
+   "end": 6631,
+   "state": "complete",
+   "casualties": 0,
+   "findings": [
+    "P9J-918 IS CALLED CHULAK BY INSCRIPTIONS IN THE RUINS",
+    "P9J-918 IS CALLED CHULAK BY THE JAFFA",
+    "CHULAK: HOSTILE",
+    "CHULAK: SURVEYED"
+   ]
+  },
+  {
+   "id": 18,
+   "team": "SG-1",
+   "world": "P6C-845",
+   "type": "survey",
+   "start": 5559,
+   "end": 6970,
+   "state": "complete",
+   "casualties": 0,
+   "findings": [
+    "P6C-845 IS CALLED ULKA'RI BY THE LOCALS",
+    "CONTACT MISSIONS POSSIBLE ON ULKA'RI",
+    "P6C-845: SURVEYED"
+   ]
+  },
+  {
+   "id": 19,
+   "team": "SG-4",
+   "world": "P7J-166",
+   "type": "survey",
+   "start": 6490,
+   "end": 8205,
+   "state": "active",
+   "casualties": 0,
+   "findings": []
+  },
+  {
+   "id": 20,
+   "team": "SG-3",
+   "world": "P4X-999",
+   "type": "survey",
+   "start": 6610,
+   "end": 8237,
+   "state": "active",
+   "casualties": 0,
+   "findings": []
+  },
+  {
+   "id": 21,
+   "team": "SG-2",
+   "world": "P5R-443",
+   "type": "survey",
+   "start": 6690,
+   "end": 7683,
+   "state": "complete",
+   "casualties": 0,
+   "findings": [
+    "P5R-443 IS CALLED KHEHOL'RI BY THE LOCALS",
+    "CONTACT MISSIONS POSSIBLE ON KHEHOL'RI",
+    "P5R-443: SURVEYED"
+   ]
+  },
+  {
+   "id": 22,
+   "team": "SG-1",
+   "world": "P3C-418",
+   "type": "survey",
+   "start": 7020,
+   "end": 8411,
+   "state": "active",
+   "casualties": 0,
+   "findings": []
+  },
+  {
+   "id": 23,
+   "team": "SG-2",
+   "world": "P7M-786",
+   "type": "survey",
+   "start": 7750,
+   "end": 8748,
+   "state": "active",
+   "casualties": 0,
+   "findings": []
+  }
+ ],
+ "stock": {
+  "malp": 0,
+  "uav": 3
+ },
+ "orders": {
+  "unknown_idc": "closed",
+  "hostiles_following": "open_briefly",
+  "bad_idc": "closed_alert",
+  "object": "seal",
+  "missed_checkin": "malp",
+  "under_fire": "recall",
+  "contact_offer": "defer"
+ },
+ "meters": {
+  "security": 86,
+  "personnel": 100
+ },
+ "inventory": [],
+ "used": [],
+ "alarms": [
+  {
+   "type": "node",
+   "scenario": "checkin_locals",
+   "node": "start",
+   "bind": {
+    "world": "P4X-999",
+    "world_id": "P4X-999",
+    "designation": "P4X-999",
+    "team": "SG-3",
+    "specialty": "combat",
+    "mission": "20"
+   },
+   "deadline": 8230,
+   "title": "CHECK-IN",
+   "text": "SG-3 checks in from P4X-999: villagers came out to meet them, and the elders want to talk. SG-3 asks for instructions."
+  }
+ ],
+ "record": {
+  "missions": 23,
+  "personnel_lost": 0,
+  "teams_lost": 0,
+  "probes": 25,
+  "surveyed": 18
+ },
+ "rng_state": [
+  3,
+  [
+   2209797851,
+   1310782419,
+   3119086015,
+   1729616049,
+   3847713558,
+   3139771108,
+   2455593149,
+   3244754123,
+   3577021632,
+   1913712266,
+   737322571,
+   3615952240,
+   18424935,
+   1596446038,
+   916716787,
+   2212648123,
+   769310697,
+   3313257811,
+   3293819628,
+   3627437201,
+   36460796,
+   2846190702,
+   3878573405,
+   2747625764,
+   1428796091,
+   1628432771,
+   2260628874,
+   1519186401,
+   1063032541,
+   1709885350,
+   2738772443,
+   1979201122,
+   114541802,
+   2883602358,
+   4077737636,
+   173898411,
+   2342798504,
+   2450926409,
+   2232824625,
+   4033330503,
+   2343616686,
+   1515570958,
+   4051615260,
+   3522546727,
+   533417299,
+   3759121372,
+   696316160,
+   2870856616,
+   3323407354,
+   2866088407,
+   3692585413,
+   843123312,
+   2332531573,
+   405676999,
+   2415026264,
+   4280820917,
+   2774053132,
+   4108276368,
+   1219140474,
+   903806648,
+   3377497524,
+   108303057,
+   4102665952,
+   2550424930,
+   2100374658,
+   3266874912,
+   4077700395,
+   2986480159,
+   139009351,
+   3041653074,
+   3839964247,
+   4199433129,
+   1936388353,
+   1838224327,
+   2781758059,
+   4239229206,
+   856134791,
+   861511663,
+   581911872,
+   2786597277,
+   161930731,
+   445774403,
+   2395212803,
+   3311681945,
+   3758626802,
+   925604840,
+   517910525,
+   1064137318,
+   695871777,
+   3016363843,
+   2805185051,
+   1230244323,
+   2835894583,
+   290837395,
+   1816834323,
+   3421863065,
+   3594521870,
+   2677875623,
+   4256153362,
+   1405132945,
+   791242287,
+   766814324,
+   1464935610,
+   2427611059,
+   3944445252,
+   1276868917,
+   1051991688,
+   3108471098,
+   2375801108,
+   130419865,
+   2775849674,
+   3718610980,
+   2752757474,
+   2555610261,
+   731605625,
+   4283257435,
+   597342503,
+   94149598,
+   1947300720,
+   3674159161,
+   3642772569,
+   171502344,
+   3062579376,
+   1893076807,
+   3467331993,
+   1938238711,
+   1173227143,
+   4225576996,
+   2389174523,
+   1254780947,
+   32373735,
+   654097312,
+   3633648030,
+   1765314267,
+   1033437443,
+   2404206575,
+   3142312706,
+   346022565,
+   3757977821,
+   3975284955,
+   172054339,
+   141173632,
+   3294911448,
+   3847655497,
+   3128512066,
+   3166827120,
+   2909018246,
+   1745154100,
+   2581131425,
+   3032815063,
+   4171776785,
+   1561944867,
+   1736557639,
+   4280846812,
+   3336183825,
+   3773651363,
+   1187013754,
+   3337926801,
+   557553004,
+   2492430200,
+   3031824664,
+   2471699653,
+   2044248862,
+   2979841546,
+   1197296108,
+   2204504526,
+   2891924611,
+   3630721777,
+   2235864090,
+   2407183217,
+   4267192286,
+   3219204226,
+   1467462895,
+   1362378104,
+   213283131,
+   1644127254,
+   4292149487,
+   1518053450,
+   2625923248,
+   4079228224,
+   84463266,
+   3848195982,
+   1458295978,
+   1774367083,
+   1811631071,
+   781530395,
+   3367450532,
+   410798176,
+   312908111,
+   525593586,
+   280418179,
+   2123030836,
+   4211165599,
+   1461861714,
+   3626322618,
+   2710631310,
+   2434646958,
+   1656130410,
+   1378799180,
+   2779553398,
+   1758697796,
+   363954851,
+   4195654717,
+   4142148649,
+   3556992360,
+   1445991129,
+   2712977377,
+   2623222904,
+   3995417036,
+   3115788929,
+   1699325857,
+   509693981,
+   917411528,
+   600406579,
+   2061828895,
+   1876262424,
+   3795137002,
+   3270017248,
+   1347667415,
+   2479809997,
+   2036299856,
+   1042672787,
+   994669106,
+   433972083,
+   2502275038,
+   2635213551,
+   1402784491,
+   1116441945,
+   2581750609,
+   1873499699,
+   744207079,
+   2742614651,
+   2608503629,
+   2626117734,
+   1428853800,
+   28090190,
+   3696488853,
+   930414318,
+   4047203678,
+   1034926196,
+   202997008,
+   2388538012,
+   1475336311,
+   1795307474,
+   3168055834,
+   2131291408,
+   3231249933,
+   3728385138,
+   596052658,
+   3596044582,
+   1203065752,
+   1748127939,
+   3932865294,
+   149286079,
+   1953265224,
+   719931609,
+   2888978460,
+   3142736816,
+   3705800512,
+   3523583006,
+   837382245,
+   3599650457,
+   2286439512,
+   4018165742,
+   3724674978,
+   1336004804,
+   462879669,
+   1727727622,
+   531401034,
+   212853857,
+   1136148421,
+   238676462,
+   3349901886,
+   2915514296,
+   287788277,
+   3864137436,
+   2932501431,
+   882058814,
+   6462233,
+   1701589250,
+   670526219,
+   2293543260,
+   3754637968,
+   4233368352,
+   745686586,
+   3991380204,
+   278647854,
+   2766957114,
+   1734452913,
+   2073953046,
+   919618676,
+   2632861443,
+   3416910172,
+   3581023649,
+   1721790903,
+   3904737182,
+   3116750505,
+   2114602060,
+   1399141197,
+   2668710826,
+   2708969026,
+   2009997944,
+   3043948900,
+   2857570347,
+   1504356700,
+   3476754486,
+   337605601,
+   911541056,
+   4293815931,
+   965782150,
+   1795609552,
+   298342213,
+   650242036,
+   3453531348,
+   2748987729,
+   2269603523,
+   502899805,
+   2625258973,
+   1852894249,
+   660403865,
+   3100750820,
+   978021276,
+   3316199148,
+   4145513117,
+   1788569554,
+   3439492090,
+   3283779360,
+   3044239256,
+   160181619,
+   3084803175,
+   2577591468,
+   1376054904,
+   2092719290,
+   2359281501,
+   3297694246,
+   1842825422,
+   1015770166,
+   1246673105,
+   2184121317,
+   1431854310,
+   3554900576,
+   431607805,
+   1831438130,
+   4227227974,
+   3051300990,
+   2757854026,
+   1255948428,
+   2055851598,
+   3761123598,
+   1196946284,
+   124437989,
+   862640847,
+   1975991680,
+   3371472232,
+   3981850462,
+   2639877961,
+   1184932315,
+   3046627654,
+   2358835955,
+   796076182,
+   1724397586,
+   600760907,
+   2731800228,
+   1040790674,
+   1663004970,
+   4110944865,
+   3176958951,
+   3197997473,
+   3764669238,
+   648306548,
+   3028635007,
+   1326689237,
+   3099174219,
+   1406987327,
+   4169621564,
+   1077284560,
+   2516588097,
+   2471331236,
+   3175561268,
+   217180289,
+   779878243,
+   1879375519,
+   1828672530,
+   3941218980,
+   399632375,
+   1004177505,
+   1473602859,
+   1904936758,
+   1900322626,
+   1544744567,
+   3189862981,
+   58354446,
+   2834805588,
+   2219429266,
+   2405529016,
+   1179509839,
+   4010806002,
+   540066322,
+   4058066641,
+   2591914617,
+   2604737954,
+   512638304,
+   655555105,
+   2179475744,
+   3877613125,
+   3960129923,
+   3514780936,
+   124580710,
+   1449363681,
+   2013889872,
+   1215106344,
+   4197253243,
+   1771495503,
+   630786633,
+   900482710,
+   1973567676,
+   1003676130,
+   392009020,
+   929303200,
+   307990821,
+   733333158,
+   4216766864,
+   2751800975,
+   3091636639,
+   1334769440,
+   2463922810,
+   3388610742,
+   762363895,
+   224523551,
+   3653083983,
+   29571225,
+   599315482,
+   4206135812,
+   793042001,
+   1301837150,
+   540221098,
+   3673904522,
+   1535115606,
+   3126969041,
+   188941058,
+   4131222413,
+   467618210,
+   3433545803,
+   1667939342,
+   3286581763,
+   3426271201,
+   4134542474,
+   276670496,
+   2094650693,
+   3323406832,
+   2146918767,
+   1031272631,
+   613070666,
+   3181618072,
+   562645249,
+   2224965962,
+   3334254493,
+   308090498,
+   614051428,
+   2859866281,
+   2195356933,
+   1528160606,
+   1665293824,
+   3560386823,
+   1653238791,
+   2725687622,
+   2222859255,
+   1219747448,
+   2762083723,
+   4064948773,
+   3751507603,
+   1521076257,
+   1526035386,
+   1994271318,
+   634479170,
+   126809755,
+   1304318434,
+   227083616,
+   3463927535,
+   1085672862,
+   59608601,
+   3469172179,
+   3610547909,
+   686220939,
+   2770248908,
+   1064340784,
+   2561249201,
+   3958823323,
+   328331370,
+   513803273,
+   4280021345,
+   3710545529,
+   3066618007,
+   3163774037,
+   144496269,
+   3103743181,
+   1449446697,
+   3814810562,
+   284014431,
+   3179178546,
+   218875862,
+   3770807197,
+   3474860314,
+   3787757823,
+   1433030609,
+   1131933,
+   4205876781,
+   3299645145,
+   1827636727,
+   3286057352,
+   709834818,
+   2264172117,
+   1495718922,
+   3772531191,
+   1805614860,
+   2228073479,
+   3516977410,
+   656116110,
+   2175707694,
+   540089995,
+   2360458992,
+   3180823070,
+   275972642,
+   334044058,
+   2622249266,
+   2638122058,
+   1496683466,
+   1280312640,
+   718933516,
+   1185455907,
+   3399448045,
+   1225333306,
+   3862527484,
+   3917756875,
+   1175269666,
+   2032851053,
+   2284216277,
+   333256132,
+   1254954251,
+   3394290506,
+   2793673908,
+   4107471281,
+   3714584622,
+   2652656726,
+   3049257932,
+   405616044,
+   2858270748,
+   2307569624,
+   2160637854,
+   1985096318,
+   2943306173,
+   3827956010,
+   3726200833,
+   3803601849,
+   1648722156,
+   1913238844,
+   177235316,
+   974080905,
+   3599530103,
+   2194255292,
+   504324636,
+   1234932344,
+   3153476750,
+   4159951556,
+   1044841595,
+   2594661005,
+   4107966045,
+   2214358026,
+   1144592615,
+   81000664,
+   701228785,
+   1774651308,
+   1033723981,
+   92419257,
+   318046185,
+   2811172968,
+   2718056043,
+   638283309,
+   2334846417,
+   1444830275,
+   3291925066,
+   3995904012,
+   829773945,
+   3208331298,
+   3341973591,
+   2586768678,
+   3109668288,
+   3713918033,
+   3171783699,
+   3359880185,
+   1714687774,
+   692911729,
+   2576318252,
+   1390186656,
+   1833519037,
+   2874524020,
+   3460414965,
+   750244811,
+   1042970649,
+   1287970903,
+   1600266623,
+   1324127159,
+   2085884600,
+   1826115555,
+   1695027055,
+   1110468416,
+   2345100366,
+   464296305,
+   1086661894,
+   2891767629,
+   1889238492,
+   836501391,
+   1443901550,
+   4204111709,
+   1381984794,
+   1249215042,
+   4121858473,
+   96740386,
+   1973019081,
+   3581678156,
+   2034987407,
+   3211712661,
+   1320598276,
+   935579968,
+   487
+  ],
+  null
+ ],
+ "over": null
+}

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
+from functools import cache
 
 from ..addresses import Address, load_canon
 
@@ -17,6 +18,13 @@ SOURCE_TEXT = {"locals": "the locals", "ruins": "inscriptions in the ruins", "ja
                "goauld": "a Goa'uld database", "comms": "a UAV comms intercept", "allies": "allied intelligence",
                "records": "SGC records"}
 GOAULD = ("Apophis", "Heru'ur", "Sokar", "Cronus", "Ba'al", "Yu", "Nirrti", "Svarog", "Olokun", "Bastet")
+GOAULD_IDS = {"Apophis": "apophis", "Heru'ur": "heruur", "Sokar": "sokar", "Cronus": "cronus", "Ba'al": "baal",
+              "Yu": "yu", "Nirrti": "nirrti", "Svarog": "svarog", "Olokun": "olokun", "Bastet": "bastet"}
+ALLY_NAMES = {"tokra": "the Tok'ra", "asgard": "the Asgard", "tollan": "the Tollan", "nox": "the Nox",
+              "jaffa": "the Free Jaffa", "locals": "local peoples"}
+FACTION_IDS = (*GOAULD_IDS.values(), *ALLY_NAMES)
+FACTION_KIND = {**{f: "goauld" for f in GOAULD_IDS.values()}, **{f: "ally" for f in ALLY_NAMES}}
+_GOAULD_NAMES = {fid: name for name, fid in GOAULD_IDS.items()}
 CARTOUCHE = "the Abydos cartouche"
 CARTOUCHE_SIZE = 20
 _LETTERS = "XCJMRWYAB"
@@ -36,6 +44,12 @@ CANON = {
     "Juna": ("normal", "human", (), None, {"locals": "Juna"}),
 }
 CAMPAIGN_CANON = ("Chulak", "Cimmeria", "Kheb", "K'tau", "Langara", "Tollana", "Juna")
+# Worlds the arcs need that data/addresses.json doesn't have: glyphs, environment, inhabitants, features,
+# owner and hidden names. The glyphs are placeholders until the SG-1 content pack supplies canon ones.
+ARC_WORLDS = {
+    "Vorash": ((11, 27, 3, 19, 36, 8), "normal", "ally", (), None, {"allies": "Vorash"}),
+}
+PLACES = (*CANON, *ARC_WORLDS)
 
 
 @dataclass
@@ -155,7 +169,33 @@ def canon_world(name: str) -> World:
     return World(designation(glyphs), glyphs, env, inhabitants, features, owner, dict(names), canon=True)
 
 
-def cartouche(mode: str, seed: int, minute: int) -> dict[str, World]:
+def faction_name(fid: str) -> str:
+    """'Apophis', "the Tok'ra"."""
+    return _GOAULD_NAMES.get(fid) or ALLY_NAMES[fid]
+
+
+def faction_id(owner: str | None) -> str | None:
+    """The faction id of a world's owner ("Heru'ur" -> "heruur"); None for an unowned world."""
+    return GOAULD_IDS.get(owner) if owner else None
+
+
+def place(name: str) -> World:
+    """A named canon or arc world, with its traits and hidden names."""
+    if name in CANON:
+        return canon_world(name)
+    glyphs, env, inhabitants, features, owner, names = ARC_WORLDS[name]
+    return World(designation(glyphs), glyphs, env, inhabitants, features, owner, dict(names), canon=True)
+
+
+@cache                                  # rules resolve @Name tokens often; load_canon reads a file
+def place_id(name: str) -> str:
+    """The designation of a named canon or arc world, e.g. place_id("Chulak")."""
+    if name in CANON:
+        return designation(next(a.glyphs for a in load_canon() if a.name == name))
+    return designation(ARC_WORLDS[name][0])
+
+
+def cartouche(mode: str, seed: int, minute: int, reserved: set[str] = frozenset()) -> dict[str, World]:
     """The starting dialing list: 20 addresses, Abydos first.
 
     Campaign places the canon worlds; Sandbox is Abydos plus generated worlds, with Goa'uld-held
@@ -169,7 +209,7 @@ def cartouche(mode: str, seed: int, minute: int) -> dict[str, World]:
     worlds = [abydos]
     if mode == "campaign":
         worlds += [canon_world(n) for n in CAMPAIGN_CANON]
-    taken = {w.id for w in worlds}
+    taken = {w.id for w in worlds} | set(reserved)
     while len(worlds) < CARTOUCHE_SIZE:
         w = generate(rng, taken, owner_odds=1.0 if mode == "campaign" else 0.3)
         taken.add(w.id)

@@ -3,9 +3,10 @@ import random
 
 import pytest
 
-from sgc.game import clock, orders, rules
-from sgc.game.state import (RANKS, ROSTER, TEAMS, Mission, Team, available_teams, demote, from_dict,
-                            has_specialty, new_campaign, rank, rank_index, to_dict)
+from sgc.game import clock, orders, rules, world
+from sgc.game.state import (ALL_TEAMS, ARC_IDS, CORE_TEAMS, RANKS, ROSTER, ArcState, CapturedDrone, Deal, Mission,
+                            Team, available_teams, demote, from_dict, has_specialty, new_campaign, rank, rank_index,
+                            team_names, to_dict, upgrade_v2)
 
 
 def test_new_campaign_starts_at_eight_with_the_cartouche_and_the_roster():
@@ -18,7 +19,8 @@ def test_new_campaign_starts_at_eight_with_the_cartouche_and_the_roster():
     assert c.meters == {"security": 70, "personnel": 80} and c.stock == {"malp": 4, "uav": 2}
     assert c.orders == orders.defaults() and c.alarms == [] and c.missions == []
     kinds = [e.kind for e in c.events]
-    assert kinds == ["recovery_tick", "incoming"] and c.events.peek().due == 540
+    assert kinds == ["recovery_tick", "incoming", "funding_review"] and c.events.peek().due == 540
+    assert list(c.events)[2].due == clock.START + 7 * clock.DAY
     assert 480 + 36 * 60 <= list(c.events)[1].due <= 480 + 96 * 60
 
 
@@ -189,8 +191,17 @@ def test_from_dict_rejects_a_team_return_naming_an_unknown_team():
         from_dict(d)
 
 
-def test_teams_are_the_four_sg_teams():
-    assert TEAMS == ("SG-1", "SG-2", "SG-3", "SG-4")
+def test_the_roster_starts_with_four_teams_and_can_grow_to_sg12():
+    assert CORE_TEAMS == ("SG-1", "SG-2", "SG-3", "SG-4") and ALL_TEAMS[-1] == "SG-12" and len(ALL_TEAMS) == 12
+    c = new_campaign("campaign", "officer", 1)
+    c.teams["SG-10"] = Team("medical")
+    c.teams["SG-5"] = Team("recon", status="forming", until=c.now + 60)
+    assert team_names(c) == ["SG-1", "SG-2", "SG-3", "SG-4", "SG-5", "SG-10"]
+    assert available_teams(c) == ["SG-1", "SG-2", "SG-3", "SG-4", "SG-10"]
+    assert from_dict(json.loads(json.dumps(to_dict(c)))) == c
+    del c.teams["SG-2"]
+    with pytest.raises(ValueError):
+        from_dict(to_dict(c))                    # the core teams never leave the roster
 
 
 W0 = "@world"                   # stands for a real world id of the busy campaign
@@ -283,3 +294,104 @@ def test_saves_no_longer_carry_check_in_counts_but_older_saves_still_load():
     assert "checkins" not in d["missions"][0] and "missed" not in d["missions"][0]
     d["missions"][0] |= {"checkins": 2, "missed": 1}                   # as a save from before
     assert from_dict(d) == c
+
+
+def test_a_new_campaign_has_funding_factions_and_arcs():
+    c = new_campaign("campaign", "officer", 42)
+    assert c.funding == 500 and c.naquadah == 0 and c.upgrades == set() and c.reserve == {"malp": 2, "uav": 0}
+    assert set(c.factions) == set(world.FACTION_IDS) and not any(f.known for f in c.factions.values())
+    assert c.factions["apophis"].kind == "goauld" and c.factions["tokra"].kind == "ally"
+    assert all(f.attention == 0 and f.trust == 0 for f in c.factions.values())
+    assert c.arcs == {a: ArcState() for a in ARC_IDS} and c.deals == [] and c.captured_drones == []
+    assert [w.hidden_names for w in c.unlisted.values()] == [{"allies": "Vorash"}]
+    assert not set(c.unlisted) & set(c.worlds)
+    assert c.ledger == dict.fromkeys(("intel", "tech", "allies", "missions", "arcs", "lost", "captured",
+                                      "breaches", "incidents"), 0)
+    assert c.won is None and c.ending is None and c.hints == set() and c.reviews == []
+    s = new_campaign("sandbox", "officer", 42)
+    assert s.arcs == {} and s.unlisted == {} and set(s.factions) == set(world.FACTION_IDS)
+
+
+def test_secondary_specialties_count():
+    t = Team("combat", secondary="medical")
+    assert has_specialty(t, "medical") and has_specialty(t, "combat") and not has_specialty(t, "science")
+
+
+def stage2_campaign():
+    c, rng = busy_campaign()
+    w = list(c.worlds)[3]
+    c.funding, c.naquadah, c.upgrades = 345, 7, {"uav_program", "iris_reinforcement"}
+    c.reserve = {"malp": 3, "uav": 1}
+    c.factions["apophis"].attention, c.factions["apophis"].known = 55, True
+    c.factions["apophis"].source, c.factions["apophis"].quiet_since = "the Jaffa", 900
+    c.factions["tokra"].trust = 30
+    c.arcs["apophis"] = ArcState("active", 2, 700, None, 5000)
+    c.deals.append(Deal(1, w, "naquadah", 2, 1600, 5))
+    c.captured_drones.append(CapturedDrone("uav", w, 800, located=True))
+    c.ledger["intel"] = 4
+    c.reviews.append((480, 300, "BASE 300"))
+    c.teams["SG-6"] = Team("diplomatic", status="training", until=1400, secondary="medical")
+    c.missions[0].target = None
+    c.hints.add("explored")
+    c.won = 990
+    c.events.push(1600, "trade_delivery", {"deal": 1})
+    c.events.push(1700, "faction_action", {"faction": "apophis"})
+    c.events.push(5000, "arc_step", {"arc": "apophis", "stage": 2})
+    return c, rng
+
+
+def test_round_trip_keeps_every_stage_2_field():
+    c, _ = stage2_campaign()
+    back = from_dict(json.loads(json.dumps(to_dict(c))))
+    assert back == c and back.deal(1).amount == 2 and back.unlisted == c.unlisted
+
+
+@pytest.mark.parametrize("path,value", [
+    (("funding",), -1), (("funding",), "lots"), (("naquadah",), -3),
+    (("upgrades",), ["warp_drive"]), (("reserve", "malp"), 9), (("reserve",), {"malp": 1}),
+    (("factions", "apophis", "attention"), 101), (("factions", "apophis", "kind"), "ally"),
+    (("factions", "tokra", "trust"), -1), (("factions",), {}),
+    (("arcs", "apophis", "state"), "sleeping"), (("arcs", "apophis", "stage"), -1), (("arcs",), {"ghost": {}}),
+    (("deals", 0, "world"), "XX-000"), (("deals", 0, "goods"), "spice"), (("deals", 0, "state"), "paused"),
+    (("captured_drones", 0, "drone"), "rover"), (("captured_drones", 0, "world"), "XX-000"),
+    (("ledger",), {"intel": 1}), (("won",), "yes"), (("ending",), "bored"), (("hints",), [3]),
+    (("teams", "SG-6", "secondary"), "cooking"), (("missions", 0, "target"), 5),
+])
+def test_from_dict_rejects_bad_stage_2_values(path, value):
+    d = to_dict(stage2_campaign()[0])
+    target = d
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = value
+    with pytest.raises(ValueError):
+        from_dict(d)
+
+
+@pytest.mark.parametrize("kind,data", [
+    ("faction_action", {}), ("faction_action", {"faction": "tokra"}), ("faction_action", {"faction": "zeus"}),
+    ("trade_delivery", {}), ("trade_delivery", {"deal": 99}),
+    ("arc_step", {"arc": "apophis"}), ("arc_step", {"arc": "ghost", "stage": 1}),
+    ("arc_step", {"arc": "apophis", "stage": 0}),
+])
+def test_from_dict_rejects_bad_stage_2_events(kind, data):
+    d = to_dict(stage2_campaign()[0])
+    d["events"].append({"due": 2000, "seq": 999, "kind": kind, "data": data})
+    with pytest.raises(ValueError):
+        from_dict(d)
+
+
+def test_a_stage_1_save_is_upgraded_with_nothing_in_flight_lost():
+    with open("tests/data/stage1_save.json") as f:
+        old = json.load(f)
+    c = from_dict(upgrade_v2(old))
+    assert c.minutes == old["minutes"] and len(c.missions) == len(old["missions"])
+    assert [(e.due, e.kind) for e in c.events if e.kind != "funding_review"] == \
+        [(e["due"], e["kind"]) for e in sorted(old["events"], key=lambda e: (e["due"], e["seq"]))]
+    review = next(e for e in c.events if e.kind == "funding_review")
+    assert review.due > c.minutes and (review.due - clock.START) % (7 * clock.DAY) == 0
+    assert c.funding == 500 and c.upgrades == {"uav_program"} and c.stock == old["stock"]
+    assert c.arcs == {a: ArcState() for a in ARC_IDS} and set(c.unlisted) == {world.place_id("Vorash")}
+    assert all(t.secondary is None for t in c.teams.values()) and all(m.target is None for m in c.missions)
+    assert old["version"] == 2                                  # the input is left alone
+    with pytest.raises(ValueError):
+        upgrade_v2({"version": 3})

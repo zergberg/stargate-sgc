@@ -98,3 +98,26 @@ def test_uav_readings_say_more_than_a_malp():
     assert uav["count"].startswith("about ") and uav["life"] == "humanoid life signs"
     assert world.readings(w, "malp", "minimal", random.Random(1)) == {"env": "toxic atmosphere",
                                                                       "life": "inconclusive"}
+
+
+def test_factions_have_ids_names_and_kinds():
+    assert world.FACTION_IDS[:2] == ("apophis", "heruur") and "tokra" in world.FACTION_IDS
+    assert len(world.FACTION_IDS) == len(set(world.FACTION_IDS)) == len(world.GOAULD) + 6
+    assert world.faction_name("heruur") == "Heru'ur" and world.faction_name("tokra") == "the Tok'ra"
+    assert world.faction_id("Ba'al") == "baal" and world.faction_id(None) is None
+    assert world.FACTION_KIND["yu"] == "goauld" and world.FACTION_KIND["locals"] == "ally"
+
+
+def test_places_are_canon_or_arc_worlds_with_stable_unique_designations():
+    assert world.place_id("Chulak") == world.canon_world("Chulak").id
+    vorash = world.place("Vorash")
+    assert vorash.id == world.place_id("Vorash") and vorash.hidden_names == {"allies": "Vorash"}
+    assert vorash.inhabitants == "ally" and vorash.canon and vorash.name == vorash.id
+    ids = [world.place_id(n) for n in world.PLACES]
+    assert len(ids) == len(set(ids))
+
+
+def test_the_cartouche_never_uses_a_reserved_designation():
+    reserved = {world.place_id("Vorash")}
+    for seed in range(40):
+        assert not reserved & set(world.cartouche("campaign", seed, 480, reserved=reserved))

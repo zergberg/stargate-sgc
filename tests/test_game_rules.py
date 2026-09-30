@@ -41,7 +41,7 @@ def test_single_use_flags_count_as_gone_once_used():
     assert not rules.parse_cond("ally.asgard")(c, {})
 
 
-@pytest.mark.parametrize("bad", ["", "security >= lots", "moral > 3", "team SG-9 base", "team SG-1 napping",
+@pytest.mark.parametrize("bad", ["", "security >= lots", "moral > 3", "team SG-13 base", "team SG-1 napping",
                                  "not ally.goauld", "intel >= 10", "cycles >= 2", "goauld Apophis strength < 2"])
 def test_bad_conditions_raise(bad):
     with pytest.raises(rules.RuleError):
@@ -274,7 +274,7 @@ def test_team_specialty_and_rank_conditions():
     assert rules.parse_cond("rank SG-3 == green")(c, b)
 
 
-@pytest.mark.parametrize("bad", ["known Chulak", "status {world} sunny", "unlocked raid {world}",
+@pytest.mark.parametrize("bad", ["known Chulak", "status {world} sunny", "unlocked picnic {world}",
                                  "world {world} env lava", "world {world} feature gold",
                                  "team {team} specialty cooking", "rank {team} >= admiral", "rank {team} ~ green"])
 def test_bad_world_and_team_conditions_raise(bad):
@@ -411,9 +411,9 @@ def test_missing_or_unknown_team_binds_are_a_no_op_not_a_crash():
 
 
 @pytest.mark.parametrize("bad", ["reveal names", 'reveal name {world} "X" from gossip', "reveal name Chulak from locals",
-                                 "unlock raid {world}", "status {world} sunny", "xp {team} -1", "xp {team} +x",
+                                 "unlock picnic {world}", "status {world} sunny", "xp {team} -1", "xp {team} +x",
                                  "schedule faction_action in 6h", "schedule incoming in 0h", "schedule incoming at 6h",
-                                 "drone {world} stolen", "recall SG-9", "reinforce {world}"])
+                                 "drone {world} stolen", "recall SG-13", "reinforce {world}"])
 def test_bad_world_effects_raise(bad):
     with pytest.raises(rules.RuleError):
         rules.parse_effect(bad)

@@ -7,7 +7,7 @@ from typing import Callable
 
 from . import rules
 from .clock import DAY, HOUR, Event, day, short
-from .state import TEAMS, Campaign, Mission
+from .state import Campaign, Mission, team_names
 
 
 @dataclass(frozen=True)
@@ -139,7 +139,7 @@ def view(c: Campaign, travel: Travel) -> list[QueueItem]:
         if m.state in ("active", "aborted") and tm.status == "offworld" and tm.mission == m.id \
                 and m.id not in departing:
             items.append(_mission(c, m))
-    for name in TEAMS:
+    for name in team_names(c):
         t = c.teams[name]
         if t.status in TEAM_WORDS and t.until > c.now:
             label, word = TEAM_WORDS[t.status]

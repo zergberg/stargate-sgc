@@ -22,7 +22,7 @@ from . import clock, orders, rules, uav
 from .content import TEXT_LEVELS, Node, Outcome, Scenario
 from .database import team_status
 from .orders import SITUATIONS
-from .state import TEAMS, Campaign, Mission, available_teams, demote, has_specialty, rank_index
+from .state import Campaign, Mission, available_teams, demote, has_specialty, rank_index, team_names
 from .world import GOAULD, World, readings
 from . import schedule
 
@@ -912,8 +912,7 @@ class Engine:
             return
         s = self.d.scene
         s.prompt = self.prompt
-        for name in TEAMS:
-            s.teams[name] = team_label(self.c, name, timer=False).upper()
+        s.teams = {name: team_label(self.c, name, timer=False).upper() for name in team_names(self.c)}
 
     def _idle_scene(self, dt: float) -> None:
         """A quiet gate now and then plays a science uplink to a world we know; it never touches the campaign.
