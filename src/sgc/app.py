@@ -580,10 +580,11 @@ class App:
         elif self.mode == "game" and self.engine is not None:
             c = self.engine.c
             if self.view == "briefing" and not self.engine.ended:
-                screens.draw_room(self.canvas, L, self.room)
+                screens.draw_room(self.canvas, L, self.room, self.engine.schedule_view())
                 screens.draw_legend(self.canvas, L, self.legend, ROOM_KEYS, busy=True)
             else:
-                screens.draw_game(self.canvas, L, scene, c, t)
+                queue = self.engine.schedule_view() if not self.engine.ended else None
+                screens.draw_game(self.canvas, L, scene, c, t, queue)
                 screens.draw_legend(self.canvas, L, self.legend, GATE_KEYS, busy=self._legend_busy())
             screens.draw_header(self.canvas, L, c, self.engine.alarm_title, t)
         screens.draw_room_label(self.canvas, L, scene)

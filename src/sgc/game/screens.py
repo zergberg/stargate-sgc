@@ -22,6 +22,8 @@ ALARM_BG = ((120, 10, 5), (50, 5, 5))
 METER_W = 10
 STATUS_H = 7
 QUEUE_ROWS = 5                  # the GATE QUEUE box shows at most this many items
+PANEL_KEEP = 6                  # the gate room keeps the DESTINATION screen above the queue box
+MENU_KEEP = 10                  # the briefing room keeps this many rows for its list above the queue box
 LEGENDS = ("bar", "full", "off")
 WIDTHS = {"addresses": (0, 18, 10, 10, 5, 5), "missions": (5, 16, 8, 10, 9, 4, 0),
           "teams": (5, 10, 9, 17, 16, 0), "intel": (5, 22, 8, 0), "queue": (10, 0, 41),
@@ -313,8 +315,24 @@ def draw_queue(canvas: Canvas, r: Rect, items: list[QueueItem]) -> None:
         canvas.put(x, y + rows - 1, _clip(f"+{len(items) - len(shown)} MORE · d", w), DIM)
 
 
-def draw_game(canvas: Canvas, layout: Layout, scene: Scene, c: Campaign, t: float) -> None:
-    """The gate-room side panel in a campaign: the alarm prompt (if any) above the SGC status."""
+def side_split(h: int, prompt_rows: int | None, n: int | None) -> tuple[int, int, int]:
+    """The gate room's side column, h rows: (prompt, queue box, status) heights from the top. The prompt
+    (prompt_rows it wants, or None) takes rows from the queue box first, then from SGC STATUS. With no prompt
+    the queue box (n items, or None for no box) sits over the side screens, keeping DESTINATION."""
+    status = max(1, min(STATUS_H, h))
+    if prompt_rows is None:
+        queue = queue_height(n, h - status - PANEL_KEEP) if n is not None else 0
+        return 0, queue, status
+    want = min(prompt_rows, h - 3)
+    queue = queue_height(n, h - status - want) if n is not None else 0
+    status = max(1, min(status, h - want - queue))
+    return h - status - queue, queue, status
+
+
+def draw_game(canvas: Canvas, layout: Layout, scene: Scene, c: Campaign, t: float,
+              queue: list[QueueItem] | None = None) -> None:
+    """The gate-room side panel in a campaign: the alarm prompt (if any), the GATE QUEUE box (given the
+    engine's schedule_view), then the SGC status at the bottom."""
     if layout.mode == "compact":
         p = scene.prompt
         canvas.fill(layout.status, " ", AMBER)
@@ -331,13 +349,13 @@ def draw_game(canvas: Canvas, layout: Layout, scene: Scene, c: Campaign, t: floa
     if layout.mode != "full":
         return
     r = layout.side
-    status_h = max(1, min(STATUS_H, r.h))
-    if scene.prompt is not None:
-        need = _prompt_height(scene.prompt, r.w)
-        status_h = max(1, min(status_h, r.h - min(need, r.h - 3)))
+    need = _prompt_height(scene.prompt, r.w) if scene.prompt is not None else None
+    prompt_h, queue_h, status_h = side_split(r.h, need, None if queue is None else len(queue))
     draw_status(canvas, Rect(r.x, r.y + r.h - status_h, r.w, status_h), c)
+    if queue_h:
+        draw_queue(canvas, Rect(r.x, r.y + r.h - status_h - queue_h, r.w, queue_h), queue)
     if scene.prompt is not None:
-        draw_prompt(canvas, Rect(r.x, r.y, r.w, r.h - status_h), scene.prompt, t)
+        draw_prompt(canvas, Rect(r.x, r.y, r.w, prompt_h), scene.prompt, t)
 
 
 def draw_legend(canvas: Canvas, layout: Layout, state: str, keys: list[tuple[str, str]],
@@ -368,8 +386,9 @@ def draw_legend(canvas: Canvas, layout: Layout, state: str, keys: list[tuple[str
             y += 1
 
 
-def draw_room(canvas: Canvas, layout: Layout, room: Room) -> None:
-    """The briefing room's list on the side panel (or the status line on a small terminal)."""
+def draw_room(canvas: Canvas, layout: Layout, room: Room, queue: list[QueueItem] | None = None) -> None:
+    """The briefing room's list on the side panel, with the GATE QUEUE box (given the engine's schedule_view)
+    at its foot; or the status line on a small terminal."""
     items = room.items()
     if layout.mode == "compact":
         text = " " + "  ".join(f"{i + 1} {label.replace(chr(10), ' · ')}" for i, (label, _) in enumerate(items))
@@ -378,7 +397,15 @@ def draw_room(canvas: Canvas, layout: Layout, room: Room) -> None:
         return
     if layout.mode != "full":
         return
-    r = layout.side
+    side = layout.side
+    queue_h = queue_height(len(queue), side.h - MENU_KEEP) if queue is not None else 0
+    if queue_h:
+        draw_queue(canvas, Rect(side.x, side.y + side.h - queue_h, side.w, queue_h), queue)
+    _draw_room_list(canvas, Rect(side.x, side.y, side.w, side.h - queue_h), room, items)
+
+
+def _draw_room_list(canvas: Canvas, r: Rect, room: Room, items: list[tuple[str, bool]]) -> None:
+    """The briefing room's box: the detail lines, then the list scrolled to keep the selection on screen."""
     canvas.fill(r, " ")
     canvas.box(r, room.title, DIM, AMBER)
     x, y, w = r.x + 2, r.y + 1, r.w - 4

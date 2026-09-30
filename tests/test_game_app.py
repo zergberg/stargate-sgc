@@ -72,7 +72,7 @@ def test_new_campaign_starts_and_saves_on_quit(tmp_path):
     pid, fd = spawn_home(["--missions"], home)
     assert b"NEW GAME" in drain(fd, 2.5)
     out = new_game(fd)
-    assert b"SGC STATUS" in out and b"HEADING DOWN" in out and b"DAY 1" in out
+    assert b"SGC STATUS" in out and b"HEADING DOWN" in out and b"DAY 1" in out and b"GATE QUEUE" in out
     quit_twice(fd, pid)
     assert (home / ".local" / "share" / "stargate-sgc" / "campaign.json").is_file()
 

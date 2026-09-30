@@ -680,3 +680,74 @@ def test_long_rows_are_cut_with_an_ellipsis():
     screens.draw_queue(cv, r, BRIEFS[:1])
     row = box_lines(cv, r)[1]
     assert row[2:14] == "1 SG-2 STAG…" and row[15] == "│"
+
+
+def test_the_side_split_gives_the_prompt_the_queue_rows_first():
+    assert screens.side_split(30, None, 3) == (0, 5, 7)             # no alarm: the box sits over the screens
+    assert screens.side_split(30, None, None) == (0, 0, 7)          # no box at all
+    assert screens.side_split(16, None, 3) == (0, 3, 7)             # 80x22: shrunk, DESTINATION kept
+    assert screens.side_split(15, None, 3) == (0, 0, 7)             # too short for even one row
+    assert screens.side_split(30, 10, 3) == (18, 5, 7)              # a short alarm leaves the box alone
+    assert screens.side_split(30, 20, 3) == (20, 3, 7)              # a longer one shrinks it...
+    assert screens.side_split(30, 22, 3) == (23, 0, 7)              # ...then takes it...
+    assert screens.side_split(30, 26, 3) == (26, 0, 4)              # ...then rows from SGC STATUS
+
+
+@pytest.mark.parametrize("cols,rows", [(80, 22), (120, 36)])
+def test_the_gate_room_shows_the_queue_above_the_status(cols, rows):
+    layout, cv = small(cols, rows)
+    screens.draw_game(cv, layout, Scene(), new_campaign("campaign", "officer", 1), 0.0, BRIEFS[:3])
+    lines = cv.text().split("\n")
+    top = next(i for i, line in enumerate(lines) if "GATE QUEUE" in line)
+    status = next(i for i, line in enumerate(lines) if "SGC STATUS" in line)
+    assert top < status
+    if layout.side.h >= 7 + 6 + 5:                 # room for every row
+        assert "1 SG-2 STAGING ABYDOS" in lines[top + 1] and "SG-1 CHECK-IN 14:00" in lines[top + 3]
+        assert status == top + 5
+    else:                                           # 80x22: one row, and it counts them
+        assert "+3 MORE · d" in lines[top + 1] and status == top + 3
+
+
+def test_an_alarm_takes_the_queue_box_s_rows_first():
+    layout, cv = small(80, 22)
+    s = Scene()
+    s.prompt = Prompt("DECISION", DECISION_TEXT, DECISION_OPTIONS, 15.0, 9.0)
+    screens.draw_game(cv, layout, s, new_campaign("campaign", "officer", 1), 0.0, BRIEFS)
+    text = cv.text()
+    assert "GATE QUEUE" not in text and "1  Open the iris" in text and "SGC STATUS" in text
+
+
+@pytest.mark.parametrize("cols,rows", [(80, 22), (120, 36)])
+def test_the_briefing_room_keeps_the_queue_at_the_foot_of_its_list(cols, rows):
+    layout, cv = small(cols, rows)
+    scenarios, _ = content.load(user=None)
+    room = Room(Engine(new_campaign("campaign", "officer", 2), scenarios))
+    room.key("3")                                   # STANDING ORDERS: a long list
+    room.sel = 7                                    # BACK, at the bottom
+    screens.draw_room(cv, layout, room, BRIEFS[:2])
+    text = cv.text()
+    assert "GATE QUEUE" in text and "2 MALP → P3X-888" in text and "8  BACK" in text
+    lines = text.split("\n")
+    assert next(i for i, line in enumerate(lines) if "8  BACK" in line) < \
+        next(i for i, line in enumerate(lines) if "GATE QUEUE" in line)
+
+
+def test_the_queue_box_stays_while_typing_a_note():
+    layout, cv = full()
+    scenarios, _ = content.load(user=None)
+    room = Room(Engine(new_campaign("campaign", "officer", 2), scenarios))
+    for k in ("1", "1", "5", "ch:x"):              # dialing list, Abydos, ADD NOTE, type
+        room.key(k)
+    screens.draw_room(cv, layout, room, [])
+    assert "> x_" in cv.text() and "NOTHING QUEUED" in cv.text()
+
+
+def test_no_queue_box_on_a_small_terminal():
+    layout = compute_layout(60, 16, 9, 18)
+    cv = Canvas(layout.cols, layout.rows)
+    c = new_campaign("campaign", "officer", 1)
+    screens.draw_game(cv, layout, Scene(), c, 0.0, BRIEFS)
+    assert "GATE QUEUE" not in cv.text() and "STAGING" not in cv.text()
+    scenarios, _ = content.load(user=None)
+    screens.draw_room(cv, layout, Room(Engine(c, scenarios)), BRIEFS)
+    assert "GATE QUEUE" not in cv.text()
