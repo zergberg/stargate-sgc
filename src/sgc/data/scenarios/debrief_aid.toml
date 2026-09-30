@@ -1,0 +1,14 @@
+id = "debrief_aid"
+kind = "debrief"
+mission_type = "aid"
+weight = 4
+
+[node.start]
+text.full = "{team} debrief: the sickness on {world} has broken. The village elders have asked us back, and not only as doctors."
+text.minimal = "{team} debrief: aid delivered."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { effects = ["trust locals +10", "reveal name {world} from locals", "unlock trade {world}"], end = true }

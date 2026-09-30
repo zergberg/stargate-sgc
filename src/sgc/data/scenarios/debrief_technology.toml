@@ -1,0 +1,15 @@
+id = "debrief_technology"
+kind = "debrief"
+mission_type = "survey"
+weight = 4
+when = ["world {world} feature technology"]
+
+[node.start]
+text.full = "{team} debrief: the energy readings on {world} come from a structure half-buried near the gate. Captain Carter wants a science team on it."
+text.minimal = "{team} debrief: energy source found."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { effects = ["unlock study {world}"], end = true }

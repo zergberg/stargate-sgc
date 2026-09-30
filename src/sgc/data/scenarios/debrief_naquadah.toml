@@ -5,11 +5,11 @@ weight = 3
 when = ["world {world} feature naquadah"]
 
 [node.start]
-text.full = "{team} debrief: Captain Carter confirms a naquadah seam on {world}, close to the surface. Worth remembering."
+text.full = "{team} debrief: Captain Carter confirms a naquadah seam on {world}, close to the surface. With the right equipment we could mine it."
 text.minimal = "{team} debrief: mineral deposits."
 default = "file"
 
 [[node.start.choice]]
 key = "file"
 label = "File the report"
-outcome = { end = true }
+outcome = { effects = ["unlock mine {world}"], end = true }

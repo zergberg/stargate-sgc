@@ -1,0 +1,15 @@
+id = "debrief_trade_wary"
+kind = "debrief"
+mission_type = "trade"
+weight = 5
+when = ["trust locals < 20"]
+
+[node.start]
+text.full = "{team} debrief: the people of {world} were polite, but they want to know us better before they trade. Word of what we've done elsewhere would help."
+text.minimal = "{team} debrief: no agreement yet."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { effects = ["trust locals +5"], end = true }

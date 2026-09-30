@@ -1,0 +1,14 @@
+id = "checkin_mine"
+kind = "checkin"
+mission_type = "mine"
+weight = 4
+
+[node.start]
+text.full = "{team} checks in from {world}: the drill is through the overburden and the ore is coming up clean."
+text.minimal = "{team} checks in."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log it"
+outcome = { end = true }

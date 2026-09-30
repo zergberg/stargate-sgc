@@ -11,4 +11,4 @@ default = "file"
 [[node.start.choice]]
 key = "file"
 label = "File the report"
-outcome = { effects = ["reveal name {world} from locals", "reveal address"], end = true }
+outcome = { effects = ["reveal name {world} from locals", "reveal address", "trust locals +5", "unlock trade {world}"], end = true }

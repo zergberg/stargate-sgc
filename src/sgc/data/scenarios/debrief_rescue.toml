@@ -1,0 +1,23 @@
+id = "debrief_rescue"
+kind = "debrief"
+mission_type = "rescue"
+weight = 4
+when = ["team {captive} captured"]
+
+[node.start]
+text.full = "{team} debrief: the rescue of {captive} on {world}."
+text.minimal = "{team} debrief: rescue."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+[node.start.choice.outcome.roll]
+odds = 55
+mods = ["team {team} specialty combat +15", "team {team} specialty recon +10", "rank {team} >= veteran +10"]
+[node.start.choice.outcome.roll.win]
+effects = ["team {captive} base", "attention {owner} +15", "xp {team} +1"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["team {team} injured"]
+end = true

@@ -1,0 +1,41 @@
+id = "checkin_raid"
+kind = "checkin"
+mission_type = "raid"
+weight = 4
+
+[node.start]
+text.full = "{team} checks in from {world}, breathing hard: they hit the compound and the whole garrison is out looking for them."
+text.minimal = "{team} is under fire."
+situation = "under_fire"
+default = "recall"
+
+[[node.start.choice]]
+key = "recall"
+label = "Recall them"
+outcome = { effects = ["recall {team}", "attention {owner} +5"], end = true }
+
+[[node.start.choice]]
+key = "hold"
+label = "Hold position"
+[node.start.choice.outcome.roll]
+odds = 55
+mods = ["team {team} specialty combat +20", "tech.zat +10"]
+[node.start.choice.outcome.roll.win]
+effects = ["xp {team} +1"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["team {team} captured"]
+end = true
+
+[[node.start.choice]]
+key = "reinforce"
+label = "Reinforce if a team is available"
+requires = ["team_available"]
+[node.start.choice.outcome.roll]
+odds = 80
+[node.start.choice.outcome.roll.win]
+effects = ["reinforce {team}"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["reinforce {team}", "team {team} injured"]
+end = true

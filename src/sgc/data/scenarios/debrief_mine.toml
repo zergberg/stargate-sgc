@@ -1,0 +1,14 @@
+id = "debrief_mine"
+kind = "debrief"
+mission_type = "mine"
+weight = 3
+
+[node.start]
+text.full = "{team} debrief: naquadah ore from {world}, crated and in the storeroom on Level 22."
+text.minimal = "{team} debrief: ore recovered."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { effects = ["naquadah +4"], end = true }

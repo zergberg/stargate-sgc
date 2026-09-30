@@ -1,0 +1,15 @@
+id = "debrief_trade_deal"
+kind = "debrief"
+mission_type = "trade"
+weight = 5
+when = ["trust locals >= 20"]
+
+[node.start]
+text.full = "{team} debrief: a deal with the people of {world}. Naquadah ore, a crate every few days, in exchange for medical supplies."
+text.minimal = "{team} debrief: trade agreed."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { effects = ["deal {world} naquadah 2", "trust locals +5"], end = true }

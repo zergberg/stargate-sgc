@@ -1,0 +1,15 @@
+id = "debrief_mine_science"
+kind = "debrief"
+mission_type = "mine"
+weight = 6
+when = ["team {team} specialty science"]
+
+[node.start]
+text.full = "{team} debrief: the science team found the richest part of the seam on {world}. More ore than we have crates for."
+text.minimal = "{team} debrief: ore recovered."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { effects = ["naquadah +6"], end = true }

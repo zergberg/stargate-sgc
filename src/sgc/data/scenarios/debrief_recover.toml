@@ -1,0 +1,22 @@
+id = "debrief_recover"
+kind = "debrief"
+mission_type = "recover"
+weight = 4
+
+[node.start]
+text.full = "{team} debrief: the drone taken on {world}."
+text.minimal = "{team} debrief: recovery."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+[node.start.choice.outcome.roll]
+odds = 70
+mods = ["team {team} specialty recon +15"]
+[node.start.choice.outcome.roll.win]
+effects = ["recover {world}", "attention {owner} +5"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["attention {owner} +5"]
+end = true

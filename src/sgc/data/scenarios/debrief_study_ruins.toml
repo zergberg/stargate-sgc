@@ -1,0 +1,15 @@
+id = "debrief_study_ruins"
+kind = "debrief"
+mission_type = "study"
+weight = 5
+when = ["world {world} feature ruins"]
+
+[node.start]
+text.full = "{team} debrief: a week's worth of rubbings from the ruins on {world}. Dr. Jackson found another cartouche, with addresses on it."
+text.minimal = "{team} debrief: ruins studied."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { effects = ["reveal name {world} from ruins", "reveal address", "reveal address"], end = true }

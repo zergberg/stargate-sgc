@@ -1,0 +1,14 @@
+id = "checkin_rescue"
+kind = "checkin"
+mission_type = "rescue"
+weight = 4
+
+[node.start]
+text.full = "{team} checks in from {world}: they've found where {captive} is held and are waiting for dark."
+text.minimal = "{team} checks in."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log it"
+outcome = { end = true }

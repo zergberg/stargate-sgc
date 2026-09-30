@@ -5,11 +5,11 @@ weight = 10
 when = ["world {world} inhabitants goauld"]
 
 [node.start]
-text.full = "{team} debrief: {world} is a Goa'uld stronghold: a pyramid, a landing platform and a standing army. {team} kept its distance."
+text.full = "{team} debrief: {world} is a Goa'uld stronghold: a pyramid, a landing platform and a standing army. {team} kept its distance. The banners over the pyramid name its master."
 text.minimal = "{team} debrief: Goa'uld stronghold."
 default = "file"
 
 [[node.start.choice]]
 key = "file"
 label = "File the report"
-outcome = { effects = ["status {world} hostile"], end = true }
+outcome = { effects = ["status {world} hostile", "reveal faction {owner} from jaffa", "unlock raid {world}"], end = true }

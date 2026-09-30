@@ -1,0 +1,23 @@
+id = "debrief_study_tech"
+kind = "debrief"
+mission_type = "study"
+weight = 5
+when = ["world {world} feature technology"]
+
+[node.start]
+text.full = "{team} debrief: the energy readings on {world} came from a device none of us has seen before."
+text.minimal = "{team} debrief: technology studied."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+[node.start.choice.outcome.roll]
+odds = 50
+mods = ["team {team} specialty science +20", "upgrade research_lab +10"]
+[node.start.choice.outcome.roll.win]
+effects = ["gain tech.lrs unless tech.lrs", "funding +40", "attention {owner} +10"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["personnel -3"]
+end = true

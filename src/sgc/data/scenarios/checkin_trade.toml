@@ -1,0 +1,14 @@
+id = "checkin_trade"
+kind = "checkin"
+mission_type = "trade"
+weight = 4
+
+[node.start]
+text.full = "{team} checks in from {world}: the haggling goes on. They like our medicine and our coffee; they want to know what we'd take in return."
+text.minimal = "{team} checks in: talks continue."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log it"
+outcome = { end = true }

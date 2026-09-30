@@ -1,0 +1,14 @@
+id = "checkin_aid"
+kind = "checkin"
+mission_type = "aid"
+weight = 4
+
+[node.start]
+text.full = "{team} checks in from {world}: the fever is bad in the lower village, but the antibiotics are working. Three children are sitting up today."
+text.minimal = "{team} checks in."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log it"
+outcome = { end = true }

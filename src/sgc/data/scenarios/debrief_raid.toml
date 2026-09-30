@@ -1,0 +1,22 @@
+id = "debrief_raid"
+kind = "debrief"
+mission_type = "raid"
+weight = 4
+
+[node.start]
+text.full = "{team} debrief: the raid on {world}."
+text.minimal = "{team} debrief: raid."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+[node.start.choice.outcome.roll]
+odds = 55
+mods = ["team {team} specialty combat +15", "rank {team} >= veteran +10"]
+[node.start.choice.outcome.roll.win]
+effects = ["gain tech.zat unless tech.zat", "attention {owner} +15", "trust jaffa +5", "xp {team} +1"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["team {team} injured", "attention {owner} +15"]
+end = true

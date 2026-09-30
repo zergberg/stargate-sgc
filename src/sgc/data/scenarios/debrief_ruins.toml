@@ -12,4 +12,4 @@ default = "file"
 [[node.start.choice]]
 key = "file"
 label = "File the report"
-outcome = { effects = ["reveal name {world} from ruins", "reveal address"], end = true }
+outcome = { effects = ["reveal name {world} from ruins", "reveal address", "unlock study {world}"], end = true }

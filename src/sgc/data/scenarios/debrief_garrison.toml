@@ -5,11 +5,11 @@ weight = 10
 when = ["world {world} inhabitants jaffa"]
 
 [node.start]
-text.full = "{team} debrief: {world} is a Jaffa garrison world. {team} listened in on the patrols long enough to learn what the Jaffa call it."
+text.full = "{team} debrief: {world} is a Jaffa garrison world. {team} listened in on the patrols long enough to learn what the Jaffa call it. The Jaffa wear their god's mark on their brows, and Dr. Jackson could read it."
 text.minimal = "{team} debrief: hostile garrison."
 default = "file"
 
 [[node.start.choice]]
 key = "file"
 label = "File the report"
-outcome = { effects = ["reveal name {world} from jaffa", "status {world} hostile"], end = true }
+outcome = { effects = ["reveal name {world} from jaffa", "reveal faction {owner} from jaffa", "status {world} hostile", "unlock raid {world}"], end = true }

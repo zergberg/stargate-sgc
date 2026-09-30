@@ -5,11 +5,11 @@ weight = 4
 when = ["world {world} inhabitants human"]
 
 [node.start]
-text.full = "{team} debrief: the people of {world} know the gate and have seen it used before. They were cautious with us, but not hostile."
+text.full = "{team} debrief: the people of {world} know the gate and have seen it used before. They were cautious with us, but not hostile. One of the elders asked whether our healers could help with a sickness in the lower village."
 text.minimal = "{team} debrief: inhabited world."
 default = "file"
 
 [[node.start.choice]]
 key = "file"
 label = "File the report"
-outcome = { effects = ["reveal name {world} from locals", "unlock contact {world}"], end = true }
+outcome = { effects = ["reveal name {world} from locals", "unlock contact {world}", "unlock aid {world}"], end = true }

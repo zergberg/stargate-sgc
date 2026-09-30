@@ -1,0 +1,15 @@
+id = "debrief_tollana"
+kind = "debrief"
+mission_type = "survey"
+weight = 30
+when = ["is {world} @Tollana"]
+
+[node.start]
+text.full = "{team} debrief: the people of {world} are the Tollan, and far ahead of us. Their envoy, Omoc, was courteous and entirely unmoved: the Tollan do not share their technology with younger races."
+text.minimal = "{team} debrief: an advanced people."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { effects = ["reveal name {world} from locals", "reveal faction tollan from locals", "trust tollan +5", "unlock contact {world}"], end = true }
