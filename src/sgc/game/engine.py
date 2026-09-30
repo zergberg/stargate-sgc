@@ -18,7 +18,7 @@ from ..director import Director
 from ..events import REGISTRY, EventContext
 from ..events.common import cleanup, start_outgoing
 from ..model import Figure, Prompt, Step
-from . import clock, orders, rules
+from . import clock, orders, rules, uav
 from .content import TEXT_LEVELS, Node, Outcome, Scenario
 from .database import team_status
 from .orders import SITUATIONS
@@ -28,6 +28,8 @@ from .world import GOAULD, World, readings
 DETAIL = {"recruit": "full", "officer": "partial", "commander": "minimal"}
 INCOMING_EVERY = (36, 96)            # game hours between random incoming wormholes
 TRAVEL = {"malp": (60, 120), "uav": (45, 90)}     # game minutes until a drone's telemetry comes back
+UAV_RAIL = 0.12                      # the UAV's launch rail stands here, at the foot of the ramp
+UAV_CRUISE = 0.8                     # the UAV's altitude as it reaches the horizon (0..1)
 DESTROYED = {"normal": 3, "toxic": 8, "radiation": 12, "extreme": 25, "no_lock": 0}
 CAPTURED = {"jaffa": 25, "goauld": 40}
 IDLE_SCENE = 45.0                    # real seconds of a quiet gate before an ambient scene plays
@@ -331,6 +333,8 @@ class Engine:
             self._log(f"{drone.upper()} SIGNAL LOST ON {w.name.upper()} — {seen['env'].upper()}")
             for line in rules.set_world_status(c, w, "probed"):
                 self._log(line)
+            if drone == "uav":
+                self._show(self._v_signal_lost(w, {"env": seen["env"]}))
             return
         if roll < destroyed + captured:
             w.reports.append((c.now, f"{drone.upper()} captured. Armed humanoids seen before the feed was cut."))
@@ -338,6 +342,8 @@ class Engine:
             self._log(f"{drone.upper()} CAPTURED ON {w.name.upper()}")
             for line in rules.set_world_status(c, w, "hostile"):
                 self._log(line)
+            if drone == "uav":
+                self._show(self._v_signal_lost(w, {}))
             return
         w.seen.update(seen)
         w.telemetry = [f"{k.upper()}: {v}" for k, v in seen.items()]
@@ -349,7 +355,7 @@ class Engine:
         if drone == "uav" and w.inhabitants != "none" and self.rng.random() < 0.4:
             for line in rules.parse_effect("reveal name {world} from comms")(c, self._wbind(w)):
                 self._log(line)
-        self._show(self._v_telemetry(w, seen))
+        self._show(self._v_telemetry(w, seen, drone))
         drawn = self._draw("probe", self._wbind(w))
         if drawn:
             self._start(*drawn)
@@ -991,20 +997,71 @@ class Engine:
     def _v_drone(self, w: World, drone: str, home: bool = False) -> list[Step]:
         if self.d is None:
             return []
+        if drone == "uav":
+            return [*self._outgoing(w), *(self._uav_home() if home else self._uav_launch()), *sq.shutdown(),
+                    cleanup()]
 
         def roll(s, p):
             s.figures = [Figure("malp", 1 - p if home else p, 0.0)] if p < 1 else []
         verb = "RETURNING THROUGH THE GATE" if home else "IN TRANSIT"
         return [*self._outgoing(w), Step(5.0, roll, f"{drone.upper()} {verb}"), *sq.shutdown(), cleanup()]
 
-    def _v_telemetry(self, w: World, seen: dict[str, str]) -> list[Step]:
+    def _v_telemetry(self, w: World, seen: dict[str, str], drone: str = "malp") -> list[Step]:
         if self.d is None:
             return []
+        if drone == "uav":
+            def feed(s, p):
+                s.feed = uav.make(w, seen, p) if p < 1 else None
+                s.panel_title = f"TELEMETRY · {w.name.upper()}"
+                s.panel_rows = [*uav.rows(uav.seed(w), p), *((k.upper(), v) for k, v in seen.items())]
+            return [*self._outgoing(w), Step(6.0, feed, "TELEMETRY RECEIVED"), *sq.shutdown(), cleanup()]
 
         def show(s, p):
             s.panel_title = f"TELEMETRY · {w.name.upper()}"
             s.panel_rows = [(k.upper(), v) for k, v in seen.items()]
         return [*self._outgoing(w), Step(6.0, show, "TELEMETRY RECEIVED"), *sq.shutdown(), cleanup()]
+
+    def _uav_launch(self) -> list[Step]:
+        """The rail at the foot of the ramp, the UAV firing off it and climbing, then through the horizon.
+        5 seconds in all, as long as the MALP's roll."""
+        def on_rail(s, p):
+            s.figures = [Figure("rail", UAV_RAIL), Figure("uav", UAV_RAIL)]
+
+        def fly(s, p):
+            climb = 1 - (1 - p) ** 2                                        # ease-out
+            s.figures = [Figure("rail", UAV_RAIL),
+                         Figure("uav", UAV_RAIL + (0.95 - UAV_RAIL) * p, alt=UAV_CRUISE * climb)]
+
+        def through(s, p):
+            s.figures = [] if p >= 1 else [Figure("rail", UAV_RAIL)]
+            s.splashes = [] if p >= 1 else [[0.0, 0.14, p]]
+        return [Step(0.6, on_rail, "UAV LAUNCHED"), Step(4.0, fly), Step(0.4, through, "UAV IN TRANSIT")]
+
+    def _uav_home(self) -> list[Step]:
+        """The UAV comes out of the horizon nose first, descends toward us, lands and rolls out. 5 seconds."""
+        def descend(s, p):
+            s.figures = [Figure("uav", 0.95 - 0.9 * p, alt=UAV_CRUISE * (1 - p * p), facing="toward")]
+            s.splashes = [[0.0, 0.14, p / 0.2]] if p < 0.2 else []
+
+        def roll_out(s, p):
+            s.figures = [] if p >= 1 else [Figure("uav", 0.05 * (1 - p), alpha=1 - p, facing="toward")]
+        return [Step(4.2, descend, "UAV RETURNING THROUGH THE GATE"), Step(0.8, roll_out, "UAV RECOVERED")]
+
+    def _v_signal_lost(self, w: World, seen: dict[str, str]) -> list[Step]:
+        """A UAV shot down or captured: its feed goes to static, SIGNAL LOST flashes, the wormhole disengages."""
+        if self.d is None:
+            return []
+
+        def live(s, p):
+            s.feed = uav.make(w, seen, 0.3 * p)
+            s.panel_title = f"TELEMETRY · {w.name.upper()}"
+            s.panel_rows = uav.rows(uav.seed(w), 0.3 * p)
+
+        def static(s, p):
+            s.feed = uav.make(w, seen, 0.3, lost=p)
+            s.panel_rows = [("SIGNAL", "LOST")]
+        return [*self._outgoing(w), Step(1.0, live), Step(1.5, static, "UAV SIGNAL LOST"), sq.hold(1.0),
+                *sq.shutdown(), cleanup()]
 
     def _v_checkin(self, team: str) -> list[Step]:
         if self.d is None:
