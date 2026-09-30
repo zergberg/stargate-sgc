@@ -92,7 +92,7 @@ def _db_help_rows(cols: int, tab: str = "addresses") -> list[str]:
 
 def _db_hint(tab: str) -> str:
     """A short, tab-aware one-liner for the compact Database, where the full key list won't fit."""
-    keys = [("←→", "TAB"), ("↑↓", "SCROLL" if tab == "world" else "MOVE")]
+    keys = [("←→", "TAB"), ("↑↓", "SCROLL" if tab == "world" else "SELECT")]
     if tab in ("addresses", "missions", "intel"):
         keys.append(("⏎", "OPEN"))
     if tab == "queue":
