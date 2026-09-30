@@ -1,10 +1,11 @@
 id = "unknown_probe"
-kind = "incoming"
+kind = "faction"
+stage = "curious"
 weight = 2
 visual = "incoming"
 
 [node.start]
-text.full = "A small probe rolled through before the iris closed. It isn't one of ours. It's scanning the gate room."
+text.full = "A small probe rolled through before the iris closed. It isn't one of ours, and it's scanning the gate room. Someone out there wants to know what's on this side of the gate."
 text.minimal = "An object came through the gate."
 situation = "object"
 default = "seal"
@@ -12,7 +13,7 @@ default = "seal"
 [[node.start.choice]]
 key = "seal"
 label = "Seal the level"
-outcome = { effects = ["security -5"], end = true }
+outcome = { effects = ["security -5", "attention {faction} +5"], end = true }
 
 [[node.start.choice]]
 key = "push_back"

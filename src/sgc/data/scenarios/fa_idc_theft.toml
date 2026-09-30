@@ -1,0 +1,15 @@
+id = "fa_idc_theft"
+kind = "faction"
+stage = "curious"
+weight = 2
+team = "territory"
+
+[node.start]
+text.full = "{team} checks in from {world} short one GDO. A Jaffa patrol jumped their rear guard and took it, code and all."
+text.minimal = "{team} reports equipment lost on {world}."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log it"
+outcome = { effects = ["idc {team} compromise", "attention {faction} +5"], end = true }

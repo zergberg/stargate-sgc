@@ -1,0 +1,32 @@
+id = "fa_scouts"
+kind = "faction"
+stage = "curious"
+weight = 3
+visual = "incoming"
+
+[node.start]
+text.full = "Unscheduled offworld activation, no IDC. The MALP camera on the far side caught three armored figures at the gate, staffs raised, waiting to see who answers. Scouts, loyal to {faction}."
+text.partial = "Unscheduled offworld activation, no IDC. Armed figures at the far gate."
+text.minimal = "Unscheduled offworld activation."
+situation = "unknown_idc"
+default = "closed"
+
+[[node.start.choice]]
+key = "closed"
+label = "Keep the iris closed"
+outcome = { visual = "iris_hold", effects = ["attention {faction} +5"], end = true }
+
+[[node.start.choice]]
+key = "open_guarded"
+label = "Open for 30 seconds under guard"
+[node.start.choice.outcome.roll]
+odds = 60
+mods = ["tech.zat +15", "personnel < 40 -15"]
+[node.start.choice.outcome.roll.win]
+visual = "firefight_win"
+effects = ["personnel -5", "reveal faction {faction} from jaffa"]
+end = true
+[node.start.choice.outcome.roll.lose]
+visual = "firefight"
+effects = ["personnel -10", "breach 10", "attention {faction} +5"]
+end = true

@@ -1,0 +1,31 @@
+id = "fa_assault"
+kind = "faction"
+stage = "seeking"
+weight = 3
+visual = "incoming"
+
+[node.start]
+text.full = "Unscheduled offworld activation. Staff blasts, then something heavier: a battering charge against the iris. This isn't a probe. Jaffa loyal to {faction} mean to take the mountain."
+text.partial = "Unscheduled offworld activation. Heavy impacts on the iris."
+text.minimal = "Unscheduled offworld activation."
+situation = "unknown_idc"
+default = "closed"
+
+[[node.start.choice]]
+key = "closed"
+label = "Keep the iris closed"
+outcome = { visual = "iris_hold", effects = ["security -12", "personnel -3"], end = true }
+
+[[node.start.choice]]
+key = "open_guarded"
+label = "Open for 30 seconds under guard"
+[node.start.choice.outcome.roll]
+odds = 25
+mods = ["tech.zat +10", "ally.jaffa +15", "personnel < 40 -15"]
+[node.start.choice.outcome.roll.win]
+visual = "firefight_win"
+effects = ["personnel -20", "breach 20", "reveal faction {faction} from jaffa"]
+end = true
+[node.start.choice.outcome.roll.lose]
+visual = "firefight"
+effects = ["game_over The iris opened on an army. Cheyenne Mountain fell in an hour."]

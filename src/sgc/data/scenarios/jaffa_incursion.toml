@@ -1,11 +1,11 @@
 id = "jaffa_incursion"
-kind = "incoming"
+kind = "faction"
+stage = "hostile"
 weight = 2
-when = ["day >= 3"]
 visual = "incoming"
 
 [node.start]
-text.full = "Incoming wormhole, no IDC. Something is already hammering the iris from the other side. Staff-weapon fire, by the sound of it."
+text.full = "Incoming wormhole, no IDC. Something is already hammering the iris from the other side: staff-weapon fire, and Jaffa loyal to {faction} by the war cries."
 text.partial = "Incoming wormhole, no IDC. Impacts on the iris."
 text.minimal = "Unscheduled offworld activation."
 situation = "unknown_idc"
@@ -14,7 +14,7 @@ default = "closed"
 [[node.start.choice]]
 key = "closed"
 label = "Keep the iris closed"
-outcome = { visual = "iris_hold", effects = ["security -5"], end = true }
+outcome = { visual = "iris_hold", effects = ["security -5", "attention {faction} +5"], end = true }
 
 [[node.start.choice]]
 key = "open_guarded"
@@ -24,7 +24,7 @@ odds = 30
 mods = ["tech.zat +15", "ally.jaffa +20", "security < 30 -15"]
 [node.start.choice.outcome.roll.win]
 visual = "firefight_win"
-effects = ["personnel -15", "breach 20"]
+effects = ["personnel -15", "breach 20", "reveal faction {faction} from jaffa"]
 end = true
 [node.start.choice.outcome.roll.lose]
 visual = "firefight"

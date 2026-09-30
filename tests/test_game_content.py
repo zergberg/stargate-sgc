@@ -319,7 +319,7 @@ def test_every_bundled_scenario_loads():
     assert warnings == []
     kinds = [s.kind for s in scenarios.values()]
     assert kinds.count("probe") >= 10 and kinds.count("checkin") >= 8 and kinds.count("debrief") >= 6
-    assert kinds.count("incoming") >= 6
+    assert kinds.count("incoming") >= 3 and kinds.count("faction") >= 10
 
 
 def test_bundled_situation_choices_say_what_the_standing_orders_say():

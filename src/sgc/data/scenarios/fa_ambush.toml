@@ -1,0 +1,50 @@
+id = "fa_ambush"
+kind = "faction"
+stage = "hostile"
+weight = 4
+team = "territory"
+
+[node.start]
+text.full = "Emergency transmission from {team} on {world}: they walked into an ambush. Jaffa loyal to {faction} were waiting at the gate, as if they knew the team was coming."
+text.minimal = "{team} is under fire on {world}."
+situation = "under_fire"
+default = "recall"
+
+[[node.start.choice]]
+key = "recall"
+label = "Recall them"
+[node.start.choice.outcome.roll]
+odds = 70
+mods = ["team {team} specialty recon +15", "team {team} specialty combat +10"]
+[node.start.choice.outcome.roll.win]
+effects = ["recall {team}", "personnel -3"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["team {team} injured"]
+end = true
+
+[[node.start.choice]]
+key = "hold"
+label = "Hold position"
+[node.start.choice.outcome.roll]
+odds = 40
+mods = ["team {team} specialty combat +20", "tech.zat +10", "rank {team} >= veteran +10"]
+[node.start.choice.outcome.roll.win]
+effects = ["xp {team} +1", "attention {faction} +5"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["team {team} captured"]
+end = true
+
+[[node.start.choice]]
+key = "reinforce"
+label = "Reinforce if a team is available"
+requires = ["team_available"]
+[node.start.choice.outcome.roll]
+odds = 70
+[node.start.choice.outcome.roll.win]
+effects = ["reinforce {team}", "attention {faction} +5"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["reinforce {team}", "team {team} injured"]
+end = true

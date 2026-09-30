@@ -1,12 +1,12 @@
-id = "naquadah_bomb"
+id = "fa_mountain_bomb"
 kind = "faction"
-stage = "hostile"
+stage = "seeking"
 weight = 2
 visual = ["incoming", "bomb"]
 
 [node.start]
-text.full = "Something came through before the iris closed. A device on the ramp, naquadah readings off the scale. The markings on the casing match nothing in our records."
-text.partial = "An object came through before the iris closed. Naquadah readings."
+text.full = "Something came through ahead of the iris: a naquadah device the size of a footlocker, already counting down in a script Dr. Jackson reads as a dedication to {faction}."
+text.partial = "An object came through the gate. Naquadah readings, rising."
 text.minimal = "An object came through the gate."
 situation = "object"
 default = "seal"
@@ -14,16 +14,16 @@ default = "seal"
 [[node.start.choice]]
 key = "seal"
 label = "Seal the level"
-outcome = { effects = ["breach 15", "personnel -5"], end = true }
+outcome = { effects = ["breach 25", "personnel -8"], end = true }
 
 [[node.start.choice]]
 key = "push_back"
 label = "Dial out, push it back through"
 [node.start.choice.outcome.roll]
-odds = 55
+odds = 45
 mods = ["tech.naquadah_generator +10", "personnel >= 50 +10"]
 [node.start.choice.outcome.roll.win]
 effects = ["security +5", "attention {faction} +5"]
 end = true
 [node.start.choice.outcome.roll.lose]
-effects = ["game_over The device detonated in the gate room. Cheyenne Mountain is gone."]
+effects = ["game_over The device went off in the gate room. Cheyenne Mountain is gone."]

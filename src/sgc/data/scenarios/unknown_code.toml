@@ -1,10 +1,11 @@
 id = "unknown_code"
-kind = "incoming"
+kind = "faction"
+stage = "hostile"
 weight = 2
 visual = "incoming"
 
 [node.start]
-text.full = "Unscheduled offworld activation. A code is coming through, but it isn't one of ours. No radio contact."
+text.full = "Unscheduled offworld activation. A code is coming through, but it isn't one of ours. The last time we heard that cadence, it was Jaffa loyal to {faction}."
 text.partial = "Unscheduled offworld activation. Unknown IDC."
 text.minimal = "Unscheduled offworld activation."
 situation = "unknown_idc"
@@ -23,7 +24,7 @@ odds = 45
 mods = ["tech.zat +15", "personnel < 40 -15"]
 [node.start.choice.outcome.roll.win]
 visual = "firefight_win"
-effects = ["personnel -10", "breach 10"]
+effects = ["personnel -10", "breach 10", "reveal faction {faction} from jaffa"]
 end = true
 [node.start.choice.outcome.roll.lose]
 visual = "firefight"

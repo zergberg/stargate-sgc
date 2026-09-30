@@ -1,0 +1,23 @@
+id = "fa_spy"
+kind = "faction"
+stage = "curious"
+weight = 2
+team = "base"
+
+[node.start]
+text.full = "Security flags a new airman who can't account for two hours in the gate-room records. The last thing he looked at was {team}'s IDC file."
+text.minimal = "A security review is under way on Level 28."
+default = "check"
+
+[[node.start.choice]]
+key = "check"
+label = "Run the infiltration check"
+[node.start.choice.outcome.roll]
+odds = 55
+mods = ["security >= 60 +15", "security < 30 -15", "ally.tokra +15"]
+[node.start.choice.outcome.roll.win]
+effects = ["reveal faction {faction} from jaffa", "security +3"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["idc {team} compromise", "attention {faction} +5", "incident +1"]
+end = true
