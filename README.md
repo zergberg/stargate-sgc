@@ -136,6 +136,13 @@ A missed check-in plays out as follows:
   - You start with 4 MALPs and 2 UAVs. Stores hold at most 6 MALPs and 3 UAVs.
   - At midnight a MALP is delivered every day, and a UAV every third day, unless the fleet is already at the cap. Drones out in the field count towards the cap.
   - A MALP's telemetry comes back in 1–2 game hours, and a UAV's in 45–90 minutes. A UAV sees more (settlements and head counts), and sometimes catches a name over comms. It's also more likely to be shot down over Jaffa or Goa'uld worlds.
+  - The UAV is its own aircraft, a small straight-wing drone with a pusher propeller:
+    - **Launch:** it fires off a launch rail at the foot of the ramp and climbs into the wormhole.
+    - **Home:** a recalled UAV flies back out of the gate nose first, lands on the ramp and rolls to a stop.
+    - **Aerial feed:** its report plays on a monitor in the corner of the gate image. It shows the ground scrolling past, a crosshair, `REC ●` and its altitude and heading, and it boxes a contact when the UAV spots a settlement or a structure. The side screen reads out ALT, HDG, SPEED and FUEL, then what the UAV learned.
+    - **Colours:** a world's ground always looks the same. It only takes on the world's colours once telemetry has told you its environment.
+    - **Lost:** if the UAV is shot down or captured, the feed breaks up into static and `SIGNAL LOST`.
+    - **Small panes:** when the gate image is under 160 pixels, the monitor is left out and the side screen still reads out.
   - Drones can be destroyed by a harsh world or captured by its garrison. Capture marks the world HOSTILE.
   - One that survives stays parked on the world, one drone per world. Recall it through the gate, or the next team there brings it home.
   - A drone that comes home to full stores is scrapped.
@@ -194,19 +201,38 @@ An action you can't take yet is greyed out and tells you why when you choose it.
 
 ### The SGC Database
 
-Press `d` for the full-screen SGC Database. It has five tabs:
+Press `d` for the full-screen SGC Database. It has six tabs:
 
 - **Addresses:** name, glyphs, status, last visit, flags and drone. The flags are `T` for a team there, `N` for notes and `L` for an address from intel.
 - **World file:** names and where they came from, telemetry, mission options, reports and your notes.
 - **Missions:** team, world, type, start, outcome, casualties and findings.
 - **Teams:** specialty, rank, status, location and history.
 - **Intel:** names learned, and leads to addresses not yet visited.
+- **Queue:** what's scheduled, soonest first:
+  - dial-outs waiting for the gate, in the order the gate will take them
+  - drones through the gate, with the window their report is due in
+  - missions in the field, with the next check-in and when the team is due home
+  - teams stood down, injured, captured or re-forming, with when that ends
+
+  Incoming wormholes and anything else you haven't been told about never show.
 
 On the Addresses tab:
 
 - `/` searches known names, designations and glyphs. Enter keeps the search; Ctrl+C or Esc clears it.
 - `s` sorts by status or name.
 - `f` filters by status: all, unexplored, probed, surveyed, contact, hostile or lost.
+
+On the Queue tab:
+
+- `x` cancels the selected dial-out. Press it again to confirm.
+  - A MALP or UAV goes back to stores.
+  - A departing team stands by at base, and its mission reads CANCELLED.
+  - A recall is withdrawn, and the drone stays where it is.
+  - A withdrawn search leaves the missing team to the 12-hour wait.
+
+  Anything already through the gate can't be cancelled here, and the tab says why.
+- `[` and `]` move the selected dial-out up or down the gate queue. Check-ins and other incoming traffic still go first. The new order is saved.
+- `/` searches the rows' text.
 
 On a small terminal the tabs stack into a single column.
 
@@ -247,7 +273,9 @@ An alarm closes the Database but keeps it, and `d` brings back the same tab, sea
 | `←` `→` Tab | switch tabs |
 | `↑` `↓` | select a row; scroll a world file |
 | Enter | open the selected world's file (Addresses, Missions, Intel) |
-| `/` `s` `f` | search, sort, filter the addresses |
+| `/` `s` `f` | search, sort, filter the addresses (/ also searches the Queue) |
+| `x` | cancel the selected dial-out on the Queue tab (press twice) |
+| `[` `]` | move the selected dial-out up or down the gate queue |
 | Ctrl+C / Esc | clear and close a search |
 | `?` | legend: bar, full (with the help block), off |
 | `m` / `+` / `-` | mute, volume |
