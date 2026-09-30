@@ -13,7 +13,8 @@ DAY = 24 * HOUR
 WINDOW = 3 * HOUR                                         # an alarm's decision window, in game minutes
 WINDOW_REAL = 60.0                                        # ...and never less than this many real seconds
 GATE_MINUTES = {"probe": 10, "uav": 10, "depart": 15, "recall": 30, "search": 10, "checkin": 10,
-                "team_return": 15, "incoming": 30, "malp_return": 20}
+                "team_return": 15, "incoming": 30, "malp_return": 20,
+                "trade_delivery": 20, "faction_action": 30}
 
 
 def seconds_per_hour(pace: str, override: int | None = None) -> int:

@@ -18,12 +18,12 @@ from ..director import Director
 from ..events import REGISTRY, EventContext
 from ..events.common import cleanup, start_outgoing
 from ..model import Figure, Prompt, Step
-from . import clock, economy, factions, orders, roster, rules, uav
+from . import arcs, clock, economy, factions, orders, roster, rules, scoring, trade, uav
 from .content import TEXT_LEVELS, Node, Outcome, Scenario
 from .database import team_status
 from .orders import SITUATIONS
 from .state import Campaign, Mission, available_teams, demote, has_specialty, rank_index, team_names
-from .world import GOAULD, World, readings
+from .world import GOAULD, World, faction_name, readings
 from . import schedule
 
 DETAIL = {"recruit": "full", "officer": "partial", "commander": "minimal"}
@@ -36,9 +36,15 @@ CAPTURED = {"jaffa": 25, "goauld": 40}
 IDLE_SCENE = 45.0                    # real seconds of a quiet gate before an ambient scene plays
 AMBIENT_WORLDS = ("probed", "surveyed", "contact")   # worlds the ambient science uplink may dial
 LANES = (-0.45, -0.15, 0.15, 0.45)
-TITLES = {"incoming": "INCOMING", "probe": "TELEMETRY", "checkin": "CHECK-IN", "debrief": "DEBRIEF"}
-GATE_KINDS = ("dial_out", "malp_return", "checkin", "team_return", "incoming")
-INBOUND = ("incoming", "checkin", "team_return", "malp_return")
+TITLES = {"incoming": "INCOMING", "probe": "TELEMETRY", "checkin": "CHECK-IN", "debrief": "DEBRIEF",
+          "faction": "SECURITY", "arc": "PRIORITY ONE"}
+GATE_KINDS = ("dial_out", "malp_return", "checkin", "team_return", "incoming", "trade_delivery", "faction_action")
+INBOUND = ("incoming", "checkin", "team_return", "malp_return", "trade_delivery", "faction_action")
+URGENT_KINDS = ("incoming", "faction", "arc")       # their visuals always play, even over other traffic
+SHARE_TRUST = 50                     # an ally this friendly may share an address at a funding review...
+SHARE_ODDS = 0.5                     # ...this often
+VICTORY_TEXT = ("Every threat the SGC uncovered has been dealt with. The President sends his thanks, and "
+                "General Hammond asks whether you'll stay on.")
 # Who gets a free gate first: check-ins, then the rest of the inbound traffic, then queued dial-outs; within
 # a rank, whatever came due first. So a check-in waits for one gate operation (30 minutes at most), plus any
 # other check-ins already due.
@@ -77,13 +83,15 @@ class Engine:
                  save: Callable[[Campaign], None] | None = None,
                  on_end: Callable[[Campaign], None] | None = None,
                  log: Callable[[str], None] | None = None,
-                 on_alarm: Callable[[str, str], None] | None = None):
+                 on_alarm: Callable[[str, str], None] | None = None,
+                 on_victory: Callable[[Campaign], None] | None = None):
         self.c, self.scenarios, self.d = campaign, scenarios, director
         self.pace_override = pace_override
         self._save = save or (lambda c: None)
         self._on_end = on_end or (lambda c: None)
         self._log = log or (lambda line: None)
         self._on_alarm = on_alarm or (lambda title, text: None)
+        self._on_victory = on_victory or (lambda c: None)
         self.rng = random.Random(campaign.seed)
         if campaign.rng_state is not None:
             self.rng.setstate(campaign.rng_state)
@@ -99,12 +107,15 @@ class Engine:
             "recovery_tick": self._recovery, "incoming": self._incoming, "dial_out": self._dial_out,
             "malp_return": self._malp_return, "checkin": self._checkin, "team_return": self._team_return,
             "search_report": self._search_report, "overdue": self._overdue,
+            "funding_review": self._funding_review, "faction_action": self._faction_action,
+            "trade_delivery": self._trade_delivery, "arc_step": self._arc_step,
         }
         if director is not None:
             director.auto = False
         if campaign.over:                    # a fallen base stays fallen
             self._game_over()
             return
+        self._stage2_start()
         self._sweep_alarms()
         self._show_alarm()
 
@@ -235,6 +246,66 @@ class Engine:
             self._start(*drawn)
         if not self.c.events.find(lambda e: e.kind == "incoming"):
             self.c.events.push(self.c.now + self.rng.randint(*INCOMING_EVERY) * clock.HOUR, "incoming")
+
+    def _stage2_start(self) -> None:
+        """Whatever Stage 2 keeps pending is pending: a funding review, and an action for every Goa'uld that
+        is curious or worse (a save from before these existed gets them now)."""
+        c = self.c
+        if not c.events.find(lambda e: e.kind == "funding_review"):
+            c.events.push(economy.next_review(c.now), "funding_review")
+        for fid in factions.GOAULD:
+            factions.ensure_action(c, fid)
+
+    def _funding_review(self, data: dict) -> None:
+        """The weekly review (it schedules the next); a friendly ally may share an address."""
+        c = self.c
+        for line in economy.review(c):
+            self._log(line)
+        for fid in factions.ALLIES:
+            f = c.factions[fid]
+            if f.known and f.trust >= SHARE_TRUST and self.rng.random() < SHARE_ODDS:
+                w = rules.new_address(c, f"intel from {faction_name(fid)}")
+                economy.note(c, "intel")
+                self._log(f"{faction_name(fid).upper()} SHARED AN ADDRESS: {w.id}")
+
+    def _faction_action(self, data: dict) -> None:
+        """A Goa'uld acts against Earth, at its stage; the next action is drawn unless it has lost interest."""
+        c, fid = self.c, data["faction"]
+        stage = factions.stage_of(c, fid)
+        if stage != "unaware":
+            drawn = self._draw("faction", factions.bind(c, fid), stage=stage)
+            if drawn:
+                sc, bind = drawn
+                if "incoming" in sc.visual:
+                    self._occupy("incoming")
+                self._start(sc, bind)
+        factions.schedule_next(c, fid, self.rng)
+
+    def _trade_delivery(self, data: dict) -> None:
+        c = self.c
+        d = c.deal(data["deal"])
+        lines, arrived = trade.deliver(c, data["deal"], self.rng.random() * 100)
+        for line in lines:
+            self._log(line)
+        if arrived:
+            self._occupy("trade_delivery")
+            self._show(self._v_delivery(c.worlds[d.world]))
+
+    def _arc_step(self, data: dict) -> None:
+        """An arc's stage has come due: play its scenario, unless the arc has moved on since."""
+        c = self.c
+        aid, stage = data["arc"], data["stage"]
+        st = c.arcs.get(aid)
+        if st is None or st.state != "active" or st.stage != stage:
+            return
+        arc = arcs.ARCS[aid]
+        w = arcs.arc_world(c, aid)
+        base = {**(self._wbind(w) if w is not None else {}), **factions.bind(c, arc.faction)}
+        drawn = self._draw("arc", base, arc=(aid, stage))
+        if drawn:
+            self._start(*drawn)
+        else:
+            self._log(f"{arc.title.upper()}: NO WORD")
 
     # ------------------------------------------------------------------ player actions (the briefing room)
     def probe(self, wid: str) -> str:
@@ -452,23 +523,31 @@ class Engine:
         """Names for the scenario's placeholders, or None if it can't be played right now."""
         c, b = self.c, dict(base)
         if sc.team:
-            teams = rules.teams_matching(c, sc.team)
+            teams = rules.teams_matching(c, sc.team, b)
             if not teams:
                 return None
             b["team"] = self.rng.choice(teams)
-            where = c.worlds.get(c.teams[b["team"]].where)
+            tm = c.teams[b["team"]]
+            where = c.worlds.get(tm.where)
             b["captured_at"] = where.name if where else "an unknown world"
+            if sc.team == "territory" and where is not None:
+                b.update(self._wbind(where))
+                b["mission"] = str(tm.mission)          # so the scenario's end closes the mission (_check_team)
         if "team" in b:
             b["specialty"] = c.teams[b["team"]].specialty
         if sc.goauld:
             b["goauld"] = self.rng.choice(GOAULD)
         return b if rules.check_all(sc.when, c, b) else None
 
-    def _draw(self, kind: str, base: dict, mission_type: str | None = None,
-              on: str = "random") -> tuple[Scenario, dict] | None:
+    def _draw(self, kind: str, base: dict, mission_type: str | None = None, on: str = "random",
+              stage: str | None = None, arc: tuple[str, int] | None = None) -> tuple[Scenario, dict] | None:
         pool = []
         for sc in sorted(self.scenarios.values(), key=lambda s: s.id):
             if sc.kind != kind or sc.on != on or (mission_type and sc.mission_type not in (None, mission_type)):
+                continue
+            if sc.kind == "faction" and sc.stage != stage:
+                continue
+            if sc.kind == "arc" and (sc.arc, sc.arc_stage) != arc:
                 continue
             b = self._binding(sc, base)
             if b is not None:
@@ -483,7 +562,7 @@ class Engine:
         return next(node.text[lv] for lv in reversed(fullest_first) if lv in node.text)
 
     def _start(self, sc: Scenario, bind: dict) -> None:
-        self._show(self._chain(list(sc.visual), bind), urgent=sc.kind == "incoming")
+        self._show(self._chain(list(sc.visual), bind), urgent=sc.kind in URGENT_KINDS)
         self._run(sc, bind, "start")
 
     def _run(self, sc: Scenario, bind: dict, name: str, follow_up: bool = False) -> None:
@@ -492,7 +571,8 @@ class Engine:
         text = rules.fill(self._text(node), bind)
         if not node.routine:
             self._raise({"type": "node", "scenario": sc.id, "node": name, "bind": bind, "deadline": None,
-                         "title": TITLES[sc.kind], "text": text}, front=follow_up)
+                         "title": "INCOMING" if sc.kind == "faction" and "incoming" in sc.visual else TITLES[sc.kind],
+                         "text": text}, front=follow_up)
             return
         self._report(bind, text)
         self._resolve(sc, bind, node.choices[0].outcome, follow_up)
@@ -519,7 +599,8 @@ class Engine:
         m = c.mission(int(bind["mission"])) if "mission" in bind else None
         if m is not None:
             m.findings += [line for line in lines if not line.startswith(("SECURITY", "PERSONNEL"))]
-        self._show(self._chain(list(o.visual), bind), urgent=sc.kind == "incoming")
+        self._check_victory()
+        self._show(self._chain(list(o.visual), bind), urgent=sc.kind in URGENT_KINDS)
         if c.over:
             return
         if o.goto:
@@ -600,9 +681,13 @@ class Engine:
                 return []
             ok = {"malp": c.stock["malp"] > 0, "team": bool(available_teams(c)), "wait": True}
             return [(k, label, ok[k]) for k, label in SITUATIONS["missed_checkin"].choices]
+        if a["type"] == "victory":
+            return [("stay", "Stay in command", True), ("retire", "Retire in victory", True)]
         return []
 
     def _situation(self, a: dict) -> tuple[str | None, str]:
+        if a["type"] == "victory":
+            return None, "stay"
         if a["type"] == "node":
             node = self.scenarios[a["scenario"]].nodes[a["node"]]
             return node.situation, node.default
@@ -688,6 +773,9 @@ class Engine:
             self._resolve(sc, a["bind"], choice.outcome, follow_up=True)
         elif a["type"] == "missed_checkin":
             self._missed_order(c.mission(a["mission"]), key)
+        elif a["type"] == "victory" and key == "retire":
+            self.retire()
+            return
         if c.over:
             self._game_over()
             return
@@ -959,6 +1047,23 @@ class Engine:
         self._log(f"{m.team} DEBRIEFED: {m.type.upper()} OF {w.name.upper()} COMPLETE")
 
     # ------------------------------------------------------------------ the end
+    def _check_victory(self) -> None:
+        c = self.c
+        if c.won is not None or c.over or not scoring.victory(c):
+            return
+        c.won = c.now
+        self._log("VICTORY — EVERY THREAT WE UNCOVERED HAS BEEN DEALT WITH")
+        self._on_victory(c)
+        self._raise({"type": "victory", "deadline": None, "title": "VICTORY", "text": VICTORY_TEXT})
+
+    def retire(self) -> str:
+        """Hand over command: the campaign ends and goes into the records."""
+        if self.ended:
+            return "THE CAMPAIGN IS OVER"
+        self.c.ending, self.c.over = "retired", "You handed over command of the SGC."
+        self._game_over()
+        return "COMMAND HANDED OVER"
+
     def _game_over(self) -> None:
         if self.ended:
             return
@@ -966,12 +1071,22 @@ class Engine:
         self.ended = True
         c.alarms.clear()
         self._log(c.over.upper())
+        ending = c.ending or "overrun"
+        if ending == "retired":
+            title = "VICTORY" if c.won is not None else "COMMAND HANDED OVER"
 
-        def red(s, p):
-            s.alert, s.status = "red", "SGC OVERRUN"
-        self._show([Step(0, red, "THE SGC HAS FALLEN", ("loop:klaxon",)), sq.hold(4.0)], urgent=True)
-        self.prompt = Prompt("BASE OVERRUN", f"{c.over}\nDay {clock.day(c.minutes)}. "
-                             f"Worlds surveyed: {c.record['surveyed']}. Teams lost: {c.record['teams_lost']}.",
+            def calm(s, p):
+                s.status = "STANDING DOWN"
+            self._show([Step(0, calm, "COMMAND HANDED OVER"), sq.hold(2.0)], urgent=True)
+        else:
+            title = "BASE OVERRUN" if ending == "overrun" else "EARTH HAS FALLEN"
+
+            def red(s, p):
+                s.alert, s.status = "red", "SGC OVERRUN" if ending == "overrun" else "EARTH HAS FALLEN"
+            self._show([Step(0, red, "THE SGC HAS FALLEN", ("loop:klaxon",)), sq.hold(4.0)], urgent=True)
+        self.prompt = Prompt(title, f"{c.over}\nDay {clock.day(c.minutes)}. "
+                             f"Worlds surveyed: {c.record['surveyed']}. Teams lost: {c.record['teams_lost']}. "
+                             f"Score: {scoring.score(c)}.",
                              [("Return to the briefing room", True)])
         self._on_end(c)
 
@@ -982,7 +1097,9 @@ class Engine:
             return
         s = self.d.scene
         s.prompt = self.prompt
-        s.teams = {name: team_label(self.c, name, timer=False).upper() for name in team_names(self.c)}
+        c = self.c
+        away_first = sorted(team_names(c), key=lambda n: (n in available_teams(c), int(n.split("-")[1])))
+        s.teams = {name: team_label(c, name, timer=False).upper() for name in away_first}
 
     def _idle_scene(self, dt: float) -> None:
         """A quiet gate now and then plays a science uplink to a world we know; it never touches the campaign.
@@ -1177,6 +1294,24 @@ class Engine:
         return [*sq.incoming(7), *sq.kawoosh(),
                 Step(0, idc, f"IDC RECEIVED — {team}", ("idc_accept", "stop:klaxon")),
                 *self._arrival(4, f"{team} COMING HOME"), *sq.shutdown(), cleanup()]
+
+    def _v_delivery(self, w: World) -> list[Step]:
+        """A trade delivery: a friendly wormhole, the iris opens, a crate rolls down the ramp."""
+        if self.d is None:
+            return []
+
+        def idc(s, p):
+            s.alert, s.identified, s.status = "normal", True, "IDC: TRADE PARTNER"
+
+        def open_iris(s, p):
+            s.iris = min(s.iris, 1 - p)
+
+        def crate(s, p):
+            s.figures = [Figure("crate", 1 - p, 0.0)] if p < 1 else []
+        return [*sq.incoming(7), *sq.kawoosh(),
+                Step(0, idc, f"TRADE DELIVERY FROM {w.name.upper()}", ("idc_accept", "stop:klaxon")),
+                Step(1.2, open_iris, cues=("iris_open",)), Step(4.0, crate, "CRATE ON THE RAMP"),
+                *sq.shutdown(), cleanup()]
 
     def _v_departure(self, w: World, team: str) -> list[Step]:
         if self.d is None:

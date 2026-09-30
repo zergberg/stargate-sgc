@@ -84,12 +84,13 @@ class Rig:
             self.c.events.cancel(lambda e: e.kind == "incoming")      # tests trigger incoming themselves
             self.c.stock["uav"] = 2
             self.c.upgrades.add("uav_program")
-        self.saves, self.ended, self.logs, self.alarms = [], [], [], []
+        self.saves, self.ended, self.logs, self.alarms, self.victories = [], [], [], [], []
         self.d = Director(Config(), random.Random(1), AddressPicker(load_canon(), 0.6, random.Random(1)),
                           REGISTRY) if director else None
         self.e = Engine(self.c, scen(*texts), self.d, pace_override=pace,
                         save=lambda c: self.saves.append(to_dict(c)), on_end=self.ended.append,
-                        log=self.logs.append, on_alarm=lambda t, x: self.alarms.append(t))
+                        log=self.logs.append, on_alarm=lambda t, x: self.alarms.append(t),
+                        on_victory=self.victories.append)
 
     def world(self, i=5, **traits):
         w = list(self.c.worlds.values())[i]
