@@ -154,7 +154,7 @@ def test_status_shows_meters_drones_and_missions():
     c = new_campaign("campaign", "officer", 1)
     screens.draw_game(cv, layout, Scene(), c, 0.0)
     text = cv.text()
-    for bit in ("SGC STATUS", "SECURITY", " 70", "PERSONNEL", "MALP 4  UAV 2", "NO TEAMS OUT"):
+    for bit in ("SGC STATUS", "SECURITY", " 70", "PERSONNEL", "MALP 4  UAV 0", "NO TEAMS OUT"):
         assert bit in text, bit
 
 

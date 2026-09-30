@@ -82,6 +82,8 @@ class Rig:
         self.c = campaign or new_campaign("campaign", difficulty, 7)
         if campaign is None:
             self.c.events.cancel(lambda e: e.kind == "incoming")      # tests trigger incoming themselves
+            self.c.stock["uav"] = 2
+            self.c.upgrades.add("uav_program")
         self.saves, self.ended, self.logs, self.alarms = [], [], [], []
         self.d = Director(Config(), random.Random(1), AddressPicker(load_canon(), 0.6, random.Random(1)),
                           REGISTRY) if director else None
@@ -163,15 +165,6 @@ def test_a_uav_sees_more_and_recall_brings_a_drone_home():
     r.e.advance(1)
     assert w.drone is None and r.c.stock["uav"] == 2 and r.c.gate_until == r.c.now - 1 + 30
     assert r.e.recall_drone(w.id).startswith("NO DRONE")
-
-
-def test_a_recalled_drone_coming_home_to_full_stores_is_scrapped():
-    r = Rig()
-    w = r.world(env="normal", drone="malp")
-    r.c.stock["malp"] = 6                                  # an older save, already over: nothing adds to it
-    r.e.recall_drone(w.id)
-    r.e.advance(1)
-    assert w.drone is None and r.c.stock["malp"] == 6 and "MALP SCRAPPED — STORES FULL (6)" in r.logs
 
 
 def test_an_alarm_waits_three_game_hours_then_the_default_order_runs():

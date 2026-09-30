@@ -114,7 +114,7 @@ def test_a_survey_departs_checks_in_comes_home_and_debriefs():
     assert r.c.teams["SG-4"].status == "base" and r.c.teams["SG-4"].xp == 1 and r.c.teams["SG-4"].mission is None
     assert w.status == "surveyed" and r.c.record["surveyed"] == 1 and w.name == "Tel'kar"
     assert "contact" in w.options and w.drone is None
-    assert r.c.stock["malp"] == 6                          # 4, +1 at midnight, +1 brought home
+    assert r.c.stock["malp"] == 5                          # 4, +1 brought home; nothing is free at midnight
     assert any("SG-4 CHECKS IN FROM" in line.upper() for line in r.logs)
     assert any("TEL'KAR" in f for f in m.findings) and w.last_visit == m.end
 

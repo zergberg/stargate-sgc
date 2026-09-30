@@ -1,7 +1,7 @@
 """The idle simulation: 30 game days with nobody at the keyboard."""
-from sgc.game import clock, content, planner, rules
+from sgc.game import clock, content, planner
 from sgc.game.engine import Engine
-from sgc.game.state import STOCK, Mission, new_campaign
+from sgc.game.state import Mission, new_campaign
 
 RECKLESS = {"unknown_idc": "open_guarded", "hostiles_following": "keep_closed", "bad_idc": "closed_silent",
             "object": "push_back", "missed_checkin": "wait", "under_fire": "hold", "contact_offer": "accept"}
@@ -29,20 +29,6 @@ def test_default_orders_keep_the_base_alive_and_survey_worlds():
         assert sum(w.status in ("surveyed", "contact") for w in c.worlds.values()) >= 5, seed
         assert c.minutes >= clock.START + 30 * clock.DAY
         assert c.record["missions"] >= 10 and c.record["probes"] >= 10
-
-
-def test_drones_in_stock_and_in_the_field_never_exceed_the_cap():
-    scenarios, _ = content.load(user=None)
-    for seed in (1, 2, 3):
-        c = new_campaign("sandbox", "commander", seed)
-        e = Engine(c, scenarios)
-        for _ in range(20 * 24):
-            planner.step(e)
-            e.advance(clock.HOUR)
-            for drone, (_, cap) in STOCK.items():
-                assert rules.fleet(c, drone) <= cap, (seed, clock.stamp(c.now), drone, c.stock)
-            if e.ended:
-                break
 
 
 def test_reckless_orders_can_lose_the_base():

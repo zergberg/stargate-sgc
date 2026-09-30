@@ -19,6 +19,7 @@ def test_main_menu_and_leaving():
 
 def test_probe_uav_and_recall_from_the_dialing_list():
     r, c = room()
+    c.stock["uav"] = 2
     r.key("1")
     assert r.screen == "worlds" and len(r.items()) == 21 and r.items()[0][0].startswith("Abydos")
     target = list(c.worlds)[3]

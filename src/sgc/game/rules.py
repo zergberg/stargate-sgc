@@ -13,10 +13,12 @@ import re
 from dataclasses import dataclass, field
 from typing import Callable
 
+from . import arcs, economy, factions, trade
 from . import world as wd
 from .clock import DAY, HOUR
-from .state import (ALL_TEAMS, METERS, MISSION_TYPES, RANK_NAMES, SPECIALTIES, STATUSES, STOCK, Campaign, Mission,
-                    Team, available_teams, has_specialty, rank, rank_index, team_names)
+from .state import (ALL_TEAMS, ARC_IDS, ARC_STATES, CORE_TEAMS, GOODS, METERS, MISSION_TYPES, RANK_NAMES,
+                    SPECIALTIES, STATUSES, UPGRADE_IDS, Campaign, CapturedDrone, Mission, Team,
+                    available_teams, has_specialty, rank, rank_index, team_names)
 
 FLAGS = frozenset({"ally.tokra", "ally.asgard", "ally.tollan", "ally.nox", "ally.jaffa",
                    "tech.zat", "tech.naquadah_generator", "tech.lrs"})
@@ -24,7 +26,12 @@ SINGLE_USE = frozenset({"ally.asgard", "ally.nox"})
 FLAG_NAMES = {"ally.tokra": "THE TOK'RA", "ally.asgard": "THE ASGARD", "ally.tollan": "THE TOLLAN",
               "ally.nox": "THE NOX", "ally.jaffa": "THE FREE JAFFA", "tech.zat": "ZAT'NIK'TEL",
               "tech.naquadah_generator": "NAQUADAH GENERATOR", "tech.lrs": "LONG-RANGE SENSORS"}
-TEAM_SLOTS = ("{team}",)
+TEAM_SLOTS = ("{team}", "{captive}")
+FACTION_SLOTS = ("{faction}", "{owner}")
+EFFECT_STATUSES = ("base", "offworld", "injured", "captured", "lost")     # forming and training: roster.py only
+ARC_ACTIONS = ("start", "advance", "resolve", "fail")
+EXPLORED = "ALL ADDRESSES VISITED — RE-SURVEY, STUDY RUINS, ASK ALLIES"
+_HIDDEN_WORLD = ("env", "inhabitants", "feature")
 WORLD_SLOT = "{world}"
 SCHEDULABLE = ("incoming",)
 REINFORCE = 6 * HOUR            # a reinforcing team stays out this long
@@ -107,13 +114,58 @@ def _resolve(tok: str, bind: dict) -> str:
 
 
 def _world_tok(tok: str, text: str) -> str:
-    if tok == WORLD_SLOT or _DESIGNATION.match(tok):
+    if tok == WORLD_SLOT or _DESIGNATION.match(tok) or (tok.startswith("@") and tok[1:] in wd.PLACES):
         return tok
-    raise RuleError(f'"{text}": expected {{world}} or a designation like P3X-866, got "{tok}"')
+    raise RuleError(f'"{text}": expected {{world}}, a designation like P3X-866 or @Name of a canon world, '
+                    f'got "{tok}"')
 
 
 def _world(c: Campaign, tok: str, bind: dict) -> wd.World | None:
+    """A world on the dialing list (an unlisted arc world isn't known yet, so it's None here)."""
+    if tok.startswith("@"):
+        return c.worlds.get(wd.place_id(tok[1:]))
     return c.worlds.get(bind.get("world_id", "") if tok == WORLD_SLOT else tok)
+
+
+def _place(tok: str, text: str) -> str:
+    if not tok.startswith("@") or tok[1:] not in wd.PLACES:
+        raise RuleError(f'"{text}": expected @Name of a canon world, got "{tok}"')
+    return tok[1:]
+
+
+def _faction_tok(tok: str, text: str) -> str:
+    if tok in wd.FACTION_IDS or tok in FACTION_SLOTS:
+        return tok
+    raise RuleError(f'"{text}": unknown faction "{tok}"')
+
+
+def _fid(c: Campaign, tok: str, bind: dict) -> str | None:
+    """A faction id from a token: an id, {faction} (the scenario's faction), or {owner} (the world's holder)."""
+    if tok == "{faction}":
+        return bind.get("faction_id")
+    if tok == "{owner}":
+        return factions.owner_of(c, bind.get("world_id", ""))
+    return tok
+
+
+def held(c: Campaign, wid: str) -> bool:
+    """A captured team, or a located captured drone, is held on this world (both known to the SGC)."""
+    return any(t.status == "captured" and t.where == wid for t in c.teams.values()) \
+        or any(d.world == wid and d.located for d in c.captured_drones)
+
+
+def hidden(text: str) -> bool:
+    """A condition on something the SGC may not know: it picks which scenario plays, so only `when` may use it."""
+    t = text.split()
+    return (len(t) >= 3 and t[0] == "world" and t[2] in _HIDDEN_WORLD) or (bool(t) and t[0] in
+                                                                             ("attention", "stage", "is"))
+
+
+def attention(c: Campaign, fid: str | None, n: int) -> list[str]:
+    """Change a Goa'uld's attention; an arc of theirs may reach its endgame."""
+    if fid is None:
+        return []
+    return factions.adjust_attention(c, fid, n) + arcs.on_attention(c, fid)
 
 
 def _one(tok: str, allowed, what: str, text: str) -> str:
@@ -139,10 +191,12 @@ def _cond_body(t: list[str], text: str) -> Callable[[Campaign, dict], bool] | No
     if len(t) == 2 and t[0] == "not" and t[1] in FLAGS:
         flag = t[1]
         return lambda c, b: not has_flag(c, flag)
-    if len(t) == 3 and t[1] in _OPS and (t[0] in METERS or t[0] == "day"):
+    if len(t) == 3 and t[1] in _OPS and (t[0] in METERS or t[0] in ("day", "funding", "naquadah")):
         name, op, n = t[0], _OPS[t[1]], _int(t[2], text)
         if name == "day":
             return lambda c, b: op(int(c.minutes // DAY) + 1, n)
+        if name in ("funding", "naquadah"):
+            return lambda c, b: op(getattr(c, name), n)
         return lambda c, b: op(c.meters[name], n)
     if len(t) == 3 and t[0] == "team":
         team = _team_tok(t[1], text)
@@ -175,6 +229,30 @@ def _cond_body(t: list[str], text: str) -> Callable[[Campaign, dict], bool] | No
             return lambda c, b: (w := _world(c, tok, b)) is not None and w.inhabitants == who
         feat = _one(t[3], wd.FEATURES, "feature", text)
         return lambda c, b: (w := _world(c, tok, b)) is not None and feat in w.features
+    if len(t) == 2 and t[0] == "aware":
+        tok = _faction_tok(t[1], text)
+        return lambda c, b: (fid := _fid(c, tok, b)) is not None and c.factions[fid].known
+    if len(t) == 2 and t[0] == "upgrade":
+        uid = _one(t[1], UPGRADE_IDS, "upgrade", text)
+        return lambda c, b: uid in c.upgrades
+    if len(t) == 2 and t[0] == "held":
+        tok = _world_tok(t[1], text)
+        return lambda c, b: (w := _world(c, tok, b)) is not None and held(c, w.id)
+    if len(t) == 4 and t[0] in ("trust", "attention") and t[2] in _OPS:
+        tok, op, n, attr = _faction_tok(t[1], text), _OPS[t[2]], _int(t[3], text), t[0]
+        return lambda c, b: (fid := _fid(c, tok, b)) is not None and op(getattr(c.factions[fid], attr), n)
+    if len(t) == 3 and t[0] == "stage":
+        tok, stage = _faction_tok(t[1], text), _one(t[2], factions.STAGE_NAMES, "stage", text)
+        return lambda c, b: (fid := _fid(c, tok, b)) is not None and factions.stage_of(c, fid) == stage
+    if len(t) == 3 and t[0] == "arc":
+        aid, state = _one(t[1], ARC_IDS, "arc", text), _one(t[2], ARC_STATES, "arc state", text)
+        return lambda c, b: (a := c.arcs.get(aid)) is not None and a.state == state
+    if len(t) == 5 and t[0] == "arc" and t[2] == "stage" and t[3] in _OPS:
+        aid, op, n = _one(t[1], ARC_IDS, "arc", text), _OPS[t[3]], _int(t[4], text)
+        return lambda c, b: (a := c.arcs.get(aid)) is not None and a.state == "active" and op(a.stage, n)
+    if len(t) == 3 and t[0] == "is":
+        tok, wid = _world_tok(t[1], text), wd.place_id(_place(t[2], text))
+        return lambda c, b: (w := _world(c, tok, b)) is not None and w.id == wid
     return None
 
 
@@ -218,32 +296,38 @@ def scaled(c: Campaign, delta: int) -> int:
     return n if n != 0 else (1 if delta > 0 else -1)
 
 
+def apply_meter(c: Campaign, name: str, delta: int) -> list[str]:
+    """Change a meter by difficulty; Security losses are first cut by the iris upgrades."""
+    if name == "security" and delta < 0:
+        delta = -max(1, int(-delta * economy.defense(c) + 0.5))
+    before = c.meters[name]
+    c.meters[name] = max(0, min(100, before + scaled(c, delta)))
+    d = c.meters[name] - before
+    if name == "personnel" and d < 0:
+        c.record["personnel_lost"] += -d
+    return [f"{name.upper()} {d:+d}"] if d else []
+
+
 def _meter(name: str, delta: int):
-    def fn(c: Campaign, b: dict) -> list[str]:
-        before = c.meters[name]
-        c.meters[name] = max(0, min(100, before + scaled(c, delta)))
-        d = c.meters[name] - before
-        if name == "personnel" and d < 0:
-            c.record["personnel_lost"] += -d
-        return [f"{name.upper()} {d:+d}"] if d else []
-    return fn
+    return lambda c, b: apply_meter(c, name, delta)
 
 
 def _breach(n: int):
-    security = _meter("security", -n)
-
     def fn(c: Campaign, b: dict) -> list[str]:
         if c.meters["security"] <= 0:
             c.over = "The SGC was overrun."
             return ["SECURITY BREACHED — THE BASE HAS FALLEN"]
-        return ["SECURITY BREACH", *security(c, b)]
+        economy.note(c, "breaches")
+        return ["SECURITY BREACH", *apply_meter(c, "security", -n)]
     return fn
 
 
 def _team(tok: str, status: str):
     def fn(c: Campaign, b: dict) -> list[str]:
         name = _resolve(tok, b)
-        tm = c.teams[name]
+        tm = c.teams.get(name)
+        if tm is None:                  # a number not on the roster (never commissioned, or disbanded)
+            return []
         prev = tm.status
         if status == "lost" and prev != "lost" and has_flag(c, "ally.nox"):
             c.used.add("ally.nox")
@@ -253,10 +337,18 @@ def _team(tok: str, status: str):
         if status == "captured":
             tm.idc, tm.until = "compromised", c.now + CAPTIVE
             tm.where = b.get("world_id", tm.where)
-            return [f"{name} CAPTURED ON {b.get('world', 'AN UNKNOWN WORLD').upper()}"]
+            economy.note(c, "captured")
+            msgs = [f"{name} CAPTURED ON {b.get('world', 'AN UNKNOWN WORLD').upper()}"]
+            w = c.worlds.get(tm.where)
+            if w is not None:
+                if "rescue" not in w.options:
+                    w.options.append("rescue")
+                msgs += attention(c, wd.faction_id(w.owner), 15)
+            return msgs
         if status == "lost":
             if prev != "lost":
                 c.record["teams_lost"] += 1
+                economy.note(c, "lost")
             tm.idc, tm.until, tm.where = "revoked", c.now + REFORM, ""
             return [f"{name} LOST"]
         if status == "injured":
@@ -290,6 +382,8 @@ def revoke(c: Campaign, name: str) -> list[str]:
 def _idc(tok: str, action: str):
     def fn(c: Campaign, b: dict) -> list[str]:
         name = _resolve(tok, b)
+        if name not in c.teams:
+            return []
         if action == "compromise":
             c.teams[name].idc = "compromised"
             return []
@@ -303,6 +397,7 @@ def _gain(flag: str):
             return []
         c.inventory.add(flag)
         c.used.discard(flag)
+        economy.note(c, "allies" if flag.startswith("ally.") else "tech")
         kind = "ALLIANCE" if flag.startswith("ally.") else "NEW TECHNOLOGY"
         return [f"{kind}: {FLAG_NAMES[flag]}"]
     return fn
@@ -339,7 +434,8 @@ def set_world_status(c: Campaign, w: wd.World, status: str) -> list[str]:
 def new_address(c: Campaign, found: str) -> wd.World:
     """A generated world added to the dialing list; the same campaign always gets the same worlds."""
     rng = random.Random(f"{c.seed}/{len(c.worlds)}")
-    w = wd.generate(rng, set(c.worlds), found=found, owner_odds=1.0 if c.mode == "campaign" else 0.3)
+    w = wd.generate(rng, set(c.worlds) | set(c.unlisted), found=found,
+                    owner_odds=1.0 if c.mode == "campaign" else 0.3)
     c.worlds[w.id] = w
     return w
 
@@ -369,6 +465,7 @@ def recall(c: Campaign, m: Mission) -> list[str]:
 
 def _reveal_address(c: Campaign, b: dict) -> list[str]:
     w = new_address(c, f"intel from {b['team']}" if b.get("team") else "intel")
+    economy.note(c, "intel")
     return [f"NEW ADDRESS: {w.id}"]
 
 
@@ -382,6 +479,8 @@ def _reveal_name(tok: str, name: str | None, source: str):
             learned = wd.reveal_name(w, source, c.now)
         else:
             learned = name if wd.learn_name(w, name, wd.SOURCE_TEXT[source], c.now) else None
+        if learned:
+            economy.note(c, "intel")
         return [f"{before} IS CALLED {learned.upper()} BY {wd.SOURCE_TEXT[source].upper()}"] if learned else []
     return fn
 
@@ -430,9 +529,15 @@ def _drone(tok: str, fate: str):
         drone, w.drone = w.drone, None
         msgs = [f"{drone.upper()} ON {w.name.upper()} {fate.upper()}"]
         if fate == "captured":
-            msgs += set_world_status(c, w, "hostile")
+            msgs += capture_drone(c, w, drone)
         return msgs
     return fn
+
+
+def capture_drone(c: Campaign, w: wd.World, drone: str) -> list[str]:
+    """A drone taken on a world: held there until recovered; the world turns hostile; its Goa'uld notices."""
+    c.captured_drones.append(CapturedDrone(drone, w.id, c.now))
+    return set_world_status(c, w, "hostile") + attention(c, wd.faction_id(w.owner), 10)
 
 
 def _recall(tok: str):
@@ -464,6 +569,97 @@ def _reinforce(tok: str):
     return fn
 
 
+def _faction_delta(kind: str, tok: str, n: int):
+    def fn(c: Campaign, b: dict) -> list[str]:
+        fid = _fid(c, tok, b)
+        if fid is None:
+            return []
+        return factions.adjust_trust(c, fid, n) if kind == "trust" else attention(c, fid, n)
+    return fn
+
+
+def _resource(name: str, n: int):
+    def fn(c: Campaign, b: dict) -> list[str]:
+        before = getattr(c, name)
+        setattr(c, name, max(0, before + n))
+        d = getattr(c, name) - before
+        return [f"{name.upper()} {d:+d}"] if d else []
+    return fn
+
+
+def _incident(n: int):
+    def fn(c: Campaign, b: dict) -> list[str]:
+        economy.note(c, "incidents", n)
+        return ["THE NID HAS TAKEN AN INTEREST"]
+    return fn
+
+
+def _arc(aid: str, action: str):
+    return lambda c, b: getattr(arcs, action)(c, aid)
+
+
+def _deal(tok: str, goods: str, n: int):
+    def fn(c: Campaign, b: dict) -> list[str]:
+        w = _world(c, tok, b)
+        return trade.new_deal(c, w.id, goods, n) if w is not None else []
+    return fn
+
+
+def _reveal_place(name: str):
+    def fn(c: Campaign, b: dict) -> list[str]:
+        wid = wd.place_id(name)
+        if wid in c.worlds:
+            return []
+        w = c.unlisted.pop(wid, None) or wd.place(name)
+        w.found = f"intel from {b['team']}" if b.get("team") else "intel"
+        c.worlds[wid] = w
+        economy.note(c, "intel")
+        return [f"NEW ADDRESS: {w.id}"]
+    return fn
+
+
+def _reveal_faction(tok: str, source: str):
+    def fn(c: Campaign, b: dict) -> list[str]:
+        fid = _fid(c, tok, b)
+        if fid is None:
+            return []
+        lines = factions.know(c, fid, wd.SOURCE_TEXT[source])
+        if lines:
+            economy.note(c, "intel")
+        w = c.worlds.get(b.get("world_id", ""))
+        if tok == "{owner}" and w is not None:
+            w.seen["owner"] = wd.faction_name(fid)           # the world file now says who holds it
+        return lines
+    return fn
+
+
+def _locate(tok: str):
+    def fn(c: Campaign, b: dict) -> list[str]:
+        w = _world(c, tok, b)
+        if w is None:
+            return []
+        out = []
+        for d in c.captured_drones:
+            if d.world == w.id and not d.located:
+                d.located = True
+                out.append(f"THE {d.drone.upper()} TAKEN ON {w.name.upper()} IS HELD THERE")
+        if out and "recover" not in w.options:
+            w.options.append("recover")
+        return out
+    return fn
+
+
+def _recover(tok: str):
+    def fn(c: Campaign, b: dict) -> list[str]:
+        w = _world(c, tok, b)
+        d = next((d for d in c.captured_drones if w is not None and d.world == w.id and d.located), None)
+        if d is None:
+            return []
+        c.captured_drones.remove(d)
+        return [f"{d.drone.upper()} RECOVERED FROM {w.name.upper()}", *stow(c, d.drone)]
+    return fn
+
+
 def _effect_body(body: str, text: str):
     t = body.split()
     if not t:
@@ -471,6 +667,10 @@ def _effect_body(body: str, text: str):
     if t[0] == "reveal":
         if t == ["reveal", "address"]:
             return _reveal_address
+        if len(t) == 3 and t[1] == "address":
+            return _reveal_place(_place(t[2], text))
+        if len(t) == 5 and t[1] == "faction" and t[3] == "from":
+            return _reveal_faction(_faction_tok(t[2], text), _one(t[4], wd.NAME_SOURCES, "name source", text))
         m = _REVEAL_NAME.match(body)
         if not m:
             raise RuleError(f'"{text}": expected reveal address, or reveal name {{world}} ["Name"] from <source>')
@@ -504,8 +704,8 @@ def _effect_body(body: str, text: str):
         return _breach(n)
     if t[0] == "team" and len(t) == 3:
         team = _team_tok(t[1], text)
-        if t[2] not in STATUSES:
-            raise RuleError(f'"{text}": unknown team status "{t[2]}"')
+        if t[2] not in EFFECT_STATUSES:
+            raise RuleError(f'"{text}": a team can be set only to {", ".join(EFFECT_STATUSES)}, not "{t[2]}"')
         return _team(team, t[2])
     if t[0] == "idc" and len(t) == 3 and t[2] in ("revoke", "compromise"):
         return _idc(_team_tok(t[1], text), t[2])
@@ -515,6 +715,26 @@ def _effect_body(body: str, text: str):
         return _use(t[1])
     if t[0] == "game_over" and len(t) >= 2:
         return _game_over(body.split(None, 1)[1])
+    if t[0] in ("attention", "trust") and len(t) == 3:
+        return _faction_delta(t[0], _faction_tok(t[1], text), _signed(t[2], text))
+    if t[0] in ("funding", "naquadah") and len(t) == 2:
+        return _resource(t[0], _signed(t[1], text))
+    if t[0] == "incident" and len(t) == 2:
+        n = _signed(t[1], text)
+        if n <= 0:
+            raise RuleError(f'"{text}": incident can only go up')
+        return _incident(n)
+    if t[0] == "arc" and len(t) == 3:
+        return _arc(_one(t[1], ARC_IDS, "arc", text), _one(t[2], ARC_ACTIONS, "arc action", text))
+    if t[0] == "deal" and len(t) == 4:
+        n = _int(t[3], text)
+        if n <= 0:
+            raise RuleError(f'"{text}": a deal delivers a positive amount')
+        return _deal(_world_tok(t[1], text), _one(t[2], GOODS, "goods", text), n)
+    if t[0] == "locate" and len(t) == 2:
+        return _locate(_world_tok(t[1], text))
+    if t[0] == "recover" and len(t) == 2:
+        return _recover(_world_tok(t[1], text))
     raise RuleError(f'unknown effect "{text}"')
 
 
@@ -542,14 +762,19 @@ def apply_all(effects, c: Campaign, bind: dict) -> list[str]:
 
 # ------------------------------------------------------------------ campaign bookkeeping
 
-def teams_matching(c: Campaign, which: str) -> list[str]:
+def teams_matching(c: Campaign, which: str, bind: dict | None = None) -> list[str]:
+    names = team_names(c)
     if which == "base":
         return available_teams(c)
     if which == "compromised":
-        return [t for t in team_names(c) if c.teams[t].idc == "compromised" and c.teams[t].status != "lost"]
+        return [t for t in names if c.teams[t].idc == "compromised" and c.teams[t].status != "lost"]
     if which == "captured":
-        return [t for t in team_names(c) if c.teams[t].status == "captured"]
-    return [t for t in team_names(c) if c.teams[t].status != "lost"]
+        return [t for t in names if c.teams[t].status == "captured"]
+    if which == "territory":                     # out on a mission on one of this faction's worlds
+        fid = (bind or {}).get("faction_id")
+        return [t for t in names if c.teams[t].status == "offworld" and c.teams[t].mission is not None
+                and fid is not None and factions.owner_of(c, c.teams[t].where) == fid]
+    return [t for t in names if c.teams[t].status != "lost"]
 
 
 def deployed(c: Campaign, drone: str) -> int:
@@ -563,46 +788,68 @@ def deployed(c: Campaign, drone: str) -> int:
 
 
 def fleet(c: Campaign, drone: str) -> int:
-    """Every drone of this kind the SGC has: in stores and in the field. Deliveries stop at the cap."""
+    """Every drone of this kind the SGC has: in stores and in the field."""
     return c.stock[drone] + deployed(c, drone)
 
 
 def stow(c: Campaign, drone: str) -> list[str]:
-    """A drone comes home to stores; one that would take them over the cap is scrapped."""
-    cap = STOCK[drone][1]
-    if c.stock[drone] >= cap:
-        return [f"{drone.upper()} SCRAPPED — STORES FULL ({cap})"]
+    """A drone comes home to stores. It was paid for, so it always fits (the cap only limits purchases)."""
     c.stock[drone] += 1
     return []
 
 
+def _rescue_for(c: Campaign, name: str) -> Mission | None:
+    return next((m for m in c.missions if m.type == "rescue" and m.target == name and m.state == "active"), None)
+
+
+def _explored(c: Campaign) -> list[str]:
+    """Said once each time the dialing list runs out of unexplored addresses."""
+    if any(w.status == "unexplored" for w in c.worlds.values()):
+        c.hints.discard("explored")
+        return []
+    if "explored" in c.hints:
+        return []
+    c.hints.add("explored")
+    return [EXPLORED]
+
+
 def hourly(c: Campaign) -> list[str]:
-    """One game hour at the SGC: the base recovers, drones are restocked, team timers run out."""
+    """One game hour at the SGC: the base recovers, team timers run out; at midnight, requisitions, the
+    Goa'uld's attention fading, and the address hint."""
     hour = c.now // HOUR
     if hour % 6 == 0:
-        c.meters["security"] = min(100, c.meters["security"] + 1)
+        c.meters["security"] = min(100, c.meters["security"] + (2 if "security_detail" in c.upgrades else 1))
     if hour % 4 == 0:
         c.meters["personnel"] = min(100, c.meters["personnel"] + 1)
-    msgs = []
+    msgs: list[str] = []
     if hour % 24 == 0:
-        for drone, (_, cap) in STOCK.items():
-            if drone == "uav" and (hour // 24) % 3:
-                continue
-            if fleet(c, drone) < cap:
-                c.stock[drone] += 1
-                msgs.append(f"{drone.upper()} DELIVERED — {c.stock[drone]} IN STOCK")
-    for name, tm in c.teams.items():
+        msgs += economy.requisition(c) + factions.decay(c) + _explored(c)
+    for name in team_names(c):
+        tm = c.teams[name]
         if not tm.until or tm.until > c.now:
+            continue
+        if tm.status == "captured" and (m := _rescue_for(c, name)) is not None:
+            tm.until = max(tm.until, m.end + DAY)          # a rescue is on its way: hold on
             continue
         tm.until = 0
         if tm.status == "captured":
             c.record["teams_lost"] += 1
+            economy.note(c, "lost")
             tm.status, tm.idc, tm.where, tm.until = "lost", "revoked", "", c.now + REFORM
             msgs.append(f"{name} PRESUMED LOST")
         elif tm.status == "injured":
             tm.status = "base"
             msgs.append(f"{name} BACK ON DUTY")
-        elif tm.status == "lost":
+        elif tm.status == "lost" and name in CORE_TEAMS:
             tm.status, tm.idc, tm.xp = "base", "valid", 0
             msgs.append(f"{name} RE-FORMED — GREEN")
+        elif tm.status == "lost":
+            del c.teams[name]
+            msgs.append(f"{name} DISBANDED — THE NUMBER CAN BE RECOMMISSIONED")
+        elif tm.status == "forming":
+            tm.status = "base"
+            msgs.append(f"{name} READY FOR DUTY")
+        elif tm.status == "training":
+            tm.status = "base"
+            msgs.append(f"{name} TRAINING COMPLETE: {tm.secondary.upper()}")
     return msgs

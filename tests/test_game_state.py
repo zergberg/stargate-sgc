@@ -16,7 +16,7 @@ def test_new_campaign_starts_at_eight_with_the_cartouche_and_the_roster():
     assert {t: tm.specialty for t, tm in c.teams.items()} == ROSTER == {
         "SG-1": "elite", "SG-2": "recon", "SG-3": "combat", "SG-4": "science"}
     assert all(tm.status == "base" and tm.idc == "valid" and tm.xp == 0 for tm in c.teams.values())
-    assert c.meters == {"security": 70, "personnel": 80} and c.stock == {"malp": 4, "uav": 2}
+    assert c.meters == {"security": 70, "personnel": 80} and c.stock == {"malp": 4, "uav": 0}
     assert c.orders == orders.defaults() and c.alarms == [] and c.missions == []
     kinds = [e.kind for e in c.events]
     assert kinds == ["recovery_tick", "incoming", "funding_review"] and c.events.peek().due == 540

@@ -180,42 +180,6 @@ def test_hourly_recovers_security_every_six_hours_and_personnel_every_four():
     assert c.meters["security"] == 52 and c.meters["personnel"] == 53     # 12, 18 / 12, 16, 20
 
 
-def test_hourly_restocks_drones_at_midnight_up_to_the_cap():
-    c = camp()
-    c.minutes = clock.DAY
-    assert rules.hourly(c) == ["MALP DELIVERED — 5 IN STOCK"]
-    c.minutes = 3 * clock.DAY
-    msgs = rules.hourly(c)
-    assert "MALP DELIVERED — 6 IN STOCK" in msgs and "UAV DELIVERED — 3 IN STOCK" in msgs
-    c.minutes = 6 * clock.DAY
-    assert rules.hourly(c) == []                  # both at their caps
-
-
-def test_deliveries_count_deployed_drones_against_the_cap():
-    c = camp()
-    ws = list(c.worlds.values())
-    c.stock["malp"] = 3
-    ws[3].drone = "malp"                                      # parked on a world
-    c.events.push(c.now, "dial_out", {"op": "malp", "world": ws[4].id})          # queued to launch
-    c.events.push(c.now + 60, "malp_return", {"world": ws[5].id, "drone": "malp"})     # in flight
-    assert rules.fleet(c, "malp") == 6
-    c.minutes = clock.DAY
-    assert rules.hourly(c) == [] and c.stock["malp"] == 3
-    c.events.push(c.now + 60, "search_report", {"mission": 1, "by": "malp"})   # a search MALP counts too
-    ws[3].drone = None
-    assert rules.fleet(c, "malp") == 6
-    c.events.cancel(lambda e: e.kind == "search_report")
-    c.minutes = 2 * clock.DAY
-    assert rules.hourly(c) == ["MALP DELIVERED — 4 IN STOCK"]
-
-
-def test_a_drone_coming_home_to_a_full_store_is_scrapped():
-    c = camp()
-    c.stock["malp"] = 5
-    assert rules.stow(c, "malp") == [] and c.stock["malp"] == 6
-    assert rules.stow(c, "malp") == ["MALP SCRAPPED — STORES FULL (6)"] and c.stock["malp"] == 6
-
-
 def test_hourly_runs_team_timers():
     c = camp()
     run(["team SG-1 captured", "team SG-2 injured", "team SG-3 lost"], c, {"world": "Chulak"})
