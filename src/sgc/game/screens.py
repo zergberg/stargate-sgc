@@ -13,6 +13,7 @@ from .clock import stamp
 from .database import COLUMNS, OPENS, SEARCHABLE, TAB_TITLES, TABS, Database
 from .menu import Menu
 from .room import Room
+from .schedule import QueueItem
 from .state import Campaign
 
 HILITE = (70, 48, 12)
@@ -20,6 +21,7 @@ HEADER_BG = (38, 26, 8)
 ALARM_BG = ((120, 10, 5), (50, 5, 5))
 METER_W = 10
 STATUS_H = 7
+QUEUE_ROWS = 5                  # the GATE QUEUE box shows at most this many items
 LEGENDS = ("bar", "full", "off")
 WIDTHS = {"addresses": (0, 18, 10, 10, 5, 5), "missions": (5, 16, 8, 10, 9, 4, 0),
           "teams": (5, 10, 9, 17, 16, 0), "intel": (5, 22, 8, 0), "queue": (10, 0, 41),
@@ -281,6 +283,34 @@ def draw_status(canvas: Canvas, r: Rect, c: Campaign) -> None:
         active = len(c.active_missions())
         canvas.put(x, y, (f"{active} MISSION{'S' if active != 1 else ''} ACTIVE" if active else "NO TEAMS OUT")[:w],
                    AMBER if active else DIM)
+
+
+def queue_height(n: int, avail: int) -> int:
+    """Rows for the GATE QUEUE box holding n items, given avail free rows: one row per item (at least one, at
+    most QUEUE_ROWS) plus its border, shrunk to fit; 0 when not even one item row fits."""
+    want = min(QUEUE_ROWS, max(1, n)) + 2
+    if avail >= want:
+        return want
+    return avail if avail >= 3 else 0
+
+
+def draw_queue(canvas: Canvas, r: Rect, items: list[QueueItem]) -> None:
+    """The GATE QUEUE box: one brief row per item in schedule order, cut to the box. When they don't all fit
+    the last row counts the rest; with nothing queued it says so. Read-only: the Database's QUEUE tab acts."""
+    if r.h < 3 or r.w < 6:
+        return
+    canvas.fill(r, " ")
+    canvas.box(r, "GATE QUEUE", DIM, AMBER)
+    x, y, w = r.x + 2, r.y + 1, r.w - 4
+    rows = r.h - 2
+    if not items:
+        canvas.put(x, y, _clip("NOTHING QUEUED", w), DIM)
+        return
+    shown = items if len(items) <= rows else items[:rows - 1]
+    for i, item in enumerate(shown):
+        canvas.put(x, y + i, _clip(item.brief, w), WHITE if item.kind == "dial_out" else AMBER)
+    if len(shown) < len(items):
+        canvas.put(x, y + rows - 1, _clip(f"+{len(items) - len(shown)} MORE · d", w), DIM)
 
 
 def draw_game(canvas: Canvas, layout: Layout, scene: Scene, c: Campaign, t: float) -> None:

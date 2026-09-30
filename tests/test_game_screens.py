@@ -612,3 +612,71 @@ def test_every_room_key_is_in_the_help():
     keys = {k for k, _ in screens.KEYS_HELP}
     for k in ("b", "d", "1-9", "↑↓ ⏎", "?", "q", "^C Esc"):
         assert k in keys
+
+
+# ---------------------------------------------------------------- the GATE QUEUE box
+
+from sgc.layout import Rect
+
+BRIEFS = [
+    QueueItem("dial:depart:1", "dial_out", "1", "SG-2 → ABYDOS (SURVEY)", "WAITING FOR THE GATE", (0, 0),
+              brief="1 SG-2 STAGING ABYDOS"),
+    QueueItem("dial:malp:P3X-888", "dial_out", "2", "MALP → P3X-888", "WAITING FOR THE GATE", (0, 1),
+              brief="2 MALP → P3X-888"),
+    QueueItem("mission:3", "mission", "14:00", "SG-1 SURVEY OF P3X-774", "CHECK-IN 14:00", (1, 840),
+              brief="SG-1 CHECK-IN 14:00"),
+    QueueItem("team:SG-4", "team", "D2 09:00", "SG-4 RE-FORMING", "READY D2 09:00", (1, 1980),
+              brief="SG-4 RE-FORMING D2 09:00"),
+    QueueItem("team:SG-3", "team", "D4 18:00", "SG-3 INJURED", "BACK D4 18:00", (1, 5400),
+              brief="SG-3 INJURED D4 18:00"),
+    QueueItem("deal:1", "delivery", "D5 08:00", "DELIVERY FROM LANGARA", "2 NAQUADAH · 5 TO COME", (1, 6240),
+              brief="DELIVERY LANGARA D5 08:00"),
+    QueueItem("deal:2", "delivery", "D6 08:00", "DELIVERY FROM K'TAU", "2 NAQUADAH · 5 TO COME", (1, 7680),
+              brief="DELIVERY K'TAU D6 08:00"),
+]
+
+
+def box_lines(cv, r):
+    return [line[r.x:r.x + r.w] for line in cv.text().split("\n")[r.y:r.y + r.h]]
+
+
+def test_the_queue_box_height_fits_its_items_and_shrinks_then_goes():
+    assert screens.queue_height(0, 20) == 3                  # "NOTHING QUEUED" takes one row
+    assert screens.queue_height(2, 20) == 4
+    assert screens.queue_height(9, 20) == screens.QUEUE_ROWS + 2
+    assert screens.queue_height(9, 5) == 5                  # shrunk to the rows there are
+    assert screens.queue_height(9, 3) == 3
+    assert screens.queue_height(9, 2) == 0 and screens.queue_height(0, -4) == 0
+
+
+def test_the_queue_box_draws_every_row_when_they_fit():
+    cv = Canvas(40, 10)
+    r = Rect(0, 0, 38, 7)
+    screens.draw_queue(cv, r, BRIEFS[:5])
+    lines = box_lines(cv, r)
+    assert "GATE QUEUE" in lines[0]
+    assert [line[2:].rstrip(" │") for line in lines[1:6]] == [i.brief for i in BRIEFS[:5]]
+
+
+def test_an_overflowing_queue_ends_with_how_many_more():
+    cv = Canvas(40, 10)
+    r = Rect(0, 0, 38, 7)
+    screens.draw_queue(cv, r, BRIEFS)
+    lines = box_lines(cv, r)
+    assert lines[4][2:].rstrip(" │") == BRIEFS[3].brief
+    assert lines[5][2:].rstrip(" │") == "+3 MORE · d"
+
+
+def test_an_empty_queue_says_nothing_is_queued():
+    cv = Canvas(40, 5)
+    r = Rect(0, 0, 38, 3)
+    screens.draw_queue(cv, r, [])
+    assert "NOTHING QUEUED" in box_lines(cv, r)[1]
+
+
+def test_long_rows_are_cut_with_an_ellipsis():
+    cv = Canvas(20, 5)
+    r = Rect(0, 0, 16, 3)
+    screens.draw_queue(cv, r, BRIEFS[:1])
+    row = box_lines(cv, r)[1]
+    assert row[2:14] == "1 SG-2 STAG…" and row[15] == "│"
