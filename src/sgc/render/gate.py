@@ -9,6 +9,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageFo
 
 from ..glyphs import glyph_char, load_glyph_font
 from ..model import Feed, Figure, Scene
+from .feed import screen as feed_screen
 
 LIT = (255, 140, 30)
 UNLIT = (110, 60, 30)
@@ -29,6 +30,12 @@ def label_font(size: int) -> ImageFont.ImageFont:
         except OSError:
             continue
     return ImageFont.load_default(size=max(1, size))
+
+
+@lru_cache(maxsize=8)
+def _feed_fonts(h: int) -> tuple[ImageFont.ImageFont, ImageFont.ImageFont]:
+    """The feed monitor's HUD font and its SIGNAL LOST font, for a screen h pixels high."""
+    return label_font(max(6, h // 9)), label_font(max(7, h // 6))
 
 
 @lru_cache(maxsize=1)
@@ -521,5 +528,6 @@ class GateRenderer:
         im.paste(self._feed_screen(feed, t, w, h), (x0 + bezel, y0 + bezel))
 
     def _feed_screen(self, feed: Feed, t: float, w: int, h: int) -> Image.Image:
-        """The monitor's picture."""
-        return Image.new("RGB", (w, h), (8, 12, 10))
+        """The monitor's picture: the UAV's camera and HUD, turning to static as the signal goes."""
+        small, big = _feed_fonts(h)
+        return feed_screen(feed, t, (w, h), int(feed.p * FEED_SCROLL), small, big)
