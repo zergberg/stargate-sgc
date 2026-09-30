@@ -541,3 +541,74 @@ def test_the_new_tabs_draw_and_the_current_tab_stays_in_the_strip(tab):
     db.tab = tab
     screens.draw_database(cv, layout, db, "bar")
     assert TAB_TITLES[tab] in cv.text().split("\n")[0]
+
+
+from sgc.game import arcs, database, factions, trade
+
+
+@pytest.mark.parametrize("cols,rows", [(80, 22), (120, 36)])
+def test_the_status_panel_shows_funding_and_naquadah(cols, rows):
+    layout, cv = small(cols, rows)
+    c = new_campaign("campaign", "officer", 1)
+    c.naquadah = 7
+    screens.draw_game(cv, layout, Scene(), c, 0.0)
+    if layout.mode == "full":
+        assert "FUNDING 500 · NAQUADAH 7" in cv.text()
+
+
+def test_defcon_follows_what_the_sgc_knows():
+    layout, cv = full()
+    c = new_campaign("campaign", "officer", 1)
+    c.factions["sokar"].attention = 60
+    screens.draw_header(cv, layout, c, None, 0.0)
+    assert "DEFCON 5" in cv.text().split("\n")[0]
+    factions.know(c, "sokar", "the Jaffa")
+    screens.draw_header(cv, layout, c, None, 0.0)
+    assert "DEFCON 3" in cv.text().split("\n")[0]
+
+
+def test_the_tab_strip_scrolls_to_keep_the_current_tab_in_view():
+    parts = screens._tab_strip(database.TABS, "arcs", 60)
+    text = "".join(label for label, _ in parts)
+    assert " ARCS " in text and text.startswith("‹") and len(text) <= 60
+    assert [on for label, on in parts if label.strip() == "ARCS"] == [True]
+    wide = "".join(label for label, _ in screens._tab_strip(database.TABS, "addresses", 200))
+    assert "‹" not in wide and "›" not in wide and " ADDRESSES " in wide
+
+
+@pytest.mark.parametrize("cols,rows", [(80, 22), (120, 36)])
+def test_the_new_tabs_draw_at_both_sizes(cols, rows):
+    layout, cv = small(cols, rows)
+    c, ws = db_campaign()
+    factions.know(c, "apophis", "the Jaffa")
+    trade.new_deal(c, ws[2].id, "naquadah", 2)
+    arcs.start(c, "apophis")
+    db = Database(c)
+    for tab, bit in (("factions", "Apophis"), ("trade", "2 NAQUADAH"), ("arcs", "Apophis and Chulak")):
+        db.tab = tab
+        screens.draw_database(cv, layout, db, "bar")
+        text = cv.text()
+        assert database.TAB_TITLES[tab] in text.split("\n")[0] and bit in text, (tab, cols)
+
+
+def test_the_hint_shows_on_the_addresses_tab():
+    layout, cv = full()
+    c, ws = db_campaign()
+    c.hints.add("explored")
+    screens.draw_database(cv, layout, Database(c), "bar")
+    assert database.HINT in cv.text()
+
+
+def test_every_database_key_is_in_its_legend():
+    for tab in database.TABS:
+        help_keys = {k for k, _ in screens._db_help_entries(tab)}
+        for key, _ in screens._db_keys(tab):
+            assert key in help_keys, (tab, key)
+    assert "⏎" in [k for k, _ in screens._db_keys("trade")] and "⏎" in [k for k, _ in screens._db_keys("arcs")]
+    assert "⏎" not in [k for k, _ in screens._db_keys("factions")]
+
+
+def test_every_room_key_is_in_the_help():
+    keys = {k for k, _ in screens.KEYS_HELP}
+    for k in ("b", "d", "1-9", "↑↓ ⏎", "?", "q", "^C Esc"):
+        assert k in keys

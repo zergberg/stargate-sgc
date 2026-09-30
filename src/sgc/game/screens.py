@@ -8,6 +8,7 @@ from ..layout import Layout, Rect
 from ..model import Prompt, Scene
 from ..panels import AMBER, CYAN, DIM, GREEN, RED, WHITE
 from ..term.canvas import Canvas
+from . import factions
 from .clock import stamp
 from .database import COLUMNS, OPENS, SEARCHABLE, TAB_TITLES, TABS, Database
 from .menu import Menu
@@ -18,7 +19,7 @@ HILITE = (70, 48, 12)
 HEADER_BG = (38, 26, 8)
 ALARM_BG = ((120, 10, 5), (50, 5, 5))
 METER_W = 10
-STATUS_H = 6
+STATUS_H = 7
 LEGENDS = ("bar", "full", "off")
 WIDTHS = {"addresses": (0, 18, 10, 10, 5, 5), "missions": (5, 16, 8, 10, 9, 4, 0),
           "teams": (5, 10, 9, 17, 16, 0), "intel": (5, 22, 8, 0), "queue": (10, 0, 41),
@@ -244,7 +245,7 @@ def draw_header(canvas: Canvas, layout: Layout, c: Campaign, alarm: str | None, 
     if layout.mode != "full":
         return
     r = layout.header
-    right = f"{stamp(c.minutes)} SGC · DEFCON {2 if alarm else 5} "
+    right = f"{stamp(c.minutes)} SGC · DEFCON {2 if alarm else factions.threat(c)} "
     if alarm:
         bg = ALARM_BG[int(t * 2) % 2]
         canvas.fill(r, " ", WHITE, bg)
@@ -271,6 +272,9 @@ def draw_status(canvas: Canvas, r: Rect, c: Campaign) -> None:
         y += 1
     if y < bottom:
         canvas.put(x, y, f"MALP {c.stock['malp']}  UAV {c.stock['uav']}"[:w], CYAN)
+        y += 1
+    if y < bottom:
+        canvas.put(x, y, f"FUNDING {c.funding} · NAQUADAH {c.naquadah}"[:w], AMBER)
         y += 1
     if y < bottom:
         active = len(c.active_missions())
@@ -494,7 +498,8 @@ def draw_database(canvas: Canvas, layout: Layout, db: Database, legend: str) -> 
             canvas.put(x, top, head[:wd], DIM, bold=True)
             x += wd + 1
         table = db.rows()
-        space = max(1, bottom - top - 1)
+        hint = db.hint()
+        space = max(1, bottom - top - 1 - (1 if hint and db.tab != "world" else 0))
         first = max(0, db.sel - space + 1)
         for i, row in enumerate(table[first:first + space], start=first):
             sel = i == db.sel
@@ -507,6 +512,8 @@ def draw_database(canvas: Canvas, layout: Layout, db: Database, legend: str) -> 
                 x += wd + 1
         if not table:
             canvas.put(2, top + 1, _nothing(db), DIM)
+        if hint:
+            canvas.put(2, bottom - 1, _clip(hint, cols - 4), CYAN, bold=True)
     if legend != "off":
         text = " " + "  ".join(f"{k} {label}" for k, label in _db_keys(db.tab)) + " "
         canvas.fill(Rect(0, rows - 1, cols, 1), " ", AMBER, HEADER_BG)
