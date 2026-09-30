@@ -14,7 +14,7 @@ LIT = (255, 140, 30)
 UNLIT = (110, 60, 30)
 HOUSING = (58, 60, 66)
 N_HORIZON_FRAMES = 16
-UAV_LIFT = 0.30          # a uav at alt 1 flies this fraction of the image above its point on the ramp
+UAV_LIFT = 0.55          # a uav at alt 1 flies this fraction of the image above its point on the ramp
 FEED_MIN = 160           # gate images smaller than this skip the feed monitor (the side panel still reads out)
 FEED_W, FEED_H = 0.42, 0.30        # the monitor's size, as fractions of the image
 FEED_SCROLL = 48         # terrain rows that scroll past over a whole report; the frame key's quantum
@@ -399,22 +399,25 @@ class GateRenderer:
     def _draw_uav(self, im: Image.Image, x: float, y: float, s: float, a: int, facing: str) -> None:
         """A small straight-wing pusher drone: from behind, its propeller a blurred ring, or nose on coming home.
         Port light red, starboard green: so red is on our left from behind and on our right nose on."""
-        w = self.S * 0.24 * s                    # wingspan
-        th = max(1, int(w * 0.035))
-        wy = y - w * 0.22                        # the wing, above its point on the ramp
+        w = self.S * 0.24 * 1.3 * s               # wingspan, scaled up for legibility
+        th = max(2, int(w * 0.09))                # wing chord: a real surface, not a line
+        bth = max(2, int(th * 0.72))               # boom/fin/tailplane thickness
+        wy = y - w * 0.22                          # the wing, above its point on the ramp
         d = ImageDraw.Draw(im)
-        pale, boom, dark = (196, 200, 204, a), (170, 174, 180, a), (46, 50, 56, a)
-        by = wy + w * 0.12 if facing == "away" else wy - w * 0.05     # tail booms run toward the tailplane
+        lead, under = (222, 226, 230, a), (146, 150, 158, a)     # the wing: a lit leading edge, a shadowed underside
+        boom, dark = (172, 176, 182, a), (44, 48, 54, a)
+        by = wy + w * 0.14 if facing == "away" else wy - w * 0.07     # tail booms run toward the tailplane
         for side in (-1, 1):
             bx = x + side * w * 0.17
-            d.line([(bx, wy), (bx, by)], fill=boom, width=th)
-            d.line([(bx, by), (bx, by - w * 0.1)], fill=boom, width=th)        # the fins
-        d.line([(x - w * 0.17, by), (x + w * 0.17, by)], fill=pale, width=th)  # the tailplane
-        d.rectangle([x - w / 2, wy - th, x + w / 2, wy + th], fill=pale)       # the wing
-        r = w * 0.07
-        d.ellipse([x - r, wy - r, x + r, wy + r], fill=dark)                   # the fuselage, end on
+            d.line([(bx, wy), (bx, by)], fill=boom, width=bth)
+            d.line([(bx, by), (bx, by - w * 0.12)], fill=boom, width=bth)        # the fins
+        d.line([(x - w * 0.17, by), (x + w * 0.17, by)], fill=lead, width=bth)   # the tailplane
+        d.rectangle([x - w / 2, wy - th, x + w / 2, wy], fill=lead)              # the wing, leading edge up
+        d.rectangle([x - w / 2, wy, x + w / 2, wy + th], fill=under)             # ...its underside in shadow
+        r = w * 0.1
+        d.ellipse([x - r, wy - r, x + r, wy + r], fill=dark)                     # the fuselage pod, end on
         if facing == "away":
-            rr = w * 0.13
+            rr = w * 0.16
             size = int(rr * 2) + 8
             x0, y0 = int(x - size / 2), int(wy - size / 2)
             if x0 >= 0 and y0 >= 0 and x0 + size <= im.width and y0 + size <= im.height:
@@ -424,10 +427,10 @@ class GateRenderer:
                 im.alpha_composite(ring.filter(ImageFilter.GaussianBlur(max(0.5, rr * 0.12))), (x0, y0))
             left, right = (230, 40, 30), (60, 230, 90)
         else:
-            n = r * 0.45
+            n = r * 0.55
             d.ellipse([x - n, wy - n, x + n, wy + n], fill=(20, 22, 26, a))      # the nose
             left, right = (60, 230, 90), (230, 40, 30)
-        lr = max(1.0, w * 0.025)
+        lr = max(2.0, w * 0.032)
         for side, col in ((-1, left), (1, right)):
             lx = x + side * w / 2
             d.ellipse([lx - lr, wy - lr, lx + lr, wy + lr], fill=col + (a,))
