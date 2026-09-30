@@ -483,8 +483,10 @@ def test_redialing_a_world_with_no_lock_counts_one_probe():
     assert w.status == "lost" and r.c.stock["malp"] == 4 and r.c.record["probes"] == 1
 
 
-def test_a_quiet_gate_plays_an_ambient_scene_to_a_known_world_without_touching_the_campaign():
+def test_a_quiet_gate_plays_an_ambient_scene_to_a_parked_drone_without_touching_the_campaign():
     r = Rig(director=True)
+    r.world(3, status="probed", drone="malp")
+    r.world(4, status="surveyed", drone="uav")
     before, state = to_dict(r.c), r.e.rng.getstate()
     assert r.d.idle
     r.e._idle_scene(eng.IDLE_SCENE - 1)
@@ -493,13 +495,14 @@ def test_a_quiet_gate_plays_an_ambient_scene_to_a_known_world_without_touching_t
     assert not r.d.idle
     for _ in range(40):
         r.d.advance(1.0)
-    known = {w.name.upper() for w in r.c.worlds.values() if w.status in ("probed", "surveyed", "contact")}
-    assert r.d.scene.panel_title.startswith("SCIENCE · ") and r.d.scene.panel_title[10:] in known
+    parked = {r.world(3).name.upper(), r.world(4).name.upper()}
+    assert r.d.scene.panel_title.startswith("SCIENCE · ") and r.d.scene.panel_title[10:] in parked
     assert to_dict(r.c) == before and r.e.rng.getstate() == state
 
 
 def ambient_rig(*texts):
     r = Rig(*texts, director=True)
+    r.world(3, status="probed", drone="malp")             # something on a world to uplink from
     r.e._idle_scene(eng.IDLE_SCENE)
     assert r.e.ambient and not r.d.idle
     for _ in range(10):
@@ -538,9 +541,11 @@ def test_the_ambient_flag_clears_when_the_scene_ends():
     assert not r.e.ambient
 
 
-@pytest.mark.parametrize("why", ["alarm", "gate", "no_worlds"])
-def test_no_ambient_scene_while_an_alarm_is_open_the_gate_is_busy_or_nothing_is_known(why):
+@pytest.mark.parametrize("why", ["alarm", "gate", "no_drones"])
+def test_no_ambient_scene_while_an_alarm_is_open_the_gate_is_busy_or_no_drone_is_parked(why):
     r = Rig(UNKNOWN, director=True)
+    if why != "no_drones":
+        r.world(3, status="probed", drone="malp")
     if why == "alarm":
         r.c.events.push(r.c.now, "incoming")
         r.e.advance(1)
@@ -551,10 +556,9 @@ def test_no_ambient_scene_while_an_alarm_is_open_the_gate_is_busy_or_nothing_is_
     elif why == "gate":
         r.c.gate_until = r.c.now + 30
     else:
-        for w in r.c.worlds.values():
-            w.status = "unexplored"
+        assert not any(w.drone for w in r.c.worlds.values())     # known worlds, but nothing on them
     r.e._idle_scene(eng.IDLE_SCENE + 1)
-    assert r.d.idle and not r.e.ambient
+    assert r.d.idle and not r.e.ambient and r.e._quiet == 0.0     # the quiet timer starts again
 
 
 def test_an_order_for_an_unknown_situation_is_rejected():

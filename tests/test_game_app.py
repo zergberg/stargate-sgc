@@ -432,6 +432,7 @@ def test_walking_on_an_idle_gate_starts_at_once(tmp_path):
 def test_walking_cuts_the_ambient_gate_scene(tmp_path):
     app = start(tmp_path)
     run_until(app, 15, lambda a: a.director.idle)
+    list(app.engine.c.worlds.values())[0].drone = "malp"    # a parked drone to uplink from
     app.engine._quiet = eng.IDLE_SCENE                  # the quiet gate plays its ambient scene now
     tick(app)
     assert app.engine.ambient and not app.director.idle
@@ -610,6 +611,7 @@ def test_q_mid_walk_says_why_once(tmp_path):
 # ---------------------------------------------------------------- walks, searches, saves
 def ambient_on(app):
     """A quiet gate plays its ambient science scene; returns once its wormhole is up."""
+    list(app.engine.c.worlds.values())[0].drone = "malp"    # a parked drone to uplink from
     app.engine._quiet = eng.IDLE_SCENE
     tick(app)
     assert app.engine.ambient and not app.director.idle

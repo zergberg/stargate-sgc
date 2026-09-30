@@ -35,7 +35,6 @@ UAV_CRUISE = 0.8                     # the UAV's altitude as it reaches the hori
 DESTROYED = {"normal": 3, "toxic": 8, "radiation": 12, "extreme": 25, "no_lock": 0}
 CAPTURED = {"jaffa": 25, "goauld": 40}
 IDLE_SCENE = 45.0                    # real seconds of a quiet gate before an ambient scene plays
-AMBIENT_WORLDS = ("probed", "surveyed", "contact")   # worlds the ambient science uplink may dial
 LANES = (-0.45, -0.15, 0.15, 0.45)
 TITLES = {"incoming": "INCOMING", "probe": "TELEMETRY", "checkin": "CHECK-IN", "debrief": "DEBRIEF",
           "faction": "SECURITY", "arc": "PRIORITY ONE"}
@@ -1175,7 +1174,8 @@ class Engine:
         s.teams = {name: team_label(c, name, timer=False).upper() for name in away_first}
 
     def _idle_scene(self, dt: float) -> None:
-        """A quiet gate now and then plays a science uplink to a world we know; it never touches the campaign.
+        """A quiet gate now and then plays a science uplink to a drone of ours parked on a world; with none
+        parked, the gate stays quiet. It never touches the campaign.
 
         The world is picked with a visual RNG seeded from the game minute, never self.rng.
         """
@@ -1186,9 +1186,9 @@ class Engine:
         self._quiet += dt
         if self._quiet >= IDLE_SCENE:
             self._quiet = 0.0
-            known = [w for w in c.worlds.values() if w.status in AMBIENT_WORLDS]
-            if known:
-                self.d.run_steps(self._registry("science", random.Random(c.now).choice(known)))
+            parked = [w for w in c.worlds.values() if w.drone]
+            if parked:
+                self.d.run_steps(self._registry("science", random.Random(c.now).choice(parked)))
                 self._ambient = True
 
     def _close_idle_gate(self) -> None:
