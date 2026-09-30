@@ -1,7 +1,7 @@
 from PIL import ImageChops, ImageStat
 
 from sgc.model import Feed, Scene
-from sgc.render.feed import RES, terrain, value_noise
+from sgc.render.feed import HUD, LOST, REC, RES, terrain, value_noise
 from sgc.render.gate import GateRenderer
 
 
@@ -9,8 +9,20 @@ def monitor(g, t=0.0, **kw):
     return g.render(Scene(feed=Feed(**{"seed": 5, **kw})), t).crop(g.feed_rect())
 
 
+def inner_screen(g, t=0.0, **kw):
+    """The monitor's picture alone, without its bezel: what `render.feed.screen` actually draws."""
+    im = g.render(Scene(feed=Feed(**{"seed": 5, **kw})), t)
+    x0, y0, x1, y1 = g.feed_rect()
+    bezel = max(2, (x1 - x0) // 24)
+    return im.crop((x0 + bezel, y0 + bezel, x1 - bezel, y1 - bezel))
+
+
 def differ(a, b):
     return ImageChops.difference(a, b).getbbox() is not None
+
+
+def has_color(im, color):
+    return any(im.getpixel((x, y)) == color for x in range(im.width) for y in range(im.height))
 
 
 def test_value_noise_is_deterministic_and_between_0_and_1():
@@ -61,3 +73,19 @@ def test_a_contact_gets_a_box_mid_report():
 def test_the_hud_line_is_drawn():
     g = GateRenderer(300, None)
     assert differ(monitor(g, hud="UAV  ALT 1240M  HDG 047"), monitor(g, hud=""))
+
+
+def test_the_hud_line_fits_the_monitor_at_the_smallest_and_a_large_size():
+    long_hud = "UAV  ALT 1500M  HDG 090"
+    for g in (GateRenderer(160, None), GateRenderer(1600, None)):
+        im = inner_screen(g, hud=long_hud)
+        edge = im.crop((im.width - 2, 0, im.width, im.height))
+        assert not has_color(edge, HUD)
+
+
+def test_the_rec_light_and_signal_lost_fit_the_smallest_monitor():
+    g = GateRenderer(160, None)
+    live = inner_screen(g, hud="UAV  ALT 1240M  HDG 047")
+    assert not has_color(live.crop((live.width - 2, 0, live.width, live.height)), REC)
+    gone = inner_screen(g, 0.0, lost=1.0)
+    assert not has_color(gone.crop((gone.width - 2, 0, gone.width, gone.height)), LOST)

@@ -32,10 +32,10 @@ def label_font(size: int) -> ImageFont.ImageFont:
     return ImageFont.load_default(size=max(1, size))
 
 
-@lru_cache(maxsize=8)
-def _feed_fonts(h: int) -> tuple[ImageFont.ImageFont, ImageFont.ImageFont]:
-    """The feed monitor's HUD font and its SIGNAL LOST font, for a screen h pixels high."""
-    return label_font(max(6, h // 9)), label_font(max(7, h // 6))
+@lru_cache(maxsize=64)
+def _feed_font(size: int) -> ImageFont.ImageFont:
+    """A cached font for the feed monitor, so fitting text to the screen by trying sizes stays cheap."""
+    return label_font(size)
 
 
 @lru_cache(maxsize=1)
@@ -529,5 +529,4 @@ class GateRenderer:
 
     def _feed_screen(self, feed: Feed, t: float, w: int, h: int) -> Image.Image:
         """The monitor's picture: the UAV's camera and HUD, turning to static as the signal goes."""
-        small, big = _feed_fonts(h)
-        return feed_screen(feed, t, (w, h), int(feed.p * FEED_SCROLL), small, big)
+        return feed_screen(feed, t, (w, h), int(feed.p * FEED_SCROLL), _feed_font)

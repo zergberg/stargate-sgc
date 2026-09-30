@@ -4,10 +4,14 @@ from __future__ import annotations
 import math
 import random
 from functools import lru_cache
+from typing import Callable
 
 from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 from ..model import Feed
+
+FontLoader = Callable[[int], ImageFont.ImageFont]
+EDGE_MARGIN = 5           # pixels reserved on the right so text never touches the screen's edge
 
 RES = (48, 34)                       # the terrain is computed at this size, then scaled to the monitor
 TINTS = {                            # (low ground, high ground)
@@ -80,17 +84,35 @@ def _static(feed: Feed, t: float, w: int, h: int) -> Image.Image:
     return im.resize((w, h), Image.NEAREST).convert("RGB")
 
 
-def _hud(d: ImageDraw.ImageDraw, feed: Feed, w: int, h: int, font: ImageFont.ImageFont) -> None:
+def _fit(d: ImageDraw.ImageDraw, text: str, max_w: float, size: int, min_size: int,
+         font_loader: FontLoader) -> ImageFont.ImageFont:
+    """The largest font no bigger than `size` (down to `min_size`) that draws `text` within `max_w`."""
+    font = font_loader(size)
+    while size > min_size and d.textlength(text, font=font) > max_w:
+        size -= 1
+        font = font_loader(size)
+    return font
+
+
+def _hud(d: ImageDraw.ImageDraw, feed: Feed, w: int, h: int, font_loader: FontLoader) -> None:
     cx, cy, c = w / 2, h / 2, max(3, h // 8)
     for a, b in (((cx - c, cy), (cx - c / 3, cy)), ((cx + c / 3, cy), (cx + c, cy)),
                  ((cx, cy - c), (cx, cy - c / 3)), ((cx, cy + c / 3), (cx, cy + c))):
         d.line([a, b], fill=HUD, width=1)                                    # the crosshair
+    max_w = max(1, w - EDGE_MARGIN)
+    size, min_size = max(6, h // 9), max(4, h // 16)
+    font = _fit(d, "REC", max_w, size, min_size, font_loader)
     d.text((3, 2), "REC", font=font, fill=HUD)
     if int(feed.p * 12) % 2 == 0:                                            # the REC light blinks
         x, r = 3 + d.textlength("REC", font=font) + 3, max(1, h // 28)
         d.ellipse([x, 3, x + 2 * r, 3 + 2 * r], fill=REC)
     if feed.hud:
-        d.text((3, h - 2), feed.hud, font=font, fill=HUD, anchor="ld")
+        text = feed.hud
+        font = _fit(d, text, max_w, size, min_size, font_loader)
+        if d.textlength(text, font=font) > max_w and text.startswith("UAV "):
+            text = text[4:]                                                  # still too wide: drop the prefix
+            font = _fit(d, text, max_w, size, min_size, font_loader)
+        d.text((3, h - 2), text, font=font, fill=HUD, anchor="ld")
     if feed.contact and 0.3 <= feed.p <= 0.7:
         bx = w * (0.15 + 0.5 * _hash01(feed.seed, 7, 1))
         by = h * (0.2 + 0.35 * _hash01(feed.seed, 3, 9))
@@ -98,8 +120,7 @@ def _hud(d: ImageDraw.ImageDraw, feed: Feed, w: int, h: int, font: ImageFont.Ima
         d.rectangle([bx, by, bx + s, by + s * 0.8], outline=CONTACT, width=1)
 
 
-def screen(feed: Feed, t: float, size: tuple[int, int], scroll: int, font: ImageFont.ImageFont,
-           big: ImageFont.ImageFont) -> Image.Image:
+def screen(feed: Feed, t: float, size: tuple[int, int], scroll: int, font_loader: FontLoader) -> Image.Image:
     """The monitor's picture at `size`: terrain, scan lines, the HUD while live, and static as it's lost."""
     w, h = size
     img = terrain(feed.seed, scroll, feed.tint).resize((w, h), Image.BILINEAR)
@@ -108,7 +129,10 @@ def screen(feed: Feed, t: float, size: tuple[int, int], scroll: int, font: Image
     img = ImageChops.multiply(img, _scanlines(w, h))
     d = ImageDraw.Draw(img)
     if feed.lost < 0.5:
-        _hud(d, feed, w, h, font)
+        _hud(d, feed, w, h, font_loader)
     if feed.lost >= 1 and int(t * 4) % 2 == 0:
-        d.text((w / 2, h / 2), "SIGNAL LOST", font=big, fill=LOST, anchor="mm")
+        text = "SIGNAL LOST"
+        max_w = max(1, w - EDGE_MARGIN)
+        font = _fit(d, text, max_w, max(7, h // 6), max(6, h // 14), font_loader)
+        d.text((w / 2, h / 2), text, font=font, fill=LOST, anchor="mm")
     return img
