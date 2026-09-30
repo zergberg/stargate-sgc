@@ -304,6 +304,9 @@ class Engine:
         drawn = self._draw("arc", base, arc=(aid, stage))
         if drawn:
             self._start(*drawn)
+        elif arc.endgame == stage:                       # nothing to play at the endgame: the arc is lost
+            for line in arcs.fail(c, aid):
+                self._log(line)
         else:
             self._log(f"{arc.title.upper()}: NO WORD")
 
@@ -385,6 +388,8 @@ class Engine:
         return self._purchase(economy.buy(self.c, item), done)
 
     def set_reserve(self, drone: str, n: int) -> str:
+        if self.ended:
+            return "THE CAMPAIGN IS OVER"
         return self._purchase(economy.set_reserve(self.c, drone, n), True)
 
     def commission(self, specialty: str) -> str:

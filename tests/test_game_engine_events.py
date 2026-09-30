@@ -300,3 +300,22 @@ def test_saving_mid_way_gives_the_same_future():
     for r in (a, b):
         r.e.advance(10 * clock.DAY)
     assert to_dict(a.c) == to_dict(b.c)
+
+
+def test_an_endgame_with_no_scenario_fails_the_arc_and_a_catastrophe_ends_the_game():
+    r = Rig()
+    arcs.start(r.c, "apophis")
+    for _ in range(3):
+        arcs.advance(r.c, "apophis")
+    assert r.c.arcs["apophis"].stage == 4
+    r.e.advance(120 * 60)
+    assert r.c.arcs["apophis"].state == "failed" and r.e.ended and r.c.ending == "fallen"
+    assert "FAILED: APOPHIS AND CHULAK" in r.logs and "APOPHIS AND CHULAK: NO WORD" not in r.logs
+
+
+def test_a_non_endgame_stage_with_no_scenario_keeps_the_arc_going():
+    r = Rig()
+    arcs.start(r.c, "apophis")
+    arcs.advance(r.c, "apophis")
+    r.e.advance(48 * 60)
+    assert r.c.arcs["apophis"].state == "active" and "APOPHIS AND CHULAK: NO WORD" in r.logs

@@ -192,3 +192,10 @@ def test_a_recall_with_no_drone_left_to_fetch_refunds_its_wear():
     stock = r.c.stock["malp"]
     r.e.advance(30)
     assert r.c.funding == 100 and r.c.stock["malp"] == stock
+
+
+def test_the_reserve_cannot_be_set_after_the_campaign_ends():
+    r = Rig()
+    r.c.over, r.c.ending = "Done.", "fallen"
+    r.e.ended = True
+    assert r.e.set_reserve("malp", 3) == "THE CAMPAIGN IS OVER" and r.c.reserve["malp"] != 3
