@@ -92,18 +92,6 @@ def test_escape_clears_a_search_kept_with_enter():
     assert db.query == "" and db.tab == "queue" and len(db.rows()) == len(WIDEST)
 
 
-# ---------------------------------------------------------------- the drone in flight
-
-def test_a_drone_in_flight_cannot_be_recalled_from_the_queue():
-    from sgc.game import schedule
-    from sgc.game.engine import TRAVEL
-    r = Rig()
-    w = r.world(5)
-    r.c.events.push(r.c.now + 600, "malp_return", {"world": w.id, "drone": "malp", "sent": r.c.now})
-    item = next(i for i in schedule.view(r.c, TRAVEL) if i.kind == "drone")
-    assert item.reason == "ALREADY THROUGH THE GATE: WAIT FOR ITS REPORT"
-
-
 # ---------------------------------------------------------------- the save
 
 def test_a_drone_reports_sent_time_must_be_a_whole_number():

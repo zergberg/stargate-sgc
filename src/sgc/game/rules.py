@@ -802,7 +802,7 @@ def deployed(c: Campaign, drone: str) -> int:
     def out(e) -> bool:
         d = e.data
         return ((e.kind == "dial_out" and (d.get("op") == drone or (d.get("op") == "search" and d.get("by") == drone)))
-                or (e.kind == "malp_return" and d.get("drone") == drone)
+                or (e.kind in ("drone_report", "malp_return") and d.get("drone") == drone)
                 or (e.kind == "search_report" and d.get("by") == drone))
     return sum(w.drone == drone for w in c.worlds.values()) + len(c.events.find(out))
 

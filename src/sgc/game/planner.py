@@ -99,7 +99,7 @@ def step(e: Engine) -> list[str]:
     """One round of orders; returns the engine's replies."""
     c, out = e.c, []
     out += _spend(e)
-    busy = {ev.data.get("world") for ev in c.events if ev.kind in ("dial_out", "malp_return")}
+    busy = {ev.data.get("world") for ev in c.events if ev.kind in ("dial_out", "drone_report", "malp_return")}
     if c.stock["malp"] > 0:
         nxt = next((w for w in c.worlds.values() if w.status == "unexplored" and w.id not in busy and not w.drone),
                    None)

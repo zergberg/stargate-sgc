@@ -127,8 +127,9 @@ def test_probe_to_telemetry_report():
     assert r.e.probe(w.id) == f"MALP QUEUED FOR {w.id}" and r.c.stock["malp"] == 3
     assert r.e.probe(w.id).startswith("A DRONE IS ALREADY BOUND")
     r.e.advance(1)
-    assert r.c.gate_until == r.c.now - 1 + 10 and any("MALP SENT TO" in line for line in r.logs)
-    r.e.advance(125)
+    assert r.c.gate_until == r.c.now - 1 + clock.GATE_MINUTES["probe"]
+    assert any("MALP SENT TO" in line for line in r.logs)
+    r.e.advance(clock.GATE_MINUTES["probe"])                  # the gate shuts: the drone reported live
     assert w.status == "probed" and w.drone == "malp" and w.seen["env"] == "breathable atmosphere"
     assert w.seen["features"] == "ruins" and w.last_visit is not None
     assert any("green across the board" in text for _, text in w.reports)
@@ -291,7 +292,7 @@ def test_at_a_busy_pace_a_result_waits_for_the_gate_to_finish_showing_it():
     lines = [line for _, line in play(r, 120, 0.1)]
     transit = lines.index("MALP IN TRANSIT")
     telemetry = lines.index(f"MALP TELEMETRY FROM {name}")
-    assert transit < telemetry and "TELEMETRY RECEIVED" in lines[telemetry:]
+    assert transit < lines.index("TELEMETRY RECEIVED") < telemetry        # logged once the feed has played
     assert w.status == "probed"
 
 
@@ -467,7 +468,7 @@ def test_inbound_traffic_goes_before_queued_dial_outs():
     for w in normal_worlds(r, 6):
         r.e.probe(w.id)
     r.c.events.push(r.c.now + 1, "incoming")
-    r.e.advance(11)                                      # the first dial-out holds the gate for 10 minutes
+    r.e.advance(16)                                      # the first dial-out holds the gate for 15 minutes
     assert r.alarms == ["INCOMING"]
     assert len(r.c.events.find(lambda e: e.kind == "dial_out")) == 5
 

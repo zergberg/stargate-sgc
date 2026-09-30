@@ -13,8 +13,8 @@ from .state import Campaign, Mission, team_names
 @dataclass(frozen=True)
 class QueueItem:
     id: str                          # "dial:<op>:<world>", "dial:depart:<mission>", "dial:search:<mission>:<by>",
-                                     # "drone:<world>", "mission:<id>", "team:<name>" or "deal:<id>"
-    kind: str                        # "dial_out" | "drone" | "mission" | "team" | "delivery"
+                                     # "mission:<id>", "team:<name>" or "deal:<id>"
+    kind: str                        # "dial_out" | "mission" | "team" | "delivery"
     when: str
     what: str
     status: str
@@ -29,13 +29,10 @@ class QueueItem:
         return self.when, self.what, self.status
 
 
-Travel = dict[str, tuple[int, int]]          # engine.TRAVEL: game minutes until a drone's report, (lo, hi)
-
 WAITING = "WAITING FOR THE GATE"
 THROUGH = "ALREADY THROUGH THE GATE"
 GONE = "NO LONGER SCHEDULED"
 NOT_MOVABLE = "ONLY DIAL-OUTS WAITING FOR THE GATE CAN BE MOVED"
-SOON = "REPORT EXPECTED ANY MINUTE"
 WAIT_HOURS = 12                              # a withdrawn search leaves the team to the 12-hour wait
 TEAM_WORDS = {"base": ("STOOD DOWN", "BACK"), "injured": ("INJURED", "BACK"),
               "captured": ("CAPTURED", "PRESUMED LOST"), "lost": ("RE-FORMING", "READY"),
@@ -101,21 +98,6 @@ def _brief(c: Campaign, ev: Event) -> str:
     return _words(c, ev)[0]
 
 
-def _drone(c: Campaign, ev: Event, travel: Travel) -> QueueItem:
-    """A drone through the gate: only its report window, never the exact rolled time."""
-    d = ev.data
-    lo, hi = travel[d["drone"]]
-    if "sent" in d:
-        start, end = max(c.now, d["sent"] + lo), d["sent"] + hi
-    else:                                            # an older save didn't note when it went
-        start, end = c.now, c.now + hi
-    status = f"REPORT EXPECTED {at(start, c.now)}–{at(end, start)}" if end > c.now else SOON
-    what = f"{d['drone'].upper()} AT {_name(c, d['world'])}"
-    return QueueItem(f"drone:{d['world']}", "drone", at(start, c.now), what, status, (1, start, end),
-                     reason=f"{THROUGH}: WAIT FOR ITS REPORT",
-                     brief=f"{d['drone'].upper()} REPORT {at(start, c.now)}–{at(end, start)}")
-
-
 def _mission(c: Campaign, m: Mission) -> QueueItem:
     def mine(kind: str, op: str | None = None) -> list[Event]:
         return c.events.find(lambda e: e.kind == kind and e.data.get("mission") == m.id
@@ -141,13 +123,12 @@ def _mission(c: Campaign, m: Mission) -> QueueItem:
                      brief=f"{m.team} {brief}")
 
 
-def view(c: Campaign, travel: Travel) -> list[QueueItem]:
+def view(c: Campaign) -> list[QueueItem]:
     """What the SGC has scheduled that the player has been told about, soonest first. Incoming wormholes,
-    the recovery tick and rolled times never appear."""
+    the recovery tick, a probe's report and rolled times never appear."""
     dials = gate_order(c)
     items = [QueueItem(dial_id(ev), "dial_out", str(i + 1), _words(c, ev)[0], WAITING, (0, i),
                        cancellable=True, movable=True, brief=f"{i + 1} {_brief(c, ev)}") for i, ev in enumerate(dials)]
-    items += [_drone(c, ev, travel) for ev in c.events.find(lambda e: e.kind == "malp_return")]
     for m in c.missions:
         if m.state not in ("active", "aborted"):
             continue                                 # history, perhaps of a team since disbanded
@@ -176,8 +157,8 @@ def _find(c: Campaign, item_id: str) -> Event | None:
     return next((e for e in gate_order(c) if dial_id(e) == item_id), None)
 
 
-def _refusal(c: Campaign, item_id: str, travel: Travel, why: Callable[[QueueItem], str]) -> str:
-    item = next((i for i in view(c, travel) if i.id == item_id), None)
+def _refusal(c: Campaign, item_id: str, why: Callable[[QueueItem], str]) -> str:
+    item = next((i for i in view(c) if i.id == item_id), None)
     return why(item) if item is not None else GONE
 
 
@@ -205,12 +186,12 @@ def _undo(c: Campaign, d: dict) -> list[str]:
     return lines
 
 
-def cancel(c: Campaign, item_id: str, confirm: bool, travel: Travel) -> tuple[str, list[str], bool]:
+def cancel(c: Campaign, item_id: str, confirm: bool) -> tuple[str, list[str], bool]:
     """Cancel a dial-out waiting for the gate: (message, log lines from undoing it, done). Without confirm it
     only asks; a row that can't be cancelled answers with why."""
     ev = _find(c, item_id)
     if ev is None:
-        return _refusal(c, item_id, travel, lambda i: i.reason), [], False
+        return _refusal(c, item_id, lambda i: i.reason), [], False
     said = _words(c, ev)[1]
     if not confirm:
         return f"CANCEL THE {said}?  x AGAIN TO CONFIRM", [], False
@@ -218,12 +199,12 @@ def cancel(c: Campaign, item_id: str, confirm: bool, travel: Travel) -> tuple[st
     return f"CANCELLED: {said}", _undo(c, ev.data), True
 
 
-def move(c: Campaign, item_id: str, delta: int, travel: Travel) -> tuple[str, bool]:
+def move(c: Campaign, item_id: str, delta: int) -> tuple[str, bool]:
     """Move a waiting dial-out one place up (delta < 0) or down the gate queue: (message, done)."""
     dials = gate_order(c)
     ids = [dial_id(e) for e in dials]
     if item_id not in ids:
-        return _refusal(c, item_id, travel, lambda i: NOT_MOVABLE), False
+        return _refusal(c, item_id, lambda i: NOT_MOVABLE), False
     i = ids.index(item_id)
     j = i + (1 if delta > 0 else -1)
     if j < 0:

@@ -28,7 +28,8 @@ from . import schedule
 
 DETAIL = {"recruit": "full", "officer": "partial", "commander": "minimal"}
 INCOMING_EVERY = (36, 96)            # game hours between random incoming wormholes
-TRAVEL = {"malp": (60, 120), "uav": (45, 90)}     # game minutes until a drone's telemetry comes back
+MALP_FEED_S = 20.0                   # real seconds the side panel takes to fill with a MALP's readings
+UAV_FEED_S = 90.0                    # real seconds of a UAV's aerial feed
 UAV_RAIL = 0.12                      # the UAV's launch rail stands here, at the foot of the ramp
 UAV_CRUISE = 0.8                     # the UAV's altitude as it reaches the horizon (0..1)
 DESTROYED = {"normal": 3, "toxic": 8, "radiation": 12, "extreme": 25, "no_lock": 0}
@@ -78,6 +79,11 @@ def team_label(c: Campaign, name: str, timer: bool = True) -> str:
     return status if timer else _TIME_LEFT.sub("", status)
 
 
+def _shown(n: int, p: float) -> int:
+    """How many of n rows a feed has sent back at progress p: one at a time, the last just before the end."""
+    return min(n, math.floor(p * (n + 1)))
+
+
 # Rescue and recover missions draw only scenarios written for them: a generic one would never free the captive
 # or bring the drone home.
 EXACT_TYPES = ("rescue", "recover")
@@ -111,6 +117,7 @@ class Engine:
         self._save_failed = False        # the last save failed; logged once until one succeeds
         self._handlers: dict[str, Callable[[dict], None]] = {
             "recovery_tick": self._recovery, "incoming": self._incoming, "dial_out": self._dial_out,
+            "drone_report": self._drone_report,
             "malp_return": self._malp_return, "checkin": self._checkin, "team_return": self._team_return,
             "search_report": self._search_report, "overdue": self._overdue,
             "funding_review": self._funding_review, "faction_action": self._faction_action,
@@ -333,7 +340,8 @@ class Engine:
             return f"NO {drone.upper()} IN STOCK"
         if w.drone:
             return f"A {w.drone.upper()} IS ALREADY ON {w.name.upper()}"
-        if c.events.find(lambda e: e.kind in ("dial_out", "malp_return") and e.data.get("world") == wid):
+        if c.events.find(lambda e: e.kind in ("dial_out", "drone_report", "malp_return")
+                         and e.data.get("world") == wid):
             return f"A DRONE IS ALREADY BOUND FOR {w.name.upper()}"
         if drone == "uav" and "uav_program" not in c.upgrades:
             return "NEEDS THE UAV PROGRAM"
@@ -413,13 +421,13 @@ class Engine:
 
     # ------------------------------------------------------------------ the schedule (the Database's QUEUE tab)
     def schedule_view(self) -> list[schedule.QueueItem]:
-        return schedule.view(self.c, TRAVEL)
+        return schedule.view(self.c)
 
     def cancel(self, item_id: str, confirm: bool = False) -> str:
         """Cancel a dial-out still waiting for the gate. Without confirm it only asks (or says why not)."""
         if self.ended:
             return "THE CAMPAIGN IS OVER"
-        msg, lines, done = schedule.cancel(self.c, item_id, confirm, TRAVEL)
+        msg, lines, done = schedule.cancel(self.c, item_id, confirm)
         if done:
             for line in lines:
                 self._log(line)
@@ -431,7 +439,7 @@ class Engine:
         """Move a waiting dial-out up (delta < 0) or down the gate queue; inbound traffic keeps its priority."""
         if self.ended:
             return "THE CAMPAIGN IS OVER"
-        msg, done = schedule.move(self.c, item_id, delta, TRAVEL)
+        msg, done = schedule.move(self.c, item_id, delta)
         if done:
             self.save_now()
         return msg
@@ -449,6 +457,8 @@ class Engine:
             self._search_out(data)
 
     def _drone_out(self, wid: str, drone: str) -> None:
+        """The probe's one connection: the drone goes through and its readings stream back live while the gate
+        stays open. Its fate is rolled now; drone_report applies it when the gate shuts."""
         c = self.c
         w = c.worlds[wid]
         if w.env != "no_lock" or w.status != "lost":            # a known dead address isn't a new probe
@@ -461,13 +471,56 @@ class Engine:
             w.reports.append((c.now, "Dialing failed: the seventh chevron would not lock."))
             self._show(self._registry("failed_dial", w))
             return
-        self._occupy("probe")
+        self._occupy("probe" if drone == "malp" else "uav")
         self._log(f"{drone.upper()} SENT TO {w.name.upper()}")
-        c.events.push(c.now + self.rng.randint(*TRAVEL[drone]), "malp_return",
-                      {"world": wid, "drone": drone, "sent": c.now})
-        self._show(self._v_drone(w, drone))
+        roll = self.rng.random() * 100
+        destroyed = DESTROYED[w.env] + (10 if drone == "uav" and w.inhabitants in CAPTURED else 0)
+        captured = destroyed + CAPTURED.get(w.inhabitants, 0)
+        fate = "destroyed" if roll < destroyed else "captured" if roll < captured else "ok"
+        seen = readings(w, drone, DETAIL[c.difficulty], self.rng)
+        c.events.push(c.gate_until, "drone_report", {"world": wid, "drone": drone, "fate": fate, "seen": seen})
+        self._show(self._v_probe(w, drone, seen, fate))
+
+    def _drone_report(self, data: dict) -> None:
+        """The probe's gate shuts: what came back is on file, and a surviving drone stays on the world."""
+        c = self.c
+        w, drone, fate, seen = c.worlds[data["world"]], data["drone"], data["fate"], data["seen"]
+        w.last_visit = c.now
+        if fate == "destroyed":
+            w.seen["env"] = seen["env"]
+            w.reports.append((c.now, f"{drone.upper()} destroyed. Last reading: {seen['env']}."))
+            self._log(f"{drone.upper()} SIGNAL LOST ON {w.name.upper()} — {seen['env'].upper()}")
+            if drone == "uav":
+                w.wreck = "shot_down" if w.inhabitants in CAPTURED else "crashed"
+            for line in rules.set_world_status(c, w, "probed"):
+                self._log(line)
+            return
+        if fate == "captured":
+            w.reports.append((c.now, f"{drone.upper()} captured. Armed humanoids seen before the feed was cut."))
+            w.seen["life"] = "armed humanoids"
+            self._log(f"{drone.upper()} CAPTURED ON {w.name.upper()}")
+            for line in rules.capture_drone(c, w, drone):
+                self._log(line)
+            return
+        w.seen.update(seen)
+        w.telemetry = [f"{k.upper()}: {v}" for k, v in seen.items()]
+        w.drone = drone
+        w.reports.append((c.now, f"{drone.upper()} telemetry: " + "; ".join(f"{k} {v}" for k, v in seen.items())))
+        self._log(f"{drone.upper()} TELEMETRY FROM {w.name.upper()}")
+        for line in rules.set_world_status(c, w, "probed"):
+            self._log(line)
+        if drone == "uav":                                  # a drone of ours held here shows up on the feed
+            for line in rules.parse_effect("locate {world}")(c, self._wbind(w)):
+                self._log(line)
+        if drone == "uav" and w.inhabitants != "none" and self.rng.random() < 0.4:
+            for line in rules.parse_effect("reveal name {world} from comms")(c, self._wbind(w)):
+                self._log(line)
+        drawn = self._draw("probe", self._wbind(w))
+        if drawn:
+            self._start(*drawn)
 
     def _malp_return(self, data: dict) -> None:
+        """Legacy: a report from before probes went live, still pending in an older save."""
         c = self.c
         w, drone = c.worlds[data["world"]], data["drone"]
         self._occupy("malp_return")
@@ -1253,6 +1306,52 @@ class Engine:
             s.panel_title = f"TELEMETRY · {w.name.upper()}"
             s.panel_rows = [(k.upper(), v) for k, v in seen.items()]
         return [*self._outgoing(w), Step(6.0, show, "TELEMETRY RECEIVED"), *sq.shutdown(), cleanup()]
+
+    def _v_probe(self, w: World, drone: str, seen: dict[str, str], fate: str) -> list[Step]:
+        """A live probe: out through the gate, its readings streaming back a row at a time while the gate stays
+        open, then shutdown. A drone that's lost stops partway (the visual RNG picks where) on what the report
+        keeps of it, and SIGNAL LOST."""
+        if self.d is None:
+            return []
+        if fate == "ok":
+            got, cut = dict(seen), 1.0
+        else:
+            got = {"env": seen["env"]} if fate == "destroyed" else {}
+            cut = random.Random(self.c.now).uniform(0.2, 0.7)
+        rows = [(k.upper(), v) for k, v in got.items()]
+        title = f"TELEMETRY · {w.name.upper()}"
+
+        def upto(p: float) -> list[tuple[str, str]]:
+            return rows[:_shown(len(rows), p)] if fate == "ok" else rows
+        if drone == "uav":
+            sd = uav.seed(w)
+
+            def feed(s, p):
+                q = cut * p
+                back = upto(q)
+                s.feed = None if p >= 1 and fate == "ok" else uav.make(w, dict(list(got.items())[:len(back)]), q)
+                s.panel_title = title
+                s.panel_rows = [*uav.rows(sd, q), *back]
+
+            def static(s, p):
+                s.feed = uav.make(w, got, cut, lost=p)
+                s.panel_rows = [("SIGNAL", "LOST")]
+            steps = [*self._outgoing(w), *self._uav_launch(), Step(UAV_FEED_S * cut, feed, "TELEMETRY RECEIVED")]
+            if fate != "ok":
+                steps += [Step(1.5, static, "UAV SIGNAL LOST"), sq.hold(1.0)]
+            return [*steps, *sq.shutdown(), cleanup()]
+
+        def roll(s, p):
+            s.figures = [Figure("malp", p, 0.0)] if p < 1 else []
+
+        def show(s, p):
+            s.panel_title = title
+            s.panel_rows = [*upto(p), *([("SIGNAL", "LOST")] if fate != "ok" and p >= 1 else [])]
+        steps = [*self._outgoing(w), Step(5.0, roll, "MALP IN TRANSIT"),
+                 Step(MALP_FEED_S * cut, show, "TELEMETRY RECEIVED")]
+        if fate != "ok":
+            steps.append(sq.hold(1.0))
+        return [*steps, *sq.shutdown(), cleanup()]
 
     def _uav_launch(self) -> list[Step]:
         """The rail at the foot of the ramp, the UAV firing off it and climbing, then through the horizon.

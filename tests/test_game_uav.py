@@ -169,8 +169,8 @@ def test_the_uav_log_reads_in_order_at_a_busy_pace(monkeypatch):
     name = w.name.upper()
     r.e.send_uav(w.id)
     lines = [line for _, line in play(r, 120, 0.1)]
-    assert lines.index("UAV LAUNCHED") < lines.index("UAV IN TRANSIT") < lines.index(f"UAV TELEMETRY FROM {name}")
-    assert "TELEMETRY RECEIVED" in lines[lines.index(f"UAV TELEMETRY FROM {name}"):]
+    assert lines.index("UAV LAUNCHED") < lines.index("UAV IN TRANSIT") < lines.index("TELEMETRY RECEIVED") \
+        < lines.index(f"UAV TELEMETRY FROM {name}")
 
 
 def test_uav_visuals_do_not_change_the_campaign_at_any_frame_rate():

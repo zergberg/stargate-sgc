@@ -1,7 +1,6 @@
 import json
 
 from sgc.game import clock
-from sgc.game import engine as eng
 from sgc.game import rules
 from sgc.game import schedule
 from sgc.game import trade
@@ -60,30 +59,6 @@ def test_the_view_is_the_order_the_gate_will_take_them():
     assert sent_to(r) == [a.name.upper(), b.name.upper()]
 
 
-def test_a_drone_out_shows_only_its_report_window():
-    r = Rig()
-    w = r.world(5, env="normal", inhabitants="none")
-    r.e.probe(w.id)
-    r.e.advance(1)                                        # sent at 08:00; a MALP reports in 60-120 minutes
-    item = next(i for i in view(r) if i.kind == "drone")
-    assert item.what == f"MALP AT {w.name.upper()}" and item.status == "REPORT EXPECTED 09:00–10:00"
-    assert item.when == "09:00" and not item.cancellable
-    assert item.reason == "ALREADY THROUGH THE GATE: WAIT FOR ITS REPORT"
-    ev = r.c.events.find(lambda e: e.kind == "malp_return")[0]
-    ev.due += 7                                           # the exact rolled time never shows
-    assert next(i for i in view(r) if i.kind == "drone").status == item.status
-
-
-def test_a_drone_window_never_starts_in_the_past():
-    r = Rig()
-    w = r.world(5)
-    r.c.events.push(r.c.now + 200, "malp_return", {"world": w.id, "drone": "uav", "sent": r.c.now - 60})
-    item = next(i for i in view(r) if i.kind == "drone")
-    assert item.status == "REPORT EXPECTED 08:00–08:30"   # 45-90 minutes after 07:00, from now at the earliest
-    r.e.advance(45)
-    assert next(i for i in view(r) if i.kind == "drone").status == "REPORT EXPECTED ANY MINUTE"
-
-
 def test_a_mission_in_the_field_shows_its_next_check_in_and_when_it_is_due_home():
     r = Rig(CHECKIN)
     w = probed(r)
@@ -121,18 +96,6 @@ def test_teams_standing_down_show_when_they_are_back_and_rows_go_by_time():
                      ("team", "SG-3 INJURED")]
     sg3 = view(r)[-1]
     assert sg3.status == f"BACK {clock.short(until)}" and sg3.reason == "NOTHING TO CANCEL: SG-3 IS INJURED"
-
-
-def test_drones_past_their_earliest_report_list_in_a_public_order_not_their_rolled_one():
-    def rows(dues, sent=(70, 70)):
-        r = Rig()
-        for i, due, ago in zip((3, 4), dues, sent):
-            w = r.world(i, env="normal")
-            r.c.events.push(r.c.now + due, "malp_return", {"world": w.id, "drone": "malp", "sent": r.c.now - ago})
-        return [i.cells for i in view(r)]
-    assert rows((10, 40)) == rows((40, 10))
-    assert rows((10, 40), (65, 70)) == rows((40, 10), (65, 70))           # the window's end breaks the tie
-    assert rows((10, 40), (65, 70))[0][2].endswith("08:50")
 
 
 def test_incoming_wormholes_and_other_hidden_events_are_never_listed():
@@ -293,23 +256,6 @@ def test_only_dial_outs_waiting_for_the_gate_can_be_moved():
     r.c.teams["SG-3"].status, r.c.teams["SG-3"].until = "injured", r.c.now + clock.DAY
     assert r.e.move("team:SG-3", -1) == "ONLY DIAL-OUTS WAITING FOR THE GATE CAN BE MOVED"
     assert r.e.move("dial:malp:NOWHERE", 1) == "NO LONGER SCHEDULED"
-
-
-def test_the_drone_report_notes_when_it_went():
-    r = Rig()
-    w = r.world(5, env="normal")
-    r.e.probe(w.id)
-    r.e.advance(1)
-    assert r.c.events.find(lambda e: e.kind == "malp_return")[0].data["sent"] == r.c.now - 1
-    assert eng.TRAVEL["malp"] == (60, 120)                # the window test above assumes this
-
-
-def test_an_older_save_without_the_dial_out_time_still_shows_a_window():
-    r = Rig()
-    w = r.world(5)
-    r.c.events.push(r.c.now + 200, "malp_return", {"world": w.id, "drone": "uav"})
-    b = Rig(campaign=from_dict(json.loads(json.dumps(to_dict(r.c)))))
-    assert next(i for i in view(b) if i.kind == "drone").status == "REPORT EXPECTED 08:00–09:30"
 
 
 def test_a_disbanded_team_s_old_missions_never_break_the_queue():

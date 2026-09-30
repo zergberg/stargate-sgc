@@ -492,8 +492,8 @@ def test_a_check_in_waits_at_most_thirty_minutes_behind_queued_dial_outs(monkeyp
         r.e.probe(probed(r, i).id)
     r.e.advance(1)                                        # the first probe takes the gate
     r.e.advance(due + 30 - r.c.now)
-    assert checked_in(r) == 1                             # at due + 5, between the first and second probes
-    assert len(r.c.events.find(lambda e: e.kind == "dial_out")) == 3
+    assert checked_in(r) == 1                             # at due + 10, between the first and second probes
+    assert len(r.c.events.find(lambda e: e.kind == "dial_out")) == 4
 
 
 @pytest.mark.parametrize("stop", [1, 5 * 60, 8 * 60 + 5, 20 * 60, 30 * 60])

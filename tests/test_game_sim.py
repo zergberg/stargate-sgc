@@ -152,3 +152,15 @@ def test_with_nothing_new_to_do_the_planner_re_surveys_the_world_visited_longest
     stale = list(c.worlds.values())[7]
     stale.last_visit = c.now - 5 * clock.DAY
     assert planner.step(e) and c.mission(1).world == stale.id and c.mission(1).type == "survey"
+
+
+def test_the_planner_leaves_a_world_alone_while_its_probe_s_gate_is_open():
+    c = new_campaign("sandbox", "officer", 4)
+    e = Engine(c, SCENARIOS)
+    first = next(w for w in c.worlds.values() if w.status == "unexplored")
+    e.probe(first.id)
+    e.advance(1)                                          # through the gate: its report lands at shutdown
+    assert c.events.find(lambda ev: ev.kind == "drone_report") and first.drone is None
+    out = planner.step(e)
+    assert any(line.startswith("MALP QUEUED FOR") for line in out)             # the next address instead
+    assert not any(line.startswith("A DRONE IS ALREADY BOUND") for line in out)

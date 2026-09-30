@@ -407,6 +407,7 @@ def _captured_drone(d: dict, world_ids: set[str]) -> CapturedDrone:
 
 
 DIAL_OPS = ("malp", "uav", "recall", "depart", "search")
+PROBE_FATES = ("ok", "destroyed", "captured")  # how a probe's dial ends: rolled at the dial, applied at shutdown
 SEARCHERS = ("malp", *ALL_TEAMS)               # a MALP, or the team sent to look
 
 
@@ -433,6 +434,10 @@ def _event(e, world_ids: set[str], mission_ids: set[int], deal_ids: set[int] = f
         if by != "malp":
             _one_of(by, team_ids, "searcher")
 
+    def readings(v) -> None:
+        if not isinstance(v, dict) or not all(isinstance(k, str) and isinstance(x, str) for k, x in v.items()):
+            raise ValueError(f"{kind} readings must map text to text, got {v!r}")
+
     if kind == "dial_out":
         op = _one_of(need("op"), DIAL_OPS, "dial-out op")
         if op in ("malp", "uav", "recall"):
@@ -441,7 +446,14 @@ def _event(e, world_ids: set[str], mission_ids: set[int], deal_ids: set[int] = f
             mission()
             if op == "search":
                 searcher()
-    elif kind == "malp_return":
+    elif kind == "drone_report":
+        world()
+        _one_of(need("drone"), DRONES, "drone")
+        _one_of(need("fate"), PROBE_FATES, "probe fate")
+        readings(need("seen"))
+        if "env" not in d["seen"]:
+            raise ValueError(f"a drone report's readings start with env, got {d['seen']!r}")
+    elif kind == "malp_return":                      # legacy: a report from before probes went live
         world()
         _one_of(need("drone"), DRONES, "drone")
         if "sent" in d:
