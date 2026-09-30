@@ -1,0 +1,20 @@
+id = "arc_tokra_request"
+kind = "arc"
+arc = "tokra"
+arc_stage = 2
+visual = "arrival"
+
+[node.start]
+text.full = "A Tok'ra messenger, Martouf, came through from {world} with a request. One of their operatives is trapped in a Goa'uld's service and needs a team to get her out. It would cost us, and prove a great deal."
+text.minimal = "A request from the Tok'ra."
+default = "agree"
+
+[[node.start.choice]]
+key = "agree"
+label = "Agree to help"
+outcome = { effects = ["trust tokra +20", "personnel -3", "arc tokra advance"], end = true }
+
+[[node.start.choice]]
+key = "decline"
+label = "Decline politely"
+outcome = { effects = ["trust tokra -10", "arc tokra advance"], end = true }

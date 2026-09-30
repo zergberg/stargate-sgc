@@ -1,0 +1,15 @@
+id = "arc_tokra_talks"
+kind = "debrief"
+mission_type = "contact"
+weight = 50
+when = ["is {world} @Vorash", "arc tokra stage == 3", "trust tokra < 40"]
+
+[node.start]
+text.full = "{team} debrief: more talks on {world}. The Tok'ra High Council listens, and weighs every word."
+text.minimal = "{team} debrief: talks continue."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { effects = ["trust tokra +10"], end = true }

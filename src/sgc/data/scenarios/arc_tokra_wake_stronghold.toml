@@ -1,0 +1,14 @@
+id = "arc_tokra_wake_stronghold"
+kind = "debrief"
+weight = 6
+when = ["world {world} inhabitants goauld", "arc tokra dormant", "day >= 8"]
+
+[node.start]
+text.full = "{team} debrief: among the prisoners on {world} was a woman whose eyes flashed like a Goa'uld's, but who begged for help, not mercy. Before the guards dragged her away she whispered one word, Tok'ra, and a string of glyphs."
+text.minimal = "{team} debrief: a prisoner passed us an address."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { effects = ["arc tokra start", "reveal address @Vorash", "unlock contact @Vorash"], end = true }

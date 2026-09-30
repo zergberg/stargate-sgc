@@ -1,0 +1,15 @@
+id = "arc_tokra_vorash"
+kind = "debrief"
+mission_type = "contact"
+weight = 50
+when = ["is {world} @Vorash", "arc tokra stage == 1"]
+
+[node.start]
+text.full = "{team} debrief: {world} is a desert world with tunnels grown from crystal. The Tok'ra are symbiotes like the Goa'uld, but they share their hosts and fight the System Lords from within. They are wary of us, and asked what we have done against the Goa'uld."
+text.minimal = "{team} debrief: first contact."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { effects = ["reveal name {world} from allies", "reveal faction tokra from allies", "trust tokra +20", "arc tokra advance"], end = true }

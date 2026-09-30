@@ -1,0 +1,14 @@
+id = "arc_tokra_silence"
+kind = "arc"
+arc = "tokra"
+arc_stage = 3
+
+[node.start]
+text.full = "A MALP sent to {world} found the tunnels collapsed and empty. The Tok'ra have moved on, and left no word for us."
+text.minimal = "No answer from {world}."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log it"
+outcome = { effects = ["arc tokra fail", "status {world} lost"], end = true }

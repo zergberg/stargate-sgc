@@ -1,0 +1,15 @@
+id = "arc_tokra_alliance"
+kind = "debrief"
+mission_type = "contact"
+weight = 50
+when = ["is {world} @Vorash", "arc tokra stage == 3", "trust tokra >= 40"]
+
+[node.start]
+text.full = "{team} debrief: the Tok'ra High Council has agreed to an alliance with Earth: their intelligence, our help. Martouf shook hands like a man who had practiced."
+text.minimal = "{team} debrief: an alliance."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { effects = ["trust tokra +20", "gain ally.tokra", "arc tokra resolve"], end = true }
