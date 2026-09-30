@@ -23,6 +23,7 @@ def stage3():
     arcs.start(c, "thor")
     arcs.advance(c, "thor")
     arcs.advance(c, "thor")
+    factions.know(c, "asgard", "ruins")            # the labyrinth's hologram, which stage 2 follows
     return c, w
 
 
@@ -32,8 +33,8 @@ def test_the_wake_opens_study_on_cimmeria():
     assert rules.check_all(SCENARIOS["arc_thor_wake"].when, c, b)
     play(c, "arc_thor_wake", w, team="SG-1")
     assert c.arcs["thor"].state == "active" and "study" in w.options and w.name == "Cimmeria"
-    # the arc's faction goes on file as a lead when it starts (arcs.start), but Thor hasn't spoken to us yet
-    assert c.factions["asgard"].trust == 0 and "ally.asgard" not in c.inventory
+    # Thor hasn't spoken to us yet: the Asgard are not on file until the labyrinth
+    assert not c.factions["asgard"].known and c.factions["asgard"].trust == 0 and "ally.asgard" not in c.inventory
 
 
 def test_the_wake_plays_only_on_cimmeria_while_the_arc_sleeps():

@@ -16,7 +16,7 @@ from pathlib import Path
 from ..events import REGISTRY
 from . import rules
 from . import world as wd
-from .arcs import ARCS
+from .arcs import ARCS, names_faction
 from .factions import STAGE_NAMES
 from .orders import SITUATIONS
 from .state import MISSION_TYPES
@@ -306,9 +306,10 @@ def _faction_names(fid: str | None) -> set[str]:
 
 
 def _arc_names(aid: str) -> set[str]:
-    """What an arc under way tells the SGC: the names in its title (logged when it starts) and its faction."""
+    """What an arc under way tells the SGC: the names in its title (logged when it starts), and its faction if
+    the title names it (arcs.start files it then)."""
     arc = ARCS[aid]
-    return _names_in(arc.title) | _faction_names(arc.faction)
+    return _names_in(arc.title) | (_faction_names(arc.faction) if names_faction(arc) else set())
 
 
 @cache

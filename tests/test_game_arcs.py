@@ -113,3 +113,13 @@ def test_arc_world_finds_listed_and_unlisted_worlds():
     c = camp()
     assert arcs.arc_world(c, "apophis").id == world.place_id("Chulak")
     assert arcs.arc_world(c, "tokra").id in c.unlisted
+
+
+def test_starting_an_arc_files_its_faction_only_when_the_title_names_it():
+    c = new_campaign("campaign", "officer", 5)
+    arcs.start(c, "thor")
+    assert not c.factions["asgard"].known
+    lines = arcs.start(c, "tokra")
+    assert c.factions["tokra"].known and any(l.startswith("NEW FACTION ON FILE") for l in lines)
+    arcs.start(c, "apophis")
+    assert c.factions["apophis"].known

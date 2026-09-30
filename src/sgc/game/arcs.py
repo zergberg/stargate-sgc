@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from . import factions
 from .clock import HOUR, short
 from .state import ARC_IDS, Campaign
-from .world import World, place_id
+from .world import World, faction_name, place_id
 
 ENDGAME_ATTENTION = 80
 
@@ -88,6 +88,12 @@ def _line(arc: Arc, n: int) -> str:
     return f"{arc.title.upper()}: {arc.stages[n - 1].log.upper()}"
 
 
+def names_faction(arc: Arc) -> bool:
+    """The arc's title names its faction, so the SGC knows the faction the moment the arc starts."""
+    name = faction_name(arc.faction).lower().removeprefix("the ")
+    return name in arc.title.lower()
+
+
 def start(c: Campaign, aid: str) -> list[str]:
     """Wake a dormant arc at stage 1 (its first clue has been found)."""
     st = c.arcs.get(aid)
@@ -96,7 +102,7 @@ def start(c: Campaign, aid: str) -> list[str]:
     arc = ARCS[aid]
     st.state, st.started = "active", c.now
     _enter(c, arc, 1)
-    known = factions.know(c, arc.faction, "a new lead") if arc.faction in c.factions else []
+    known = factions.know(c, arc.faction, "a new lead") if names_faction(arc) and arc.faction in c.factions else []
     return [f"NEW LEAD: {arc.title.upper()}", *known, *on_attention(c, arc.faction)]
 
 

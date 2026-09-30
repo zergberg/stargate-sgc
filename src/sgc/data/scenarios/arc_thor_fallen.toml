@@ -2,6 +2,7 @@ id = "arc_thor_fallen"
 kind = "arc"
 arc = "thor"
 arc_stage = 3
+when = ["aware asgard"]
 
 [node.start]
 text.full = "The last signal from {world}: Heru'ur holds the gate, and Gairwyn's people have gone into the hills. The Asgard have not answered."

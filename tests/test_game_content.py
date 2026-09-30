@@ -518,14 +518,23 @@ def test_an_arc_scenario_knows_its_own_arc_but_not_the_arcs_secrets():
 @pytest.mark.parametrize("when,ok", [("arc thor active", True), ("arc thor resolved", True),
                                      ("arc thor stage >= 2", True), ("arc thor dormant", False),
                                      ("known @Cimmeria", False), ("is {world} @Cimmeria", False)])
-def test_an_arc_under_way_means_its_title_and_faction_are_known(when, ok):
+def test_an_arc_under_way_means_its_title_is_known(when, ok):
     text = CHECKIN.replace('when = ["world {world} feature ruins"]', f'when = ["{when}"]').replace(
-        "designation {designation}.", "near Thor's Hammer on Cimmeria. The Asgard built it.")
+        "designation {designation}.", "near Thor's Hammer on Cimmeria.")
     if ok:
         assert parse(text)
     else:
         with pytest.raises(ContentError, match=UNKNOWN):
             parse(text)
+
+
+def test_an_arc_under_way_knows_its_faction_only_if_the_title_names_it():
+    thor = CHECKIN.replace('when = ["world {world} feature ruins"]', 'when = ["arc thor active"]').replace(
+        "designation {designation}.", "the Asgard built it.")
+    with pytest.raises(ContentError, match=UNKNOWN):           # Thor's arc does not file the Asgard
+        parse(thor)
+    assert parse(thor.replace("arc thor active", "aware asgard"))
+    assert parse(thor.replace("arc thor active", "arc tokra active").replace("the Asgard", "the Tok'ra"))
 
 
 REVEAL = """
