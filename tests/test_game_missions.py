@@ -95,7 +95,7 @@ def test_missions_need_a_probed_world_a_free_team_and_the_right_specialty():
     assert "CAN'T RUN A CONTACT" in r.e.assign(w.id, "SG-2", "contact")
     assert r.e.assign(w.id, "SG-2", "survey").startswith("SG-2 ASSIGNED: SURVEY")
     assert r.e.assign(w.id, "SG-2", "survey") == "SG-2 IS NOT AVAILABLE"
-    assert r.c.teams["SG-2"].status == "offworld" and r.c.teams["SG-2"].mission == 1 and r.c.record["missions"] == 1
+    assert r.c.teams["SG-2"].status == "staging" and r.c.teams["SG-2"].mission == 1 and r.c.record["missions"] == 1
 
 
 def test_a_survey_departs_checks_in_comes_home_and_debriefs():

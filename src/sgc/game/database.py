@@ -47,10 +47,12 @@ def team_status(c: Campaign, name: str) -> str:
     """A team's status with its timer: STOOD DOWN 11H, INJURED 1D 20H, CAPTURED 4D, RE-FORMING 2D 5H,
     FORMING 1D 4H, TRAINING 20H.
 
-    An offworld team reads OFFWORLD; where it is belongs in another column.
+    An offworld team reads OFFWORLD, and one waiting for the gate STAGING; where it's going belongs elsewhere.
     """
     t = c.teams[name]
     left = t.until - c.now
+    if t.status == "staging":
+        return "STAGING"
     if t.status == "base":
         return f"STOOD DOWN {time_left(left)}" if left > 0 else "BASE"
     if t.status == "injured":
@@ -132,7 +134,8 @@ class Database:
             for name in team_names(c):
                 t = c.teams[name]
                 done = [m for m in c.missions if m.team == name and m.state not in ("active", "cancelled")]
-                where = self._world_name(t.where) if t.where else "—" if t.status == "lost" else "SGC"
+                where = self._world_name(t.where) if t.where and t.status != "staging" \
+                    else "—" if t.status == "lost" else "SGC"
                 history = f"{len(done)} missions" + (f", last {self._world_name(done[-1].world)}" if done else "")
                 specialty = t.specialty.upper() + (f"/{t.secondary.upper()}" if t.secondary else "")
                 out.append(Row(name, (name, specialty, rank(t).upper(), team_status(c, name), where,

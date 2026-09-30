@@ -51,7 +51,7 @@ def test_assigning_a_team_to_a_probed_world():
     assert r.screen == "type_pick" and r.items() == [("SURVEY", True), ("BACK", True)]
     r.key("1")
     assert r.notice.startswith("SG-3 ASSIGNED: SURVEY") and r.screen == "world"
-    assert c.teams["SG-3"].status == "offworld"
+    assert c.teams["SG-3"].status == "staging"
 
 
 def test_adding_a_note_types_text():

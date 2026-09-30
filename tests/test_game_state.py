@@ -262,6 +262,8 @@ def test_from_dict_rejects_bad_event_payloads(kind, data):
 ])
 def test_from_dict_accepts_every_event_the_engine_makes(kind, data):
     c = busy_campaign()[0]
+    if data.get("op") == "depart":
+        c.teams["SG-3"].status = "staging"              # its departure still waits for the gate
     wid = next(iter(c.worlds))
     c.events.push(2000, kind, {k: wid if v == W0 else v for k, v in data.items()})
     assert from_dict(json.loads(json.dumps(to_dict(c)))) == c

@@ -240,6 +240,10 @@ class Room:
             return self._req_table()[i][2]
         if self.screen == "team_pick":
             team = self._teams()[i]
+            t = self.c.teams[team]
+            if t.status == "staging":
+                w = self.c.worlds.get(t.where)
+                return f"{team} IS STAGING FOR {(w.name if w is not None else t.where).upper()}"
             return f"{team}: {self._status(team)}"
         if self.screen in ("main", "pace"):
             return PACE_LOCKED

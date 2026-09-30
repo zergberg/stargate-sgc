@@ -67,12 +67,13 @@ INTEL_ROLL = 0.15                    # chance each intel roll in a debrief turns
 
 
 def team_label(c: Campaign, name: str, timer: bool = True) -> str:
-    """A team's status in the Database's words (database.team_status), or AWAY: <world> while it's offworld.
-    Without the timer, the time left is dropped: the gate room's panel is narrow."""
+    """A team's status in the Database's words (database.team_status), or AWAY: <world> while it's offworld and
+    STAGING: <world> while it waits for the gate. Without the timer, the time left is dropped: the gate room's
+    panel is narrow."""
     t = c.teams[name]
-    if t.status == "offworld":
+    if t.status in ("offworld", "staging"):
         w = c.worlds.get(t.where)
-        return f"AWAY: {w.name if w is not None else t.where}"
+        return f"{'AWAY' if t.status == 'offworld' else 'STAGING'}: {w.name if w is not None else t.where}"
     status = team_status(c, name)
     return status if timer else _TIME_LEFT.sub("", status)
 
@@ -841,7 +842,7 @@ class Engine:
                     target=self.mission_target(wid, mtype))
         c.missions.append(m)
         tm = c.teams[team]
-        tm.status, tm.where, tm.mission = "offworld", wid, m.id
+        tm.status, tm.where, tm.mission = "staging", wid, m.id      # offworld once the gate takes it (_depart)
         c.record["missions"] += 1
         c.events.push(c.now, "dial_out", {"op": "depart", "mission": m.id})
         msg = f"{team} ASSIGNED: {mtype.upper()} OF {w.name.upper()}, {(m.end - m.start) // 60} HOURS"
@@ -875,6 +876,11 @@ class Engine:
         m = c.mission(mid)
         if m is None or m.state != "active":
             return
+        tm = c.teams[m.team]
+        if tm.status != "staging" or tm.mission != m.id:      # something happened to the team while it waited
+            self._check_team(m)
+            return
+        tm.status = "offworld"
         self._occupy("depart")
         for line in rules.attention(c, factions.owner_of(c, m.world), SEEN):   # seen on their world
             self._log(line)
@@ -911,7 +917,7 @@ class Engine:
         """After a scenario: a team that's no longer out there has ended its mission."""
         c = self.c
         tm = c.teams[m.team]
-        if m.state not in ("active", "aborted") or tm.mission != m.id or tm.status == "offworld":
+        if m.state not in ("active", "aborted") or tm.mission != m.id or tm.status in ("offworld", "staging"):
             return
         m.state = {"captured": "captured", "lost": "lost"}.get(tm.status, "aborted")
         c.events.cancel(lambda e: e.data.get("mission") == m.id)

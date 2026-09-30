@@ -16,7 +16,7 @@ CORE_TEAMS = ("SG-1", "SG-2", "SG-3", "SG-4")         # always on the roster; a 
 ALL_TEAMS = tuple(f"SG-{n}" for n in range(1, 13))    # SG-5 to SG-12 are commissioned with funding
 ROSTER = {"SG-1": "elite", "SG-2": "recon", "SG-3": "combat", "SG-4": "science"}
 SPECIALTIES = ("recon", "combat", "science", "diplomatic", "medical")
-STATUSES = ("base", "offworld", "injured", "captured", "lost", "forming", "training")
+STATUSES = ("base", "staging", "offworld", "injured", "captured", "lost", "forming", "training")
 IDC_STATES = ("valid", "compromised", "revoked")
 METERS = ("security", "personnel")
 MODES = ("campaign", "sandbox")
@@ -473,6 +473,16 @@ def _way_home(events: Scheduler, name: str) -> bool:
                             or (e.kind in ("dial_out", "search_report") and e.data.get("by") == name)))
 
 
+def _stage_departures(teams: dict[str, Team], events: Scheduler) -> None:
+    """A save from before STAGING had an assigned team offworld while its departure still waited for the gate:
+    it is staging."""
+    departing = {e.data["mission"] for e in events
+                 if e.kind == "dial_out" and e.data.get("op") == "depart"}
+    for tm in teams.values():
+        if tm.status == "offworld" and tm.mission in departing:
+            tm.status = "staging"
+
+
 def from_dict(d: dict) -> Campaign:
     """Rebuild a campaign from to_dict() output; raises ValueError on bad or malformed data."""
     version = d.get("version") if isinstance(d, dict) else None
@@ -522,6 +532,7 @@ def from_dict(d: dict) -> Campaign:
         events = Scheduler.from_list(d["events"], d["event_seq"])
         for e in events:
             _event(e, world_ids, mission_id_set, deal_ids, set(arcs), set(teams))
+        _stage_departures(teams, events)
         for name, tm in teams.items():
             if tm.status == "offworld" and tm.mission is None and not _way_home(events, name):
                 raise ValueError(f"{name} is offworld with no mission and nothing bringing it home")
