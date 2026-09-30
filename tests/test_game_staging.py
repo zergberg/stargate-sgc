@@ -1,11 +1,12 @@
 import json
 
-from sgc.game import clock
+from sgc.game import clock, planner, rules
 from sgc.game.database import Database, team_status
 from sgc.game.engine import team_label
 from sgc.game.room import Room
 from sgc.game.state import available_teams, from_dict, to_dict
 from tests.test_game_engine import Rig
+from tests.test_game_engine_events import AMBUSH
 from tests.test_game_missions import probed
 
 
@@ -75,3 +76,31 @@ def test_an_old_save_with_a_queued_departure_loads_as_staging():
     assert back.teams["SG-2"].status == "staging"
     r.e.advance(30)
     assert from_dict(to_dict(r.c)).teams["SG-2"].status == "offworld"      # gone through: stays offworld
+
+
+def test_a_staging_team_is_never_ambushed_or_flagged_on_the_world():
+    r = Rig(AMBUSH)
+    w, tm = staged(r, owner="Sokar", inhabitants="jaffa")
+    assert rules.teams_matching(r.c, "territory", {"faction_id": "sokar"}) == []
+    assert not any(row.cells[4] == "T" for row in Database(r.c).rows() if row.key == w.id)
+    r.c.factions["sokar"].attention = 60
+    r.c.events.push(r.c.now, "faction_action", {"faction": "sokar"})
+    r.e.advance(30)                                        # the ambush goes first, while SG-2 still stages
+    assert not any("ambushed" in line for line in r.logs) and tm.status == "offworld"
+
+
+def test_a_staging_team_recalled_stands_by_at_base():
+    r = Rig()
+    w, tm = staged(r)
+    assert rules.recall(r.c, r.c.mission(1)) == []
+    assert (tm.status, tm.mission) == ("base", None) and r.c.mission(1).state == "aborted"
+    r.e.advance(clock.HOUR)
+    assert tm.status == "base" and not any("DEPARTING" in line for line in r.logs)
+
+
+def test_the_planner_never_sends_a_staging_team_again_and_its_mission_is_not_in_the_field():
+    r = Rig()
+    w, tm = staged(r)
+    out = planner.step(r.e)
+    assert not any(line.startswith("SG-2 ASSIGNED") for line in out) and tm.mission == 1
+    assert not any(i.kind == "mission" for i in r.e.schedule_view())

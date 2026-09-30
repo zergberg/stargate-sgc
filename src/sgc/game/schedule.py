@@ -131,7 +131,6 @@ def view(c: Campaign, travel: Travel) -> list[QueueItem]:
     """What the SGC has scheduled that the player has been told about, soonest first. Incoming wormholes,
     the recovery tick and rolled times never appear."""
     dials = gate_order(c)
-    departing = {e.data["mission"] for e in dials if e.data["op"] == "depart"}
     items = [QueueItem(dial_id(ev), "dial_out", str(i + 1), _words(c, ev)[0], WAITING, (0, i),
                        cancellable=True, movable=True) for i, ev in enumerate(dials)]
     items += [_drone(c, ev, travel) for ev in c.events.find(lambda e: e.kind == "malp_return")]
@@ -139,7 +138,7 @@ def view(c: Campaign, travel: Travel) -> list[QueueItem]:
         if m.state not in ("active", "aborted"):
             continue                                 # history, perhaps of a team since disbanded
         tm = c.teams.get(m.team)
-        if tm is not None and tm.status == "offworld" and tm.mission == m.id and m.id not in departing:
+        if tm is not None and tm.status == "offworld" and tm.mission == m.id:    # a staging team isn't out yet
             items.append(_mission(c, m))
     for name in team_names(c):
         t = c.teams[name]

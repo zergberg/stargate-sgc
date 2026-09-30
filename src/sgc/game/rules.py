@@ -475,6 +475,10 @@ def recall(c: Campaign, m: Mission) -> list[str]:
                                and e.data.get("mission") == m.id)
     c.events.cancel(lambda e: e.data.get("mission") == m.id and e.kind in _MISSION_TIMED_KINDS)
     m.end, m.state = c.now, "aborted"
+    tm = c.teams.get(m.team)
+    if tm is not None and tm.status == "staging" and tm.mission == m.id:     # it never left: it stands by
+        tm.status, tm.where, tm.mission = "base", "", None
+        return [line for ev in searches for line in withdraw_search(c, ev.data)]
     c.events.push(c.now, "team_return", {"mission": m.id})
     return [line for ev in searches for line in withdraw_search(c, ev.data)]
 
