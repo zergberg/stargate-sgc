@@ -12,10 +12,10 @@ from .world import ALLY_NAMES, FACTION_IDS, FACTION_KIND, faction_id, faction_na
 
 STAGES = (("unaware", 0), ("curious", 20), ("hostile", 50), ("seeking", 80))
 STAGE_NAMES = tuple(name for name, _ in STAGES)
-GAIN = {"recruit": 0.75, "officer": 1.0, "commander": 1.25}       # attention gains, by difficulty
-DECAY = {"recruit": 2, "officer": 1, "commander": 1}              # attention lost per quiet game day
+GAIN = {"recruit": 0.75, "officer": 1.0, "commander": 1.1}        # attention gains, by difficulty
+DECAY = {"recruit": 4, "officer": 3, "commander": 3}              # attention lost per quiet game day
 EVERY = {"curious": (72, 120), "hostile": (36, 72), "seeking": (18, 36)}   # game hours between actions
-TEMPO = {"recruit": 1.25, "officer": 1.0, "commander": 0.8}       # scales those intervals
+TEMPO = {"recruit": 1.25, "officer": 1.0, "commander": 0.9}       # scales those intervals
 WORDS = {"unaware": "shows no sign of knowing about Earth", "curious": "knows our gate address",
          "hostile": "has put a price on the SG teams", "seeking": "means to destroy Earth"}
 TRUST_WORDS = ((75, "allied"), (50, "friendly"), (25, "cautious"), (0, "wary"))

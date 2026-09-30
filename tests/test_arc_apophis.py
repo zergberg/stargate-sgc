@@ -75,7 +75,7 @@ def test_bratac_warns_of_the_fleet_and_the_countdown_starts():
     assert rules.check_all(SCENARIOS["arc_apophis_bratac"].when, c, bind(c, w, "SG-1"))
     play(c, "arc_apophis_bratac", w, team="SG-1")
     st = c.arcs["apophis"]
-    assert "ally.jaffa" in c.inventory and st.stage == 4 and st.deadline == c.now + 120 * clock.HOUR
+    assert "ally.jaffa" in c.inventory and st.stage == 4 and st.deadline == c.now + arcs.ARCS["apophis"].countdown * clock.HOUR
 
 
 def test_harassing_the_fleet_can_bring_the_endgame_on():

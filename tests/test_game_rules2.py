@@ -288,7 +288,7 @@ def test_attention_decays_at_midnight():
     factions.adjust_attention(c, "yu", 30)
     c.minutes = 2 * clock.DAY
     rules.hourly(c)
-    assert c.factions["yu"].attention == 29
+    assert c.factions["yu"].attention == 30 - factions.DECAY["officer"]
 
 
 def test_running_out_of_addresses_is_said_once_per_time():

@@ -47,7 +47,7 @@ ARCS: dict[str, Arc] = {a.id: a for a in (
               "Apophis is gathering his fleet"),
         Stage("Two ha'taks are on course for Earth. Strike at Chulak before they arrive.",
               "two ha'taks on course for Earth"),
-    ), endgame=4, countdown=120,
+    ), endgame=4, countdown=168,
         catastrophe="Apophis's ha'taks reached Earth orbit, and the SGC had no answer."),
     Arc("thor", "Cimmeria and Thor's Hammer", False, "asgard", "Cimmeria", (
         Stage("The Cimmerians speak of Thor, whose Hammer guards them. The ruins beneath it want studying.",

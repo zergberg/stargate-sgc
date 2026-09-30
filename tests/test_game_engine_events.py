@@ -107,7 +107,7 @@ def test_friendly_allies_share_addresses_at_reviews(monkeypatch):
 
 def test_a_curious_goauld_acts_through_the_gate_without_being_named():
     r = Rig(SCOUT)
-    rules.attention(r.c, "cronus", 25)
+    rules.attention(r.c, "cronus", 35)                  # still Curious after the days of decay before it acts
     [ev] = actions(r.c)
     r.e.advance(ev.due - r.c.now)
     assert r.alarms == ["INCOMING"] and "loyal to a Goa'uld" in r.e.prompt.text
@@ -308,7 +308,7 @@ def test_an_endgame_with_no_scenario_fails_the_arc_and_a_catastrophe_ends_the_ga
     for _ in range(3):
         arcs.advance(r.c, "apophis")
     assert r.c.arcs["apophis"].stage == 4
-    r.e.advance(120 * 60)
+    r.e.advance(arcs.ARCS["apophis"].countdown * clock.HOUR)
     assert r.c.arcs["apophis"].state == "failed" and r.e.ended and r.c.ending == "fallen"
     assert "FAILED: APOPHIS AND CHULAK" in r.logs and "APOPHIS AND CHULAK: NO WORD" not in r.logs
 

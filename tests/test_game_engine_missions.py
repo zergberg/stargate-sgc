@@ -70,7 +70,7 @@ def test_departing_for_a_goauld_world_draws_its_attention():
     w = probed(r, owner="Sokar", inhabitants="jaffa")
     r.e.assign(w.id, "SG-3", "survey")
     r.e.advance(1)
-    assert r.c.factions["sokar"].attention == 5
+    assert r.c.factions["sokar"].attention == eng.SEEN
 
 
 def test_a_rescue_brings_the_captive_home():

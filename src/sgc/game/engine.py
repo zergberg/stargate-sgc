@@ -55,7 +55,7 @@ MISSION_HOURS = {"survey": 24, "contact": 36, "trade": 30, "raid": 18, "study": 
 MISSION_NEEDS = {"contact": "diplomatic", "trade": "diplomatic", "raid": "combat", "study": "science",
                  "aid": "medical"}
 CONTACT_TYPES = ("contact", "trade", "aid")   # these end in CONTACT; the rest in SURVEYED
-SEEN = 5                                      # attention when a team departs for a Goa'uld's world
+SEEN = 4                                      # attention when a team departs for a Goa'uld's world
 MISS = (3, 8, 15, 25)                # % chance of a missed check-in, by world danger
 SEARCH = {"malp": (60, 85), "team": (80, 95)}     # a search finds the team / finds it pinned down (cumulative %)
 OVERDUE = (50, 80)                   # after 12 hours: the team turns up / is captured (cumulative %); else lost

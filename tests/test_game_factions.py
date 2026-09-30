@@ -22,7 +22,7 @@ def test_stages_follow_the_thresholds():
 
 
 def test_attention_gains_scale_with_difficulty_and_clamp():
-    for diff, expected in [("recruit", 8), ("officer", 10), ("commander", 13)]:
+    for diff, expected in [("recruit", 8), ("officer", 10), ("commander", 11)]:
         c = camp(diff)
         factions.adjust_attention(c, "sokar", 10)
         assert c.factions["sokar"].attention == expected and c.factions["sokar"].quiet_since == c.now
@@ -75,22 +75,22 @@ def test_texts_name_a_faction_only_once_it_is_known():
     assert factions.display(c, "heruur") == "Heru'ur"
 
 
-def test_attention_decays_one_a_day_after_a_quiet_day():
+def test_attention_decays_each_day_after_a_quiet_day():
     c = camp()
     factions.adjust_attention(c, "yu", 22)
     c.minutes += clock.DAY - 1
     assert factions.decay(c) == [] and c.factions["yu"].attention == 22
     c.minutes += 1
     factions.decay(c)
-    assert c.factions["yu"].attention == 21
+    assert c.factions["yu"].attention == 22 - factions.DECAY["officer"]
     c.minutes += clock.DAY
     factions.decay(c)
-    assert c.factions["yu"].attention == 20
+    assert c.factions["yu"].attention == 22 - 2 * factions.DECAY["officer"]
     r = camp("recruit")
     factions.adjust_attention(r, "yu", 30)                 # 22.5 rounds to 23
     r.minutes += clock.DAY
     factions.decay(r)
-    assert r.factions["yu"].attention == 21
+    assert r.factions["yu"].attention == 23 - factions.DECAY["recruit"]
 
 
 def test_a_known_goauld_calming_down_is_logged():

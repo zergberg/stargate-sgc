@@ -1,6 +1,8 @@
 from sgc.game import arcs, clock, world
 from sgc.game.state import ARC_IDS, new_campaign
 
+ENDGAME = arcs.ARCS["apophis"].countdown * clock.HOUR       # the endgame's countdown, in minutes
+
 
 def camp():
     return new_campaign("campaign", "officer", 3)
@@ -46,7 +48,7 @@ def test_attention_at_80_jumps_to_the_endgame_with_a_visible_deadline():
     c.factions["apophis"].attention = 80
     assert arcs.on_attention(c, "apophis")[0].startswith("APOPHIS AND CHULAK: TWO HA'TAKS")
     st = c.arcs["apophis"]
-    assert st.stage == 4 and st.deadline == c.now + 120 * 60 and steps(c, "apophis") == [(120 * 60, 4)]
+    assert st.stage == 4 and st.deadline == c.now + ENDGAME and steps(c, "apophis") == [(ENDGAME, 4)]
     assert arcs.on_attention(c, "apophis") == []
     assert arcs.stage_text(c, "apophis").endswith(f"Due {clock.short(st.deadline)}.")
 
@@ -56,7 +58,7 @@ def test_advancing_into_the_endgame_also_starts_the_countdown():
     arcs.start(c, "apophis")
     for _ in range(3):
         arcs.advance(c, "apophis")
-    assert c.arcs["apophis"].deadline == c.now + 120 * 60 and steps(c, "apophis") == [(120 * 60, 4)]
+    assert c.arcs["apophis"].deadline == c.now + ENDGAME and steps(c, "apophis") == [(ENDGAME, 4)]
     assert arcs.advance(c, "apophis") == []                                     # nothing after the last stage
 
 
