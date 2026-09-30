@@ -24,6 +24,7 @@ from .database import team_status
 from .orders import SITUATIONS
 from .state import TEAMS, Campaign, Mission, available_teams, demote, has_specialty, rank_index
 from .world import GOAULD, World, readings
+from . import schedule
 
 DETAIL = {"recruit": "full", "officer": "partial", "commander": "minimal"}
 INCOMING_EVERY = (36, 96)            # game hours between random incoming wormholes
@@ -288,6 +289,31 @@ class Engine:
             self._log(line)
         self.save_now()
 
+    # ------------------------------------------------------------------ the schedule (the Database's QUEUE tab)
+    def schedule_view(self) -> list[schedule.QueueItem]:
+        return schedule.view(self.c, TRAVEL)
+
+    def cancel(self, item_id: str, confirm: bool = False) -> str:
+        """Cancel a dial-out still waiting for the gate. Without confirm it only asks (or says why not)."""
+        if self.ended:
+            return "THE CAMPAIGN IS OVER"
+        msg, lines, done = schedule.cancel(self.c, item_id, confirm, TRAVEL)
+        if done:
+            for line in lines:
+                self._log(line)
+            self._log(msg)
+            self.save_now()
+        return msg
+
+    def move(self, item_id: str, delta: int) -> str:
+        """Move a waiting dial-out up (delta < 0) or down the gate queue; inbound traffic keeps its priority."""
+        if self.ended:
+            return "THE CAMPAIGN IS OVER"
+        msg, done = schedule.move(self.c, item_id, delta, TRAVEL)
+        if done:
+            self.save_now()
+        return msg
+
     # ------------------------------------------------------------------ drones
     def _dial_out(self, data: dict) -> None:
         op = data["op"]
@@ -315,7 +341,8 @@ class Engine:
             return
         self._occupy("probe")
         self._log(f"{drone.upper()} SENT TO {w.name.upper()}")
-        c.events.push(c.now + self.rng.randint(*TRAVEL[drone]), "malp_return", {"world": wid, "drone": drone})
+        c.events.push(c.now + self.rng.randint(*TRAVEL[drone]), "malp_return",
+                      {"world": wid, "drone": drone, "sent": c.now})
         self._show(self._v_drone(w, drone))
 
     def _malp_return(self, data: dict) -> None:

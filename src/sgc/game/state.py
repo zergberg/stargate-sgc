@@ -22,7 +22,7 @@ PACES = ("relaxed", "standard", "busy")
 RANKS = (("green", 0), ("seasoned", 3), ("veteran", 8), ("elite", 15))
 RANK_NAMES = tuple(name for name, _ in RANKS)
 MISSION_TYPES = ("survey", "contact")
-MISSION_STATES = ("active", "complete", "aborted", "captured", "lost")
+MISSION_STATES = ("active", "complete", "aborted", "captured", "lost", "cancelled")
 STOCK = {"malp": (4, 6), "uav": (2, 3)}             # drone: (starting stock, cap)
 FIRST_INCOMING = (36, 96)                             # game hours until the first random incoming wormhole
 
