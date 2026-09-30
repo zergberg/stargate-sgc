@@ -1,0 +1,20 @@
+id = "checkin_recover"
+kind = "checkin"
+mission_type = "recover"
+weight = 4
+
+[node.start]
+text.full = "{team} checks in from {world}: they've found where the lost drone is being held and are watching the site."
+text.partial = "{team} checks in from {world}: the lost drone is found."
+text.minimal = "{team} checks in."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log it"
+outcome = { end = true }
+
+[[node.start.choice]]
+key = "recall"
+label = "Recall them"
+outcome = { effects = ["recall {team}"], end = true }

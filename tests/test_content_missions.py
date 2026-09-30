@@ -150,3 +150,33 @@ def test_the_tollan_are_met_on_tollana():
     assert SCENARIOS["debrief_tollana"].mission_type == "survey"     # never displaces a rescue's debrief
     play(c, "debrief_tollana", w, team="SG-1")
     assert c.factions["tollan"].known and "contact" in w.options
+
+
+def test_recover_missions_have_their_own_check_in():
+    sc = SCENARIOS["checkin_recover"]
+    assert sc.kind == "checkin" and sc.mission_type == "recover" and sc.when == ()
+    start = sc.nodes["start"]
+    assert "full" in start.text and 2 <= len(start.choices) <= 3
+    assert start.default in {ch.key for ch in start.choices}
+    default = next(ch for ch in start.choices if ch.key == start.default)
+    assert default.outcome.roll is None and not default.outcome.effects     # idle timeout must not end the mission
+    for level in ("partial", "minimal"):
+        if level in start.text:
+            assert len(start.text[level]) <= len(start.text["full"])
+    _, problems = content.load(user=None)
+    assert not [p for p in problems if "checkin_recover" in p], problems
+
+
+def test_a_recover_check_in_can_be_drawn():
+    import random
+    c, w = camp()
+    e = Engine(c, SCENARIOS)
+    base = {"world": w.name, "world_id": w.id, "designation": w.id, "team": "SG-3",
+            "specialty": c.teams["SG-3"].specialty}
+    drawn = set()
+    for seed in range(300):
+        e.rng = random.Random(seed)
+        got = e._draw("checkin", base, "recover")
+        if got:
+            drawn.add(got[0].id)
+    assert "checkin_recover" in drawn, drawn
