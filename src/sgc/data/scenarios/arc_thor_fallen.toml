@@ -1,0 +1,14 @@
+id = "arc_thor_fallen"
+kind = "arc"
+arc = "thor"
+arc_stage = 3
+
+[node.start]
+text.full = "The last signal from {world}: Heru'ur holds the gate, and Gairwyn's people have gone into the hills. The Asgard have not answered."
+text.minimal = "Contact with {world} lost."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log it"
+outcome = { effects = ["reveal faction heruur from locals", "arc thor fail", "trust asgard -10", "trust locals -5"], end = true }

@@ -1,0 +1,23 @@
+id = "arc_thor_labyrinth"
+kind = "debrief"
+mission_type = "study"
+weight = 50
+when = ["is {world} @Cimmeria", "arc thor stage == 1"]
+
+[node.start]
+text.full = "{team} debrief: the labyrinth beneath Thor's Hammer on {world}. Deep inside, the team found a chamber of light, and a figure spoke to them: Thor, of the Asgard, or an image of him. It wanted to know whether we were Goa'uld. It seemed satisfied that we were not."
+text.minimal = "{team} debrief: the labyrinth."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+[node.start.choice.outcome.roll]
+odds = 55
+mods = ["team {team} specialty science +15", "rank {team} >= seasoned +10"]
+[node.start.choice.outcome.roll.win]
+effects = ["reveal faction asgard from ruins", "trust asgard +20", "arc thor advance", "xp {team} +1"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["team {team} injured"]
+end = true

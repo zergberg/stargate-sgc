@@ -1,0 +1,22 @@
+id = "arc_thor_chariot"
+kind = "debrief"
+weight = 50
+when = ["is {world} @Cimmeria", "arc thor stage == 3"]
+
+[node.start]
+text.full = "{team} debrief: the search for Thor's chariot beneath {world}."
+text.minimal = "{team} debrief: the search on {world}."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+[node.start.choice.outcome.roll]
+odds = 45
+mods = ["trust asgard >= 20 +10", "team {team} specialty science +10", "team {team} specialty combat +10"]
+[node.start.choice.outcome.roll.win]
+effects = ["trust asgard +40", "gain ally.asgard", "attention heruur -10", "arc thor resolve", "xp {team} +1"]
+end = true
+[node.start.choice.outcome.roll.lose]
+effects = ["team {team} injured", "attention heruur +5"]
+end = true

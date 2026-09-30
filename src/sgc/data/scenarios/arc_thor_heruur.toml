@@ -1,0 +1,14 @@
+id = "arc_thor_heruur"
+kind = "arc"
+arc = "thor"
+arc_stage = 2
+
+[node.start]
+text.full = "Word from {world}: Thor's Hammer has fallen silent, and Heru'ur's Jaffa came through the gate behind it. Gairwyn is asking for us. Somewhere under the mountains, the tales say, is Thor's chariot."
+text.minimal = "Word from {world}: the Goa'uld have come."
+default = "log"
+
+[[node.start.choice]]
+key = "log"
+label = "Log it"
+outcome = { effects = ["reveal faction heruur from locals", "attention heruur +20", "status {world} hostile", "arc thor advance"], end = true }

@@ -1,0 +1,14 @@
+id = "arc_thor_wake"
+kind = "debrief"
+weight = 50
+when = ["is {world} @Cimmeria", "arc thor dormant"]
+
+[node.start]
+text.full = "{team} debrief: the people of {world} live without fear of the Goa'uld. A great stone they call Thor's Hammer stands by the gate, and any Goa'uld who comes through is taken away. Their elder, Gairwyn, says the old tales speak of a labyrinth beneath it."
+text.minimal = "{team} debrief: a protected world."
+default = "file"
+
+[[node.start.choice]]
+key = "file"
+label = "File the report"
+outcome = { effects = ["reveal name {world} from locals", "arc thor start", "unlock study {world}", "unlock contact {world}", "trust locals +5"], end = true }
