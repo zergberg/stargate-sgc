@@ -277,12 +277,15 @@ class Engine:
         self.c.events.push(until, "checkin_timeout", {"mission": int(mission), "team": team})
 
     def _free_gate(self) -> None:
-        """Lower the gate's hold to now, and wake any gate traffic that was deferred while it was busy, in the
-        order each was first due — so an early free doesn't let later-queued traffic cut in front of it."""
+        """Lower the gate's hold to now, and wake only the gate traffic that was actually deferred while it
+        was busy — not anything merely due in that window on its own, like a staged departure or a random
+        incoming — in the order each was first due, so an early free doesn't let later-queued traffic cut
+        in front of it. _fire always defers a GATE_KINDS event by pushing it to exactly c.gate_until, so a
+        due that still matches the old gate_until is how a deferred event is told apart from one that isn't."""
         c = self.c
         old = c.gate_until
         c.gate_until = min(old, c.now)
-        for ev in c.events.remove(lambda e: e.kind in GATE_KINDS and c.now < e.due <= old):
+        for ev in c.events.remove(lambda e: e.kind in GATE_KINDS and c.now < e.due == old):
             c.events.push(c.now, ev.kind, ev.data)
 
     def _checkin_timeout(self, data: dict) -> None:

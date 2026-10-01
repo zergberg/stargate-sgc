@@ -456,6 +456,8 @@ class Room:
                 out.append(f"UPLINK {item.status.removeprefix('EXPECTED ')}")
             elif item.kind == "drone_checkin" and item.id == f"checkin:{wid}":
                 out.append(f"CHECK-IN {item.when}")
+            elif item.kind == "drone_home" and item.id == f"home:{wid}":
+                out.append(item.brief)
             elif item.kind == "mission":
                 m = self.c.mission(int(item.id.split(":")[1]))
                 if m is not None and m.world == wid:

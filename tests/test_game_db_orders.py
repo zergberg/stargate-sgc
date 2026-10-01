@@ -142,6 +142,42 @@ def test_esc_steps_back_then_closes():
     assert db.orders is None
 
 
+def test_back_by_number_closes_the_panel_on_the_first_step():
+    db, c, engine = db_engine()
+    target = list(c.worlds)[3]
+    select_address(db, target)
+    db.key("o")
+    assert db.orders is not None
+    back_key = str(len(db.orders.items()))          # BACK is the last, numbered item
+    db.key(back_key)
+    assert db.orders is None
+
+
+def test_back_by_enter_closes_the_panel_on_the_first_step():
+    db, c, engine = db_engine()
+    target = list(c.worlds)[3]
+    select_address(db, target)
+    db.key("o")
+    assert db.orders is not None
+    for _ in range(len(db.orders.items()) - 1):      # move the selection onto BACK
+        db.key("down")
+    db.key("enter")
+    assert db.orders is None
+
+
+def test_back_deeper_in_steps_back_a_level_not_close():
+    db, c, engine = db_engine()
+    target = list(c.worlds)[3]
+    c.worlds[target].status = "probed"
+    select_address(db, target)
+    db.key("o")
+    db.key("5")                                      # ASSIGN TEAM -> team_pick
+    assert db.orders.screen == "team_pick"
+    back_key = str(len(db.orders.items()))
+    db.key(back_key)
+    assert db.orders is not None and db.orders.screen == "world"
+
+
 def test_ctrl_c_also_steps_back_and_closes():
     db, c, engine = db_engine()
     target = list(c.worlds)[3]

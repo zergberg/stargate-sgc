@@ -189,3 +189,29 @@ def test_a_reload_frees_a_deferred_dial_out_in_order(monkeypatch):
     b.e.advance(1)
     assert f"MALP SENT TO {wa_name.upper()}" in b.logs
     assert f"MALP SENT TO {wb_name.upper()}" not in b.logs  # B still waits behind A
+
+
+def test_answering_a_checkin_early_keeps_a_naturally_due_incoming_on_schedule(monkeypatch):
+    """An incoming due 20 minutes ahead on its own was never deferred for the busy gate: answering the
+    line early must not wake it along with whatever genuinely was waiting."""
+    r = Rig(UNDER_FIRE)
+    _raise_the_line(r, monkeypatch)
+    due = r.c.now + 20                                      # inside the 38-minute window, but never deferred
+    r.c.events.push(due, "incoming")
+
+    r.e.key("2")                                            # hold position: answered well inside the window
+    assert r.c.gate_until <= r.c.now
+    [ev] = r.c.events.find(lambda e: e.kind == "incoming")
+    assert ev.due == due                                    # untouched: it was never waiting on the gate
+
+
+def test_a_reload_keeps_a_naturally_due_incoming_on_schedule(monkeypatch):
+    r = Rig(UNDER_FIRE)
+    _raise_the_line(r, monkeypatch)
+    due = r.c.now + 20
+    r.c.events.push(due, "incoming")
+
+    b = Rig(UNDER_FIRE, campaign=from_dict(json.loads(json.dumps(to_dict(r.c)))))
+    assert b.c.gate_until <= b.c.now
+    [ev] = b.c.events.find(lambda e: e.kind == "incoming")
+    assert ev.due == due

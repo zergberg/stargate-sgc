@@ -257,7 +257,8 @@ class Database:
                 self.orders = None
             return
         if k in ("up", "down", "enter") or (len(k) == 1 and k.isdigit()):
-            room.key(k)
+            if room.key(k) == ("close",):
+                self.orders = None
 
     def close_orders(self) -> None:
         """Drop a half-open ORDERS panel: an alarm closes the Database outright, and reopening it brings

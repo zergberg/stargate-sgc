@@ -150,6 +150,16 @@ def test_a_parked_drone_shows_its_next_checkin():
     assert r.detail()[-1] == f"NEVER VISITED · CHECK-IN {item.when}"
 
 
+def test_a_pending_drone_home_shows_its_line():
+    r, c = room()
+    wid = open_list(r, c)
+    c.worlds[wid].drone = "malp"
+    c.events.push(c.now + 15, "drone_home", {"world": wid, "mission": 1, "team": "SG-2", "drone": "malp"})
+    item = next(i for i in r.e.schedule_view() if i.kind == "drone_home")
+    assert r.detail()[-1] == f"NEVER VISITED · {item.brief}"
+    assert "SG-2 SENDING MALP HOME" in item.brief
+
+
 def test_a_note_shows_its_first_line_clipped():
     r, c = room()
     wid = open_list(r, c)
