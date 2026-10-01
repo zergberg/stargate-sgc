@@ -445,6 +445,8 @@ class Room:
                 out.append(f"{item.id.split(':')[1].upper()} QUEUED #{item.when}")
             elif item.kind == "uplink" and item.id == f"uplink:{wid}":
                 out.append(f"UPLINK {item.status.removeprefix('EXPECTED ')}")
+            elif item.kind == "drone_checkin" and item.id == f"checkin:{wid}":
+                out.append(f"CHECK-IN {item.when}")
             elif item.kind == "mission":
                 m = self.c.mission(int(item.id.split(":")[1]))
                 if m is not None and m.world == wid:
