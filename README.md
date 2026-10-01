@@ -1,6 +1,6 @@
 # sgc: SGC Dialing Computer
 
-An ambient Stargate SG-1 dialing computer for your terminal. It loops forever: dial an address, play an event at the destination, shut the gate down, pick the next address. The gate is drawn as an image and shown with your terminal's image support. The side screens, clock and a running log are drawn as text. It has sound, and it plays an animated shutdown when you quit.
+An ambient Stargate SG-1 dialing computer for your terminal. It loops forever: dial an address, play an event at the destination, shut the gate down, pick the next address. The gate is drawn as an image and shown with your terminal's image support. The side screens, clock and a running log are drawn as text. It has sound, and it plays an animated shutdown when you quit, blanking every panel to `-- NO SIGNAL --`.
 
 ## Events
 
@@ -94,7 +94,7 @@ You command the SGC while sgc runs in a terminal pane. The game keeps its own cl
 
 ### Alarms
 
-- An alarm sounds the klaxon and the terminal bell. It also sends a desktop notification through `notify-send`, if that's installed and `notify` is on.
+- An alarm sounds the klaxon and the terminal bell. Resolving it shuts its wormhole and stops the klaxon. It also sends a desktop notification through `notify-send`, if that's installed and `notify` is on.
 - The header turns red (`!! ALARM · INCOMING`, `DEFCON 2`), and you're brought back to the gate room from wherever you are.
 - You have 3 game hours to answer with `1`–`9`, and never less than 60 real seconds. The countdown ticks for its last 5 seconds.
 - If you don't answer, the standing order for that situation is carried out and the log names it. A greyed-out option can't be chosen right now.
@@ -104,6 +104,7 @@ You command the SGC while sgc runs in a terminal pane. The game keeps its own cl
   - The alarm closes the Database but keeps it: `d` opens it again on the same tab, search and scroll, a half-typed search included.
   - After the hold, `1`–`9` answers the alarm.
 - **Leaving an open alarm:** `b` won't take you out of the gate room while an alarm is open. The log reads `ALARM OPEN — GIVE AN ORDER FIRST`. After you answer, `b` takes you back to the same briefing-room screen, a half-typed note and all.
+- **A check-in's open line:** when a check-in itself raises the alarm (a contact offer, trouble and the like), its wormhole stays open and the gate stays held for it, up to 38 game minutes — the show's limit. The side panel reads `TEAM ON THE LINE · <TEAM>` with the time left, and other traffic waits for the gate. Answer in time and the log reads `ORDERS SENT TO <TEAM>` before the usual outcome. Let it run out and the log reads `WORMHOLE LOST — <TEAM> WILL RECEIVE ORDERS AT NEXT CONTACT`: the gate frees up, but the alarm stays open until its normal 3-hour deadline, same as any other. Other alarms are unaffected.
 - **Hostiles on their heels:** a team coming home from a dangerous world (Unas, Jaffa or Goa'uld) has a 15% chance of being followed. You decide before they step through: open the iris briefly and risk a firefight, or keep it closed and risk losing the team.
 - **Losing:** the base falls if a security breach hits while Security is at 0, if Jaffa win a gate-room firefight after you open the iris to an unknown code, or if a device you try to push back through the gate goes off. A campaign can also end when an arc's final threat reaches Earth with nothing to stop it (the header then reads EARTH HAS FALLEN).
 
@@ -147,7 +148,9 @@ A missed check-in plays out as follows:
     - **Lost:** if the UAV is shot down or captured, the feed stops partway and breaks up into static and `SIGNAL LOST`.
     - **Small panes:** when the gate image is under 160 pixels, the monitor is left out and the side screen still reads out.
   - Drones can be destroyed by a harsh world or captured by its garrison. Capture marks the world HOSTILE. A destroyed MALP is gone; a destroyed UAV leaves a wreck on the world.
-  - **One way only:** matter only travels from the gate that dials to the one that answers, so a drone can't come home on its own. One that survives stays parked on the world, one drone per world, until a team brings it home.
+  - **One way only:** matter only travels from the gate that dials to the one that answers, so a drone can't come home on its own. One that survives stays parked on the world, one drone per world, until a team sends it home.
+  - **Checking in:** a parked drone checks in with the SGC every 8 game hours, as real gate traffic: the side panel reads `MALP CHECK-IN · <WORLD>` (or `UAV CHECK-IN · <WORLD>`), 10 game minutes on the gate, and the log reads `MALP CHECK-IN FROM <WORLD> — ALL READINGS NOMINAL`. It's confirmation only: no roll, no new finding. A team already out on that world covers it instead, and the check-in neither dials nor shows. It can't be cancelled.
+  - **Coming home:** about 15 game minutes after a team departs to a world with a parked drone, the team dials it home: an incoming wormhole, 10 game minutes on the gate, and the drone goes straight back to stores. The log reads `SG-2 SENT THE MALP HOME FROM <WORLD>`. An extended report still collecting comes home with it, as a full report. If the team's situation changes first (captured, lost, recalled, or the mission ends before then), the drone just stays parked for the next team.
   - **Extended reports:** a MALP extended report or a UAV extensive survey costs the same drone as a plain probe. After the live pass, a MALP sits by the gate collecting for 4–6 game hours, and a UAV flies on for 3–5. Then the SGC dials back for the data (an uplink, 10 game minutes on the gate). The uplink is rolled, as full / partial / lost:
 
     | World's inhabitants | MALP | UAV |
@@ -160,9 +163,9 @@ A missed check-in plays out as follows:
     - **Full:** every reading at full detail, whatever the difficulty, with `SUBSURFACE` from a MALP's soil samples. A UAV's survey also names an inhabited world over comms, finds any drone of ours held there, and has a chance of turning up a new address.
     - **Partial:** the data is garbled (`MALP UPLINK GARBLED — <world>`), and only the live pass counts.
     - **Lost:** on a Jaffa or Goa'uld world the drone is captured. Otherwise a MALP is destroyed, and a UAV comes down (out of fuel, or crashed) and leaves a wreck. The uplink finds `NO CARRIER`.
-    - A team that reaches the world before the uplink brings the drone and its data home, as a full report.
+    - A team sent to the world before the uplink falls due brings the drone and its data home early, as a full report.
     - If the drone is lost on the live pass, there's no extended report.
-  - **Bringing drones home:** any team whose mission ends on a world (completed, aborted or recalled) brings back a drone parked there. A UAV wreck is salvaged 60% of the time if it crashed and 30% if it was shot down; a salvaged UAV goes back to stores after a repair costing 30. Without the funding for the repair, it's written off. The assign screen shows this as the mission's tandem task, like `SURVEY · RECOVER MALP` or `CONTACT · SALVAGE UAV WRECK`. A team out reinforcing brings nothing home.
+  - **Bringing drones home:** a parked drone normally comes home the moment a team sends it (above). One still parked when a team's mission ends (completed, aborted or recalled) — for example because the team arrived before the drone did — comes home with the team, the same way. A UAV wreck is salvaged 60% of the time if it crashed and 30% if it was shot down; a salvaged UAV goes back to stores after a repair costing 30. Without the funding for the repair, it's written off. The assign screen shows this as the mission's tandem task, like `SURVEY · RECOVER MALP` or `CONTACT · SALVAGE UAV WRECK`. A team out reinforcing brings nothing home.
   - A captured drone is held where it was taken. Once a UAV flight over that world, or intel, locates it, a team can go and recover it.
   - A search MALP stays on the world, unless a drone is already parked there. In that case it comes home.
 - **The gate** does one thing at a time. Check-ins go first, then other incoming traffic, then your queued dial-outs.
@@ -270,7 +273,7 @@ Recon shortens a mission by a quarter (an eighth for SG-1, or for a team trained
 The side column shows a `GATE QUEUE` box, in the gate room just above `SGC STATUS` and in the briefing room under the list:
 
 - dial-outs first, numbered in the order the gate will take them: `1 SG-2 STAGING ABYDOS`, `2 MALP → P3X-888`
-- then everything timed, with its time: `SG-1 CHECK-IN 14:00`, `MALP UPLINK 14:00–16:00`, `SG-4 HOME D2 09:00`, `SG-3 INJURED D4 18:00`
+- then everything timed, with its time: `SG-1 CHECK-IN 14:00`, `MALP UPLINK 14:00–16:00`, `MALP CHECK-IN P3X-888 14:00`, `SG-2 SENDING MALP HOME 14:15`, `SG-4 HOME D2 09:00`, `SG-3 INJURED D4 18:00`
 
 It shows up to 5 rows. With more, the last row reads `+3 MORE · d`; with nothing, `NOTHING QUEUED`. On a shorter pane it shrinks, and it's left out when not even one row fits. An alarm takes its rows first. It's read-only: cancel and reorder on the Database's Queue tab. On a small terminal there's no side column, so no box.
 
@@ -278,12 +281,19 @@ It shows up to 5 rows. With more, the last row reads `+3 MORE · d`; with nothin
 
 Press `b` to walk up and `b` again to walk back down. The walk takes `transition_seconds`, 10 by default.
 
-- A walk that starts while the gate is showing real traffic waits for it to finish. The idle scene is cut instead.
+- A walk that starts while the gate is showing real traffic waits for it to finish.
 - `q` during the walk down logs `WALKING — Q AGAIN ON ARRIVAL`.
 
 What's in the briefing room:
 
-- **Dialing list:** every address with its status and any drone on it. An address offers:
+- **Dialing list:** every address with its status, any team there and any drone or wreck on it. Selecting one shows a short summary above the list, updating as the selection moves:
+  - `<NAME> · <STATUS>`
+  - who and what is there: each team with its status (`SG-2 OFFWORLD`, `SG-3 STAGING`), `MALP ON SITE` / `UAV ON SITE` / `UAV WRECK`, or `NOBODY ON SITE`
+  - known readings in short words (`AIR OK`, `LIFE SIGNS`, `JAFFA`, `RUINS`, ...) from what the SGC has learned, or `NOT YET PROBED`
+  - its last visit, and anything queued for it: a probe queued, an uplink window, a check-in due, a team's return
+  - the first line of your note on it, if there is one
+
+  An address offers:
   - MALP probe and MALP extended report (with the number left)
   - UAV flight and UAV extensive survey
   - Assign team
@@ -315,6 +325,7 @@ Press `d` for the full-screen SGC Database. It has nine tabs:
 - **Queue:** what's scheduled, soonest first:
   - dial-outs waiting for the gate, in the order the gate will take them
   - extended reports still collecting, with the window their uplink is due in
+  - a parked drone's next check-in, and a team sending a parked drone home, each with its exact time
   - missions in the field, with the next check-in and when the team is due home
   - teams stood down, injured, captured or re-forming, with when that ends
 
@@ -325,6 +336,20 @@ On the Addresses tab:
 - `/` searches known names, designations and glyphs. Enter keeps the search; Ctrl+C or Esc clears it.
 - `s` sorts by status or name.
 - `f` filters by status: all, unexplored, probed, surveyed, contact, hostile or lost.
+- `Enter` opens the selected address's World file, as always. `o` opens its ORDERS panel instead (below).
+
+On the World file tab, there's no file of its own left to open: `Enter` or `o` opens ORDERS for that world.
+
+**The ORDERS panel** is the briefing room's own address screen — MALP probe, MALP extended report, UAV flight, UAV extensive survey, assign a team (then team, then mission type), add a note — reused, not copied, so it greys the same rows for the same reasons and makes the same engine calls. It opens in a box over the lower part of the Database, on top of the kept tab, search and scroll.
+
+- Choose with number keys, or `↑` `↓` and Enter, as in the briefing room.
+- `Esc` or Ctrl+C steps back a screen, and closes the panel from its first step.
+- A note types in as it does in the briefing room.
+- Every other Database key is ignored while it's open.
+- After an order, the reply shows in the panel (`MALP QUEUED FOR …`) and it returns to the address's first step. The GATE QUEUE box and Queue tab update at once.
+- It works wherever the Database opens, gate room or briefing room.
+- An alarm closes the Database and drops a half-finished order, same as always; reopening it brings back the tab but not the panel.
+- On a small terminal there's no room for it: opening it instead replies `ORDERS NEED A LARGER PANE`.
 
 On the Queue tab:
 
@@ -333,7 +358,7 @@ On the Queue tab:
   - A departing team stands by at base, and its mission reads CANCELLED.
   - A withdrawn search leaves the missing team to the 12-hour wait.
 
-  Anything already through the gate can't be cancelled here, and the tab says why. Nor can an uplink (`THE DRONE IS ALREADY COLLECTING`), though it can be moved.
+  Anything already through the gate can't be cancelled here, and the tab says why. Nor can an uplink (`THE DRONE IS ALREADY COLLECTING`), though it can be moved. Nor can a drone's check-in (`A SCHEDULED CHECK-IN`) or a team sending a drone home (`THE TEAM IS ALREADY BRINGING IT HOME`) — and neither of those two can be moved either.
 - `[` and `]` move the selected dial-out up or down the gate queue. Check-ins and other incoming traffic still go first. The new order is saved.
 - `/` searches the rows' text.
 
@@ -375,11 +400,12 @@ An alarm closes the Database but keeps it, and `d` brings back the same tab, sea
 |---|---|
 | `←` `→` Tab | switch tabs |
 | `↑` `↓` | select a row; scroll a world file |
-| Enter | open the selected world's file (Addresses, Missions, Intel, Trade, Arcs) |
+| Enter | open the selected world's file (Addresses, Missions, Intel, Trade, Arcs); on the World file tab, opens ORDERS |
+| `o` | open ORDERS for the selected address (Addresses or World file tab) |
 | `/` `s` `f` | search, sort, filter the addresses (/ also searches the Queue) |
 | `x` | cancel the selected dial-out on the Queue tab (press twice) |
 | `[` `]` | move the selected dial-out up or down the gate queue |
-| Ctrl+C / Esc | clear and close a search |
+| Ctrl+C / Esc | clear and close a search, or back out of / close the ORDERS panel |
 | `?` | legend: bar, full (with the help block), off |
 | `m` / `+` / `-` | mute, volume |
 | `q` | back to where you were |
@@ -388,8 +414,6 @@ An alarm closes the Database but keeps it, and `d` brings back the same tab, sea
 The menus use `↑` `↓` Enter or `1`–`9`, with `q` to go back (at the top, `q` shuts down).
 
 Notes and searches take accented letters. A character that doesn't fit in one cell shows as `?`.
-
-The idle scene: after 45 quiet seconds, the gate sometimes dials a science uplink to one of your drones parked on a world. With no drone parked anywhere, the gate stays quiet. It's only for show and changes nothing. Real traffic, an alarm or your walk cuts it.
 
 ### Writing scenarios
 
