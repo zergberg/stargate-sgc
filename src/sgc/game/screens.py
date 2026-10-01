@@ -410,7 +410,10 @@ def _draw_room_list(canvas: Canvas, r: Rect, room: Room, items: list[tuple[str, 
     canvas.box(r, room.title, DIM, AMBER)
     x, y, w = r.x + 2, r.y + 1, r.w - 4
     bottom = r.y + r.h - 1
-    detail = [part for line in room.detail() for part in _wrap(line, w)]
+    # the dialing list's address summary (Part 8) clips each line instead of wrapping it, so it stays a
+    # fixed number of rows regardless of panel width.
+    detail = ([_clip(line, w) for line in room.detail()] if room.screen == "worlds"
+              else [part for line in room.detail() for part in _wrap(line, w)])
     for line in detail[:max(0, bottom - y - 3)]:
         canvas.put(x, y, line, CYAN)
         y += 1

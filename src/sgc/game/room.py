@@ -37,6 +37,15 @@ SHORT = {"unknown_idc": "Unknown or no IDC", "hostiles_following": "Our IDC, hos
          "bad_idc": "Compromised or revoked IDC", "object": "Object through the gate",
          "missed_checkin": "Missed check-in", "under_fire": "Team under fire",
          "contact_offer": "Contact or trade offer"}
+# Part 8: w.seen's long-form readings, down to the dialing list's short words. Only w.seen is ever read here,
+# never a world's hidden traits.
+ENV_WORDS = {"breathable atmosphere": "AIR OK", "toxic atmosphere": "TOXIC", "high radiation": "RADIATION",
+             "extreme temperatures": "EXTREME", "no lock": "NO LOCK"}
+LIFE_WORDS = {"none detected": "NO LIFE"}                 # anything else known (not "inconclusive") is LIFE SIGNS
+SETTLEMENT_WORDS = {"no settlements": "NO LIFE", "settlement": "HUMANS", "Unas": "UNAS",
+                    "Jaffa garrison": "JAFFA", "Goa'uld stronghold": "GOAULD", "outpost": "ALLY"}
+FEATURE_WORDS = {"ruins": "RUINS", "energy readings": "TECH", "naquadah traces": "NAQ"}
+DETAIL_ROWS = 5                  # the dialing list's address summary: at most this many lines
 
 
 class Room:
@@ -78,6 +87,11 @@ class Room:
 
     def _teams(self) -> list[str]:
         return team_names(self.c)
+
+    def _team_on(self, wid: str) -> str:
+        """The team on a world (there or staging to go), joined if more than one; empty if none."""
+        return " · ".join(name for name in self._teams()
+                          if self.c.teams[name].where == wid and self.c.teams[name].status in ("offworld", "staging"))
 
     def _types(self) -> list[str]:
         return self.e.mission_types(self.world_id, self.team) if self.world_id and self.team else []
@@ -154,8 +168,15 @@ class Room:
             out = []
             for wid in self._worlds():
                 w = c.worlds[wid]
-                drone = f" · {w.drone.upper()}" if w.drone else ""
-                out.append((f"{w.name[:16]:<16} {w.status.upper()}{drone}", True))
+                row = f"{w.name[:16]:<16} {w.status.upper()}"
+                team = self._team_on(wid)
+                if team:
+                    row += f" · {team}"
+                if w.drone:
+                    row += f" · {w.drone.upper()}"
+                elif w.wreck:
+                    row += " · WRECK"
+                out.append((row, True))
             return out + [("BACK", True)]
         if self.screen == "world":
             return [(label, ok) for label, ok, _, _ in self._world_table()] + [("BACK", True)]
@@ -352,9 +373,80 @@ class Room:
             elif self.screen == "revoke":
                 lines += ["", f"A NEW CODE IS ISSUED; {self.team} DOES NOT STAND DOWN."]
             return lines
+        if self.screen == "worlds":
+            worlds = self._worlds()
+            if self.sel >= len(worlds):                  # BACK selected
+                return []
+            return self._world_brief(worlds[self.sel])
         if self.screen not in ("world", "note", "team_pick", "type_pick") or not self.world_id:
             return []
         w = self.c.worlds[self.world_id]
         lines = [f"{w.id} · {w.status.upper()} · {w.glyph_text}"]
         lines += [f"{k.upper()}: {v}" for k, v in w.seen.items()]
         return lines
+
+    def _world_brief(self, wid: str) -> list[str]:
+        """The dialing list's summary of the selected address (Part 8): name and status, who and what is
+        there, known readings in short form, the last visit and anything queued, then a note. Every word
+        comes from w.seen, the world's known status or the player's queue -- never a hidden trait."""
+        w = self.c.worlds[wid]
+        lines = [f"{w.name} · {w.status.upper()}", self._site_words(w)]
+        readings = self._reading_words(w)
+        if readings:
+            lines.append(" · ".join(readings))
+        visit = f"LAST VISIT {short(w.last_visit)}" if w.last_visit is not None else "NEVER VISITED"
+        lines.append(" · ".join([visit, *self._queue_words(wid)]))
+        if w.notes:
+            lines.append(f"NOTE: {w.notes[-1][1].splitlines()[0]}")
+        return lines[:DETAIL_ROWS]
+
+    def _site_words(self, w) -> str:
+        """Who and what is on a world: each team there with its status, a parked drone, a wreck; or
+        NOBODY ON SITE."""
+        parts = [f"{name} {self.c.teams[name].status.upper()}" for name in self._teams()
+                if self.c.teams[name].where == w.id and self.c.teams[name].status in ("offworld", "staging")]
+        if w.drone:
+            parts.append(f"{w.drone.upper()} ON SITE")
+        if w.wreck:
+            parts.append("UAV WRECK")
+        return " · ".join(parts) if parts else "NOBODY ON SITE"
+
+    def _reading_words(self, w) -> list[str]:
+        """Known readings in short form, from w.seen only. NOT YET PROBED for an unexplored address."""
+        if w.status == "unexplored":
+            return ["NOT YET PROBED"]
+        seen = w.seen
+        words = []
+        if "env" in seen and seen["env"] in ENV_WORDS:
+            words.append(ENV_WORDS[seen["env"]])
+        life = self._life_word(seen)
+        if life:
+            words.append(life)
+        if "features" in seen:
+            words += [FEATURE_WORDS[f] for f in seen["features"].split(", ") if f in FEATURE_WORDS]
+        return words
+
+    def _life_word(self, seen: dict) -> str:
+        """NO LIFE, LIFE SIGNS, or the UAV's settlement word (e.g. JAFFA, HUMANS) when known."""
+        if "inhabitants" in seen:
+            return SETTLEMENT_WORDS.get(seen["inhabitants"], "")
+        life = seen.get("life")
+        if life is None or life == "inconclusive":
+            return ""
+        return LIFE_WORDS.get(life, "LIFE SIGNS")
+
+    def _queue_words(self, wid: str) -> list[str]:
+        """Anything queued or due for this address, read from the engine's schedule_view -- the same
+        source as the Queue, so the two never disagree."""
+        out = []
+        for item in self.e.schedule_view():
+            if item.kind == "dial_out" and item.id in (f"dial:malp:{wid}", f"dial:uav:{wid}",
+                                                        f"dial:uplink:{wid}"):
+                out.append(f"{item.id.split(':')[1].upper()} QUEUED #{item.when}")
+            elif item.kind == "uplink" and item.id == f"uplink:{wid}":
+                out.append(f"UPLINK {item.status.removeprefix('EXPECTED ')}")
+            elif item.kind == "mission":
+                m = self.c.mission(int(item.id.split(":")[1]))
+                if m is not None and m.world == wid:
+                    out.append(item.brief)
+        return out
