@@ -164,3 +164,9 @@ def test_the_planner_leaves_a_world_alone_while_its_probe_s_gate_is_open():
     out = planner.step(e)
     assert any(line.startswith("MALP QUEUED FOR") for line in out)             # the next address instead
     assert not any(line.startswith("A DRONE IS ALREADY BOUND") for line in out)
+
+
+def test_the_planner_never_orders_an_extended_report():
+    kinds = set()
+    simulate(1, days=10, watch=lambda c: kinds.update(e.kind for e in c.events))
+    assert "uplink" not in kinds and "uplink_report" not in kinds
