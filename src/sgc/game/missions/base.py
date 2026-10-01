@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
     from ..engine import Engine
-    from ..state import Campaign, Mission
+    from ..state import Mission
 
 
 def NO_TARGET(engine: "Engine", wid: str) -> str | None:

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import sys as _sys
 
-from . import core, operations
+from . import actions, alarms, core, drones, ending, operations, scenarios, scene, visuals
 from .core import CoreMixin, DETAIL, INTEL_ROLL, SHARE_ODDS, team_label
 from .actions import ActionsMixin, EXTENDED, PLANNABLE
 from .alarms import AlarmsMixin, CHECKIN_LINE_MINUTES
@@ -24,12 +24,13 @@ class Engine(CoreMixin, ActionsMixin, DronesMixin, ScenariosMixin, AlarmsMixin, 
 
 # The test suite monkeypatches a handful of these as plain module "constants" through this package
 # (`eng = sgc.game.engine`; e.g. `monkeypatch.setattr(eng, "MISS", ...)`), expecting the same effect as
-# when `engine.py` was a single module. But `from .core import MISS` above only copies the *current*
-# value into this package's own namespace — the mixins' methods still read the bare global from
-# `core.py`'s own namespace, which a plain `setattr(engine, ...)` never touches. Forward any such write
-# to every submodule that already defines that name, so the patch reaches the code that reads it. (Add
-# further submodules to _OWNERS here as later tasks move mixins and their constants out of core.py.)
-_OWNERS = (core, operations)
+# when `engine.py` was a single module. But `from .core import ...` and its siblings above only copy
+# the *current* value into this package's own namespace — the mixins' methods still read the bare
+# global from their own submodule's namespace, which a plain `setattr(engine, ...)` never touches.
+# Forward any such write to every engine submodule that already defines that name, so the patch
+# reaches the code that reads it. Every engine submodule is an owner, so a name bound in more than one
+# (e.g. by its own `from .core import ...`) gets patched everywhere it's read.
+_OWNERS = (core, actions, alarms, drones, ending, operations, scenarios, scene, visuals)
 
 
 class _PackageModule(_sys.modules[__name__].__class__):
