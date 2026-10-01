@@ -5,6 +5,7 @@ import math
 
 from .addresses import Address
 from .model import Figure, Scene, Step
+from .panels import TOTAL_PANELS
 
 LOCK_ORDER = {7: [1, 2, 3, 6, 7, 8, 0], 8: [1, 2, 3, 6, 7, 8, 4, 0], 9: [1, 2, 3, 6, 7, 8, 4, 5, 0]}
 SPIN, LOCK = 1.8, 0.6
@@ -196,7 +197,7 @@ def exit_sequence(scene: Scene, duration: float) -> list[Step]:
         if p >= 1:
             reset_scene(s)
         s.status = "SYSTEMS OFFLINE"
-        s.blank_panels = math.ceil(4 * p)
+        s.blank_panels = math.ceil(TOTAL_PANELS * p)
 
     def collapse(s: Scene, p: float) -> None:
         s.collapse_line, s.dim = p, 0.7 * p

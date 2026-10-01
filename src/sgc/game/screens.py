@@ -6,7 +6,7 @@ import textwrap
 
 from ..layout import Layout, Rect
 from ..model import Prompt, Scene
-from ..panels import AMBER, CYAN, DIM, GREEN, RED, WHITE
+from ..panels import AMBER, BASE_PANELS, CYAN, DIM, GREEN, RED, WHITE, _fade, blank_box
 from ..term.canvas import Canvas
 from . import factions
 from .clock import stamp
@@ -186,10 +186,14 @@ def _prompt_height(prompt: Prompt, panel_w: int) -> int:
     return 2 + text_rows + 1 + option_rows + bar
 
 
-def draw_prompt(canvas: Canvas, r: Rect, prompt: Prompt, t: float) -> None:
-    urgent = prompt.total > 0
+def draw_prompt(canvas: Canvas, r: Rect, prompt: Prompt, t: float, scene: Scene | None = None) -> None:
+    dim = scene.dim if scene is not None else 0.0
     canvas.fill(r, " ")
-    canvas.box(r, prompt.title, RED if urgent else DIM, AMBER)
+    if scene is not None and scene.blank_panels > BASE_PANELS + 1:
+        blank_box(canvas, r, dim)
+        return
+    urgent = prompt.total > 0
+    canvas.box(r, prompt.title, _fade(RED if urgent else DIM, dim), _fade(AMBER, dim))
     x, y, w = r.x + 2, r.y + 1, r.w - 4
     bottom = r.y + r.h - 1
     limit = bottom - (1 if urgent else 0)
@@ -221,14 +225,15 @@ def draw_prompt(canvas: Canvas, r: Rect, prompt: Prompt, t: float) -> None:
     for line in lines:
         if y >= limit:
             break
-        canvas.put(x, y, line, WHITE)
+        canvas.put(x, y, line, _fade(WHITE, dim))
         y += 1
     y += spacer
     for i, ((_, ok), lopts) in enumerate(zip(prompt.options, option_lines)):
         for j, line in enumerate(lopts):
             if y >= limit:
                 break
-            canvas.put(x, y, (f"{i + 1}  " if j == 0 else "   ") + line, AMBER if ok else DIM, bold=ok and j == 0)
+            canvas.put(x, y, (f"{i + 1}  " if j == 0 else "   ") + line, _fade(AMBER if ok else DIM, dim),
+                       bold=ok and j == 0)
             y += 1
     if urgent:
         n = max(0, w - 5)
@@ -237,8 +242,8 @@ def draw_prompt(canvas: Canvas, r: Rect, prompt: Prompt, t: float) -> None:
         secs = max(0, math.ceil(prompt.remaining))
         low = prompt.remaining < 4
         flash = low and int(t * 4) % 2 == 0
-        canvas.put(x, bottom - 1, "█" * filled + "░" * (n - filled), RED if flash else AMBER)
-        canvas.put(x + n + 1, bottom - 1, f"{secs:>2}s", RED if low else WHITE, bold=True)
+        canvas.put(x, bottom - 1, "█" * filled + "░" * (n - filled), _fade(RED if flash else AMBER, dim))
+        canvas.put(x + n + 1, bottom - 1, f"{secs:>2}s", _fade(RED if low else WHITE, dim), bold=True)
 
 
 def next_legend(state: str) -> str:
@@ -260,9 +265,13 @@ def draw_header(canvas: Canvas, layout: Layout, c: Campaign, alarm: str | None, 
     canvas.put(max(r.x, r.x + r.w - len(right)), r.y, right, WHITE if alarm else AMBER, bg, bold=True)
 
 
-def draw_status(canvas: Canvas, r: Rect, c: Campaign) -> None:
+def draw_status(canvas: Canvas, r: Rect, c: Campaign, scene: Scene | None = None) -> None:
+    dim = scene.dim if scene is not None else 0.0
     canvas.fill(r, " ")
-    canvas.box(r, "SGC STATUS", DIM, AMBER)
+    if scene is not None and scene.blank_panels > BASE_PANELS + 1:
+        blank_box(canvas, r, dim)
+        return
+    canvas.box(r, "SGC STATUS", _fade(DIM, dim), _fade(AMBER, dim))
     x, y, w = r.x + 2, r.y + 1, r.w - 4
     bottom = r.y + r.h - 1
     for name in ("security", "personnel"):
@@ -271,20 +280,20 @@ def draw_status(canvas: Canvas, r: Rect, c: Campaign) -> None:
         v = c.meters[name]
         n = round(METER_W * v / 100)
         color = RED if v < 25 else AMBER if v < 50 else GREEN
-        canvas.put(x, y, f"{name.upper():<10}", DIM)
-        canvas.put(x + 10, y, "█" * n + "░" * (METER_W - n), color)
-        canvas.put(x + 11 + METER_W, y, f"{v:>3}", WHITE)
+        canvas.put(x, y, f"{name.upper():<10}", _fade(DIM, dim))
+        canvas.put(x + 10, y, "█" * n + "░" * (METER_W - n), _fade(color, dim))
+        canvas.put(x + 11 + METER_W, y, f"{v:>3}", _fade(WHITE, dim))
         y += 1
     if y < bottom:
-        canvas.put(x, y, f"MALP {c.stock['malp']}  UAV {c.stock['uav']}"[:w], CYAN)
+        canvas.put(x, y, f"MALP {c.stock['malp']}  UAV {c.stock['uav']}"[:w], _fade(CYAN, dim))
         y += 1
     if y < bottom:
-        canvas.put(x, y, f"FUNDING {c.funding} · NAQUADAH {c.naquadah}"[:w], AMBER)
+        canvas.put(x, y, f"FUNDING {c.funding} · NAQUADAH {c.naquadah}"[:w], _fade(AMBER, dim))
         y += 1
     if y < bottom:
         active = len(c.active_missions())
         canvas.put(x, y, (f"{active} MISSION{'S' if active != 1 else ''} ACTIVE" if active else "NO TEAMS OUT")[:w],
-                   AMBER if active else DIM)
+                   _fade(AMBER if active else DIM, dim))
 
 
 def queue_height(n: int, avail: int) -> int:
@@ -296,23 +305,27 @@ def queue_height(n: int, avail: int) -> int:
     return avail if avail >= 3 else 0
 
 
-def draw_queue(canvas: Canvas, r: Rect, items: list[QueueItem]) -> None:
+def draw_queue(canvas: Canvas, r: Rect, items: list[QueueItem], scene: Scene | None = None) -> None:
     """The GATE QUEUE box: one brief row per item in schedule order, cut to the box. When they don't all fit
     the last row counts the rest; with nothing queued it says so. Read-only: the Database's QUEUE tab acts."""
     if r.h < 3 or r.w < 6:
         return
+    dim = scene.dim if scene is not None else 0.0
     canvas.fill(r, " ")
-    canvas.box(r, "GATE QUEUE", DIM, AMBER)
+    if scene is not None and scene.blank_panels > BASE_PANELS:
+        blank_box(canvas, r, dim)
+        return
+    canvas.box(r, "GATE QUEUE", _fade(DIM, dim), _fade(AMBER, dim))
     x, y, w = r.x + 2, r.y + 1, r.w - 4
     rows = r.h - 2
     if not items:
-        canvas.put(x, y, _clip("NOTHING QUEUED", w), DIM)
+        canvas.put(x, y, _clip("NOTHING QUEUED", w), _fade(DIM, dim))
         return
     shown = items if len(items) <= rows else items[:rows - 1]
     for i, item in enumerate(shown):
-        canvas.put(x, y + i, _clip(item.brief, w), WHITE if item.kind == "dial_out" else AMBER)
+        canvas.put(x, y + i, _clip(item.brief, w), _fade(WHITE if item.kind == "dial_out" else AMBER, dim))
     if len(shown) < len(items):
-        canvas.put(x, y + rows - 1, _clip(f"+{len(items) - len(shown)} MORE · d", w), DIM)
+        canvas.put(x, y + rows - 1, _clip(f"+{len(items) - len(shown)} MORE · d", w), _fade(DIM, dim))
 
 
 def side_split(h: int, prompt_rows: int | None, n: int | None) -> tuple[int, int, int]:
@@ -351,11 +364,11 @@ def draw_game(canvas: Canvas, layout: Layout, scene: Scene, c: Campaign, t: floa
     r = layout.side
     need = _prompt_height(scene.prompt, r.w) if scene.prompt is not None else None
     prompt_h, queue_h, status_h = side_split(r.h, need, None if queue is None else len(queue))
-    draw_status(canvas, Rect(r.x, r.y + r.h - status_h, r.w, status_h), c)
+    draw_status(canvas, Rect(r.x, r.y + r.h - status_h, r.w, status_h), c, scene)
     if queue_h:
-        draw_queue(canvas, Rect(r.x, r.y + r.h - status_h - queue_h, r.w, queue_h), queue)
+        draw_queue(canvas, Rect(r.x, r.y + r.h - status_h - queue_h, r.w, queue_h), queue, scene)
     if scene.prompt is not None:
-        draw_prompt(canvas, Rect(r.x, r.y, r.w, prompt_h), scene.prompt, t)
+        draw_prompt(canvas, Rect(r.x, r.y, r.w, prompt_h), scene.prompt, t, scene)
 
 
 def draw_legend(canvas: Canvas, layout: Layout, state: str, keys: list[tuple[str, str]],
@@ -386,7 +399,8 @@ def draw_legend(canvas: Canvas, layout: Layout, state: str, keys: list[tuple[str
             y += 1
 
 
-def draw_room(canvas: Canvas, layout: Layout, room: Room, queue: list[QueueItem] | None = None) -> None:
+def draw_room(canvas: Canvas, layout: Layout, room: Room, queue: list[QueueItem] | None = None,
+              scene: Scene | None = None) -> None:
     """The briefing room's list on the side panel, with the GATE QUEUE box (given the engine's schedule_view)
     at its foot; or the status line on a small terminal."""
     items = room.items()
@@ -400,14 +414,19 @@ def draw_room(canvas: Canvas, layout: Layout, room: Room, queue: list[QueueItem]
     side = layout.side
     queue_h = queue_height(len(queue), side.h - MENU_KEEP) if queue is not None else 0
     if queue_h:
-        draw_queue(canvas, Rect(side.x, side.y + side.h - queue_h, side.w, queue_h), queue)
-    _draw_room_list(canvas, Rect(side.x, side.y, side.w, side.h - queue_h), room, items)
+        draw_queue(canvas, Rect(side.x, side.y + side.h - queue_h, side.w, queue_h), queue, scene)
+    _draw_room_list(canvas, Rect(side.x, side.y, side.w, side.h - queue_h), room, items, scene)
 
 
-def _draw_room_list(canvas: Canvas, r: Rect, room: Room, items: list[tuple[str, bool]]) -> None:
+def _draw_room_list(canvas: Canvas, r: Rect, room: Room, items: list[tuple[str, bool]],
+                     scene: Scene | None = None) -> None:
     """The briefing room's box: the detail lines, then the list scrolled to keep the selection on screen."""
+    dim = scene.dim if scene is not None else 0.0
     canvas.fill(r, " ")
-    canvas.box(r, room.title, DIM, AMBER)
+    if scene is not None and scene.blank_panels > BASE_PANELS + 1:
+        blank_box(canvas, r, dim)
+        return
+    canvas.box(r, room.title, _fade(DIM, dim), _fade(AMBER, dim))
     x, y, w = r.x + 2, r.y + 1, r.w - 4
     bottom = r.y + r.h - 1
     # the dialing list's address summary (Part 8) clips each line instead of wrapping it, so it stays a
@@ -415,13 +434,13 @@ def _draw_room_list(canvas: Canvas, r: Rect, room: Room, items: list[tuple[str, 
     detail = ([_clip(line, w) for line in room.detail()] if room.screen == "worlds"
               else [part for line in room.detail() for part in _wrap(line, w)])
     for line in detail[:max(0, bottom - y - 3)]:
-        canvas.put(x, y, line, CYAN)
+        canvas.put(x, y, line, _fade(CYAN, dim))
         y += 1
     if detail:
         y += 1
     if room.text_mode:
-        canvas.put(x, y, "NOTE (ENTER TO SAVE):"[:w], DIM)
-        canvas.put(x, y + 1, ("> " + room.note + "_")[-w:], WHITE, bold=True)
+        canvas.put(x, y, "NOTE (ENTER TO SAVE):"[:w], _fade(DIM, dim))
+        canvas.put(x, y + 1, ("> " + room.note + "_")[-w:], _fade(WHITE, dim), bold=True)
         return
     space = max(1, bottom - y - (2 if room.notice else 0))
     blocks = [_item_rows(label, w) for label, _ in items]
@@ -438,13 +457,13 @@ def _draw_room_list(canvas: Canvas, r: Rect, room: Room, items: list[tuple[str, 
             if y - top_y >= space:
                 break
             text = f" {num}  {row}" if j == 0 else f"    {row}"
-            canvas.put(x, y, _clip(text, w).ljust(w)[:w], (WHITE if sel else AMBER) if ok else DIM,
-                       HILITE if sel else None, bold=sel and j == 0)
+            canvas.put(x, y, _clip(text, w).ljust(w)[:w], _fade((WHITE if sel else AMBER) if ok else DIM, dim),
+                       _fade(HILITE, dim) if sel else None, bold=sel and j == 0)
             y += 1
     if room.notice and y < bottom:
         for line in _wrap(room.notice, w)[:max(0, bottom - y - 1)]:
             y += 1
-            canvas.put(x, y, line, GREEN, bold=True)
+            canvas.put(x, y, line, _fade(GREEN, dim), bold=True)
 
 
 def _item_rows(label: str, w: int) -> list[str]:

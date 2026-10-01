@@ -10,6 +10,7 @@ from sgc.game.state import Mission, new_campaign
 from sgc.layout import compute_layout
 from sgc.model import Prompt, Scene
 from sgc.term.canvas import Canvas
+from sgc import panels
 
 RECORD = {"mode": "sandbox", "difficulty": "officer", "result": "overrun", "surveyed": 7, "days": 31}
 
@@ -751,3 +752,44 @@ def test_no_queue_box_on_a_small_terminal():
     scenarios, _ = content.load(user=None)
     screens.draw_room(cv, layout, Room(Engine(c, scenarios)), BRIEFS)
     assert "GATE QUEUE" not in cv.text()
+
+
+def test_a_quitting_scene_blanks_the_queue_box_before_the_status_box():
+    layout, cv = full()
+    c = new_campaign("campaign", "officer", 1)
+    s = Scene(blank_panels=panels.BASE_PANELS + 1, dim=0.3)
+    screens.draw_game(cv, layout, s, c, 0.0, BRIEFS[:3])
+    text = cv.text()
+    assert "GATE QUEUE" not in text and "NO SIGNAL" in text
+    assert "SGC STATUS" in text
+
+
+def test_a_quitting_scene_blanks_the_queue_and_status_boxes_in_the_game():
+    layout, cv = full()
+    c = new_campaign("campaign", "officer", 1)
+    s = Scene(blank_panels=panels.TOTAL_PANELS, dim=0.3)
+    screens.draw_game(cv, layout, s, c, 0.0, BRIEFS[:3])
+    text = cv.text()
+    assert "GATE QUEUE" not in text and "SGC STATUS" not in text
+    assert text.count("NO SIGNAL") >= 2
+
+
+def test_a_quitting_scene_blanks_the_queue_and_the_prompt():
+    layout, cv = small(80, 22)
+    s = Scene(blank_panels=panels.TOTAL_PANELS, dim=0.3)
+    s.prompt = Prompt("DECISION", DECISION_TEXT, DECISION_OPTIONS, 15.0, 9.0)
+    screens.draw_game(cv, layout, s, new_campaign("campaign", "officer", 1), 0.0, BRIEFS)
+    text = cv.text()
+    assert "DECISION" not in text and "Open the iris" not in text
+    assert "NO SIGNAL" in text
+
+
+def test_a_quitting_scene_blanks_the_briefing_rooms_boxes_too():
+    layout, cv = full()
+    scenarios, _ = content.load(user=None)
+    room = Room(Engine(new_campaign("campaign", "officer", 2), scenarios))
+    s = Scene(blank_panels=panels.TOTAL_PANELS, dim=0.3)
+    screens.draw_room(cv, layout, room, BRIEFS[:2], s)
+    text = cv.text()
+    assert "GATE QUEUE" not in text and "BRIEFING ROOM" not in text and "DIALING LIST" not in text
+    assert text.count("NO SIGNAL") >= 2

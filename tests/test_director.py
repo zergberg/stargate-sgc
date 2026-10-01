@@ -6,6 +6,7 @@ from sgc.config import Config
 from sgc.director import Director
 from sgc.events import REGISTRY
 from sgc.model import Scene
+from sgc import panels
 
 
 def run(steps, scene, dt=0.05):
@@ -109,6 +110,20 @@ def test_exit_finishes_within_duration():
         d.advance(0.1)
         t += 0.1
     assert d.finished and 5.5 <= t <= 6.6
+
+
+def test_quit_blanks_the_game_boxes_too_by_the_end():
+    """The shutdown sequence's blank step used to stop at the 4 side screens; it now carries on to blank
+    the GATE QUEUE box and SGC STATUS (or the briefing room's box) as well."""
+    d = director(exit_duration=6.0)
+    d.advance(20.0)
+    d.begin_exit()
+    t = 0.0
+    while not d.finished and t < 20:
+        d.advance(0.1)
+        t += 0.1
+    assert d.finished
+    assert d.scene.blank_panels == panels.TOTAL_PANELS
 
 
 def test_skip_moves_to_a_new_cycle():

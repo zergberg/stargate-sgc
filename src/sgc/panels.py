@@ -14,11 +14,22 @@ RED: Color = (255, 70, 55)
 GREEN: Color = (100, 220, 130)
 WHITE: Color = (215, 220, 228)
 SPARK = "▁▂▃▄▅▆▇█"
+BASE_PANELS = 4                  # the side screens: DESTINATION, DATA, WORMHOLE, OFFWORLD TEAMS
+GAME_PANELS = 2                  # then the GATE QUEUE box, then SGC STATUS (or the briefing room's box/prompt)
+TOTAL_PANELS = BASE_PANELS + GAME_PANELS      # how far scene.blank_panels counts up to, on quit
 
 
 def _fade(c: Color, dim: float) -> Color:
     k = max(0.0, 1 - dim)
     return (int(c[0] * k), int(c[1] * k), int(c[2] * k))
+
+
+def blank_box(canvas: Canvas, r: Rect, dim: float) -> None:
+    """An empty box reading '-- NO SIGNAL --': how a blanked side screen or game box looks during shutdown.
+    Shared so a blanked box always looks the same, wherever it's drawn."""
+    color = _fade(DIM, max(dim, 0.5))
+    canvas.box(r, "", color)
+    canvas.put(r.x + 2, r.y + r.h // 2, "-- NO SIGNAL --"[:r.w - 4], color)
 
 
 def _log_color(line: str) -> Color:
@@ -83,8 +94,7 @@ def _side(canvas: Canvas, r: Rect, scene: Scene, t: float, dim: float) -> None:
         blank = i < scene.blank_panels
         color = _fade(RED if scene.alert == "red" else DIM, dim)
         if blank:
-            canvas.box(box, "", _fade(DIM, max(dim, 0.5)))
-            canvas.put(box.x + 2, box.y + h // 2, "-- NO SIGNAL --"[:box.w - 4], _fade(DIM, max(dim, 0.5)))
+            blank_box(canvas, box, dim)
         else:
             title_text = scene.panel_title if title == "DATA" else title
             canvas.box(box, title_text, color, _fade(AMBER, dim))
