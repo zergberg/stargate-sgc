@@ -260,3 +260,32 @@ def test_the_uplink_scene_fills_the_panel_or_finds_no_carrier():
     lost = next(st for st in r.e._v_uplink(w, "lost", {}) if st.log == "NO CARRIER")
     lost.update(s, 0.5)
     assert s.panel_rows == [("SIGNAL", "LOST")]
+
+
+def test_an_uplink_waits_while_a_team_is_on_the_world(monkeypatch):
+    r, w = collecting(monkeypatch, features=("naquadah",))
+    monkeypatch.setitem(eng.UPLINK_ODDS, "malp", {"calm": (0, 0, 100), "jaffa": (0, 0, 100), "goauld": (0, 0, 100)})
+    w.status = "probed"
+    r.e.assign(w.id, "SG-2", "survey")
+    m = r.c.mission(1)
+    wait = eng.UPLINK_HOURS["malp"][1] * clock.HOUR + clock.HOUR       # past the uplink's window
+    m.end = r.c.now + wait + 2 * clock.HOUR                             # the team is still there then
+    r.e.advance(1)
+    r.c.events.cancel(lambda e: e.kind == "checkin")
+    r.e.advance(wait)
+    assert r.c.teams["SG-2"].status == "offworld" and w.drone == "malp"   # a certain loss never rolled
+    assert not r.c.events.find(lambda e: e.kind == "uplink_report" or e.data.get("op") == "uplink")
+    assert r.c.events.find(lambda e: e.kind == "uplink" and e.data["world"] == w.id)
+    r.e.advance(3 * clock.HOUR)
+    assert m.state == "complete" and w.drone is None
+    assert "SG-2 BROUGHT THE MALP AND ITS DATA HOME" in m.findings
+
+
+def test_an_uplink_dial_still_in_the_queue_waits_for_a_team_that_got_there(monkeypatch):
+    r, w = collecting(monkeypatch)
+    r.c.events.cancel(lambda e: e.kind == "uplink")
+    tm = r.c.teams["SG-2"]
+    tm.status, tm.where = "offworld", w.id
+    r.e._uplink_out({"world": w.id, "drone": "malp"})
+    assert w.drone == "malp" and not r.c.events.find(lambda e: e.kind == "uplink_report")
+    assert r.c.events.find(lambda e: e.kind == "uplink" and e.data["world"] == w.id)

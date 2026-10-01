@@ -536,10 +536,25 @@ class Engine:
             self._start(*drawn)
 
     def _uplink(self, data: dict) -> None:
-        """An extended report has collected long enough: its uplink joins the gate queue as a dial-out."""
+        """An extended report has collected long enough: its uplink joins the gate queue as a dial-out. While a
+        team is out on the world it waits, and the team brings the drone and its data home."""
         w = self.c.worlds[data["world"]]
-        if w.drone == data["drone"]:
-            self.c.events.push(self.c.now, "dial_out", {"op": "uplink", "world": w.id, "drone": data["drone"]})
+        if w.drone != data["drone"]:
+            return
+        if self._team_on(w):
+            self._uplink_later(w, data["drone"])
+            return
+        self.c.events.push(self.c.now, "dial_out", {"op": "uplink", "world": w.id, "drone": data["drone"]})
+
+    def _team_on(self, w: World) -> bool:
+        """A team is out on this world."""
+        return any(t.status == "offworld" and t.where == w.id for t in self.c.teams.values())
+
+    def _uplink_later(self, w: World, drone: str) -> None:
+        """Ask again in an hour: a team on the world will bring the drone and its data home first."""
+        now = self.c.now
+        self.c.events.push(now + clock.HOUR, "uplink", {"world": w.id, "drone": drone, "from": now,
+                                                        "to": now + clock.HOUR})
 
     def _uplink_out(self, data: dict) -> None:
         """The uplink dial: the gate holds while the drone sends its extended data. The outcome is rolled now
@@ -547,6 +562,9 @@ class Engine:
         c = self.c
         w, drone = c.worlds[data["world"]], data["drone"]
         if w.drone != drone:                                 # a team brought it home first
+            return
+        if self._team_on(w):                                 # a team got there while the dial waited
+            self._uplink_later(w, drone)
             return
         self._occupy("uplink")
         self._log(f"UPLINK TO THE {drone.upper()} ON {w.name.upper()}")
