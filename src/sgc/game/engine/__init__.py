@@ -7,16 +7,17 @@ import sys as _sys
 
 from . import core
 from .core import (CAPTURED, CoreMixin, DESTROYED, DETAIL, DRONE_HOME_MINUTES,
-                    EXTENDED, FOLLOWED, INTEL_ROLL, MALP_FEED_S, MISS, PLANNABLE, REPAIR, SALVAGE, SEARCH,
+                    FOLLOWED, INTEL_ROLL, MALP_FEED_S, MISS, REPAIR, SALVAGE, SEARCH,
                     SEEN, SHARE_ODDS, UAV_CRUISE, UAV_FEED_S, UAV_RAIL, UPLINK_FEED_S, UPLINK_HOURS,
                     UPLINK_ODDS, team_label, uplink_odds, uplink_outcome)
+from .actions import ActionsMixin, EXTENDED, PLANNABLE
 from .alarms import AlarmsMixin, CHECKIN_LINE_MINUTES
 from .ending import EndingMixin
 from .scene import SceneMixin
 from .scenarios import ScenariosMixin
 
 
-class Engine(CoreMixin, EndingMixin, SceneMixin, ScenariosMixin, AlarmsMixin):
+class Engine(CoreMixin, ActionsMixin, EndingMixin, SceneMixin, ScenariosMixin, AlarmsMixin):
     pass
 
 
