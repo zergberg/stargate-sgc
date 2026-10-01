@@ -1,7 +1,7 @@
 """Departures, check-ins, missed check-ins and searches, returns, arrival, recovery and salvage, debriefs."""
 from __future__ import annotations
 
-from .. import clock, economy, factions, rules
+from .. import clock, economy, factions, missions, rules
 from . import visuals
 from .core import INTEL_ROLL
 from ..state import Mission, available_teams, demote, has_specialty, rank_index
@@ -26,8 +26,7 @@ class OperationsMixin:
     def _mbind(self, m: Mission) -> dict:
         tm = self.c.teams[m.team]
         b = {**self._wbind(self.c.worlds[m.world]), "team": m.team, "specialty": tm.specialty, "mission": str(m.id)}
-        if m.type == "rescue" and m.target:
-            b["captive"] = m.target
+        b.update(missions.get(m.type).bind(m, m.team))
         return b
 
     def _next_checkin(self, m: Mission) -> None:
@@ -276,7 +275,7 @@ class OperationsMixin:
         economy.note(c, "missions")
         bind = self._mbind(m)
         lines = rules.parse_effect("xp {team} +1")(c, bind)
-        lines += rules.set_world_status(c, w, "contact" if m.type in CONTACT_TYPES else "surveyed")
+        lines += rules.set_world_status(c, w, missions.get(m.type).ends_as)
         drawn = self._draw("debrief", bind, m.type)
         if drawn:
             self._start(*drawn)

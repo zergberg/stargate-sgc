@@ -2,9 +2,9 @@
 the schedule view (the Database's QUEUE tab)."""
 from __future__ import annotations
 
-from .. import clock, economy, orders, roster, rules, schedule
+from .. import clock, economy, missions, orders, roster, rules, schedule
 from ..orders import SITUATIONS
-from ..state import Mission, available_teams, has_specialty, team_names
+from ..state import Mission, available_teams, has_specialty
 
 EXTENDED = {"malp": "MALP EXTENDED REPORT", "uav": "UAV EXTENSIVE SURVEY"}
 MISSION_HOURS = {"survey": 24, "contact": 36, "trade": 30, "raid": 18, "study": 36, "rescue": 20,
@@ -125,28 +125,17 @@ class ActionsMixin:
         w, tm = self.c.worlds[wid], self.c.teams[team]
         out = []
         for t in w.options:
-            need = MISSION_NEEDS.get(t)
-            if need and not has_specialty(tm, need):
+            mt = missions.get(t)
+            if mt.needs and not has_specialty(tm, mt.needs):
                 continue
-            if t in ("rescue", "recover") and self.mission_target(wid, t) is None:
+            if mt.target is not missions.base.NO_TARGET and self.mission_target(wid, t) is None:
                 continue
             out.append(t)
         return out
 
     def mission_target(self, wid: str, mtype: str) -> str | None:
         """Who a rescue is for (a team), or what a recovery is after (a drone kind); None if nothing is."""
-        c = self.c
-        taken = [m.target for m in c.active_missions() if m.world == wid and m.type == mtype]
-        if mtype == "rescue":
-            return next((n for n in team_names(c) if c.teams[n].status == "captured" and c.teams[n].where == wid
-                         and n not in taken), None)
-        if mtype == "recover":
-            held = [d.drone for d in c.captured_drones if d.world == wid and d.located]
-            for drone in taken:
-                if drone in held:
-                    held.remove(drone)
-            return held[0] if held else None
-        return None
+        return missions.get(mtype).target(self, wid)
 
     def assign(self, wid: str, team: str, mtype: str) -> str:
         c = self.c
@@ -173,6 +162,6 @@ class ActionsMixin:
 
     def _duration(self, team: str, mtype: str) -> int:
         tm = self.c.teams[team]
-        hours = MISSION_HOURS[mtype] * self.rng.uniform(0.85, 1.2)
+        hours = missions.get(mtype).hours * self.rng.uniform(0.85, 1.2)
         hours *= 1 - 0.25 * roster.strength(tm, "recon")
         return round(max(12, min(72, hours)) * clock.HOUR)

@@ -2,7 +2,7 @@
 factions and arcs."""
 from __future__ import annotations
 
-from .. import rules
+from .. import missions, rules
 from ..content import TEXT_LEVELS, Node, Outcome, Scenario
 from .core import DETAIL
 from ..state import Mission, rank_index
@@ -47,7 +47,7 @@ class ScenariosMixin:
             if sc.kind != kind or sc.on != on:
                 continue
             if mission_type and sc.mission_type != mission_type and (
-                    sc.mission_type is not None or mission_type in EXACT_TYPES):
+                    sc.mission_type is not None or missions.get(mission_type).exact_scenarios):
                 continue
             if sc.kind == "faction" and sc.stage != stage:
                 continue

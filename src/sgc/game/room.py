@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from . import economy, orders, roster
+from . import economy, missions, orders, roster
 from .clock import DAY, HOUR, PACE_NAMES, short
 from .economy import PRICES, UPGRADES, cost_text
 from .engine import PLANNABLE, Engine, team_label
@@ -140,13 +140,10 @@ class Room:
 
     def _type_label(self, mtype: str) -> str:
         """The mission, and the tandem task any team there does too: bringing home a drone or a UAV wreck."""
-        target = self.e.mission_target(self.world_id, mtype) if mtype in ("rescue", "recover") else None
-        if mtype == "rescue" and target:
-            label = f"RESCUE {target}"
-        elif mtype == "recover" and target:
-            label = f"RECOVER THE {target.upper()}"
-        else:
-            label = mtype.upper()
+        mt = missions.get(mtype)
+        target = self.e.mission_target(self.world_id, mtype) if mt.target is not missions.base.NO_TARGET \
+            else None
+        label = (target and mt.assign_label(target)) or mtype.upper()
         w = self.c.worlds[self.world_id]
         tandem = ([f"RECOVER {w.drone.upper()}"] if w.drone else []) + (["SALVAGE UAV WRECK"] if w.wreck else [])
         return " · ".join([label, *tandem])

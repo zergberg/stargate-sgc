@@ -4,7 +4,7 @@ the worlds of active arcs, then trade, aid, study and mining, then surveys and c
 free team re-surveys the known world visited longest ago. The idle simulation uses it; so could an autopilot."""
 from __future__ import annotations
 
-from . import arcs, clock, economy, roster
+from . import arcs, clock, economy, missions, roster
 from .engine import Engine
 from .state import available_teams
 from .world import World
@@ -17,7 +17,8 @@ KEEP = 150                          # funding the planner never spends
 MAX_TEAMS = 8
 UPGRADE_ORDER = ("uav_program", "security_detail", "database_analysts", "iris_reinforcement", "naquadah_generator")
 SPECIALTY_ORDER = ("diplomatic", "combat", "medical", "recon", "science")
-TYPE_SCORE = {"rescue": 50, "recover": 15, "aid": 10, "study": 9, "mine": 8}
+TYPE_SCORE = {name: missions.get(name).planner_score for name in missions.MISSION_TYPES
+              if missions.get(name).planner_score}
 ARC_BONUS = 30                      # an arc world's own work outranks everything but a rescue
 ARC_WORK = ("raid", "study", "contact")     # the first of these an arc world offers is its own work
 
