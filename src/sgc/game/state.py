@@ -471,6 +471,11 @@ def _event(e, world_ids: set[str], mission_ids: set[int], deal_ids: set[int] = f
     elif kind == "drone_checkin":
         world()
         _one_of(need("drone"), DRONES, "drone")
+    elif kind == "drone_home":
+        world()
+        mission()
+        _one_of(need("team"), team_ids, "drone-home team")
+        _one_of(need("drone"), DRONES, "drone")
     elif kind == "malp_return":                      # legacy: a report from before probes went live
         world()
         _one_of(need("drone"), DRONES, "drone")

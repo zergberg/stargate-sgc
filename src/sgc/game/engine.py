@@ -33,6 +33,7 @@ UAV_FEED_S = 90.0                    # real seconds of a UAV's aerial feed
 UPLINK_FEED_S = 10.0                 # real seconds an uplink's extended data takes to fill the side panel
 EXTENDED = {"malp": "MALP EXTENDED REPORT", "uav": "UAV EXTENSIVE SURVEY"}
 UPLINK_HOURS = {"malp": (4, 6), "uav": (3, 5)}    # game hours an extended report collects before its uplink
+DRONE_HOME_MINUTES = 15              # game minutes after a team departs before it dials home a parked drone
 UPLINK_ODDS = {                      # an uplink's (full, partial, lost) %, by drone and who lives on the world
     "malp": {"calm": (85, 10, 5), "jaffa": (75, 10, 15), "goauld": (65, 10, 25)},
     "uav": {"calm": (75, 20, 5), "jaffa": (60, 20, 20), "goauld": (45, 20, 35)},
@@ -49,8 +50,9 @@ CHECKIN_FEED_S = 10.0                # real seconds a routine drone check-in's p
 TITLES = {"incoming": "INCOMING", "probe": "TELEMETRY", "checkin": "CHECK-IN", "debrief": "DEBRIEF",
           "faction": "SECURITY", "arc": "PRIORITY ONE"}
 GATE_KINDS = ("dial_out", "malp_return", "checkin", "team_return", "incoming", "trade_delivery", "faction_action",
-              "drone_checkin")
-INBOUND = ("incoming", "checkin", "team_return", "malp_return", "trade_delivery", "faction_action", "drone_checkin")
+              "drone_checkin", "drone_home")
+INBOUND = ("incoming", "checkin", "team_return", "malp_return", "trade_delivery", "faction_action", "drone_checkin",
+           "drone_home")
 URGENT_KINDS = ("incoming", "faction", "arc")       # their visuals always play, even over other traffic
 SHARE_TRUST = 50                     # an ally this friendly may share an address at a funding review...
 SHARE_ODDS = 0.5                     # ...this often
@@ -144,7 +146,7 @@ class Engine:
             "search_report": self._search_report, "overdue": self._overdue,
             "funding_review": self._funding_review, "faction_action": self._faction_action,
             "trade_delivery": self._trade_delivery, "arc_step": self._arc_step,
-            "drone_checkin": self._drone_checkin,
+            "drone_checkin": self._drone_checkin, "drone_home": self._drone_home,
         }
         if director is not None:
             director.auto = False
@@ -1073,6 +1075,9 @@ class Engine:
         self._next_checkin(m)
         c.events.push(m.end, "team_return", {"mission": m.id})
         w = c.worlds[m.world]
+        if w.drone:                        # the team dials home the parked drone shortly after it arrives
+            c.events.push(c.now + DRONE_HOME_MINUTES, "drone_home",
+                          {"world": w.id, "mission": m.id, "team": m.team, "drone": w.drone})
         self._log(f"{m.team} DEPARTING FOR {w.name.upper()}")
         self._show(self._v_departure(w, m.team))
 
@@ -1248,6 +1253,17 @@ class Engine:
         c.funding -= REPAIR
         return [f"UAV WRECK SALVAGED — REPAIRED FOR {REPAIR}", *rules.stow(c, "uav")]
 
+    def _extended_waiting(self, w: World, drone: str) -> list[str]:
+        """An extended report still collecting when the drone leaves early comes home as a full return: its
+        pending uplink (still collecting, or already a dial-out waiting for the gate) is cancelled and its data
+        filed now, same as if the uplink itself had landed. Returns the report's lines, or none if there was no
+        extended report still waiting."""
+        waiting = self.c.events.remove(lambda e: e.data.get("world") == w.id and (
+            e.kind == "uplink" or (e.kind == "dial_out" and e.data.get("op") == "uplink")))
+        if not waiting:
+            return []
+        return self._extended(w, drone, self._extended_readings(w, drone))
+
     def _bring_drone(self, m: Mission, w: World) -> list[str]:
         """A report already rolled for this same minute (the team lands the very
         minute the uplink's gate shuts) plays as it landed — the team never overrules it."""
@@ -1264,17 +1280,34 @@ class Engine:
             w.drone = None
             rules.clear_uplink(c, w.id)
             return [f"{m.team} BROUGHT THE {drone.upper()} HOME"] + rules.stow(c, drone)
-        lines = []
-        waiting = c.events.remove(lambda e: e.data.get("world") == w.id and (
-            e.kind == "uplink" or (e.kind == "dial_out" and e.data.get("op") == "uplink")))
-        if waiting:
-            lines += self._extended(w, drone, self._extended_readings(w, drone))
-            lines.append(f"{m.team} BROUGHT THE {drone.upper()} AND ITS DATA HOME")
-        else:
-            lines.append(f"{m.team} BROUGHT THE {drone.upper()} HOME")
+        extended = self._extended_waiting(w, drone)
+        tail = f"{m.team} BROUGHT THE {drone.upper()} AND ITS DATA HOME" if extended else \
+            f"{m.team} BROUGHT THE {drone.upper()} HOME"
         w.drone = None
         rules.clear_uplink(c, w.id)
-        return lines + rules.stow(c, drone)
+        return extended + [tail] + rules.stow(c, drone)
+
+    def _drone_home(self, data: dict) -> None:
+        """A team dials home the parked drone it found right after it arrived. Nothing happens if the team's
+        situation changed before this was due (captured, lost, recalled, the mission ended) or the drone is
+        already gone. An extended report still collecting comes home now too, as a full return."""
+        c = self.c
+        m = c.mission(data["mission"])
+        w = c.worlds[data["world"]]
+        tm = c.teams.get(data["team"])
+        if (m is None or m.state != "active" or tm is None or tm.status != "offworld" or tm.mission != m.id
+                or tm.where != w.id or w.drone != data["drone"]):
+            return
+        drone, team = data["drone"], data["team"]
+        self._occupy("drone_home")
+        extended = self._extended_waiting(w, drone)
+        w.drone = None
+        rules.clear_uplink(c, w.id)
+        lines = extended + [f"{team} SENT THE {drone.upper()} HOME FROM {w.name.upper()}"] + rules.stow(c, drone)
+        for line in lines:
+            self._log(line)
+        m.findings.extend(lines)
+        self._show(self._v_drone_home(w, team, drone))
 
     def _debrief(self, m: Mission, w: World) -> None:
         c = self.c
@@ -1546,6 +1579,25 @@ class Engine:
             s.panel_title = title
             s.panel_rows = rows[:_shown(len(rows), p)] if p < 1 else [*rows, ("ALL READINGS", "NOMINAL")]
         return [*self._outgoing(w), Step(CHECKIN_FEED_S, show, "ALL READINGS NOMINAL"), *sq.shutdown(), cleanup()]
+
+    def _v_drone_home(self, w: World, team: str, drone: str) -> list[Step]:
+        """A parked drone goes home right behind the team: an incoming wormhole, IDC accepted, the drone coming
+        through (the UAV's landing, or the MALP rolling in — the same visuals a recall once played, reversed),
+        then shutdown."""
+        if self.d is None:
+            return []
+
+        def idc(s, p):
+            s.alert, s.identified, s.status = "normal", True, f"IDC: {team}"
+        if drone == "uav":
+            through = self._uav_home()
+        else:
+            def roll(s, p):
+                s.figures = [Figure("malp", 1 - p, 0.0)] if p < 1 else []
+            through = [Step(5.0, roll, f"{drone.upper()} COMING HOME")]
+        return [*sq.incoming(7), *sq.kawoosh(),
+                Step(0, idc, f"IDC RECEIVED — {team}", ("idc_accept", "stop:klaxon")),
+                *through, *sq.shutdown(), cleanup()]
 
     def _uav_launch(self) -> list[Step]:
         """The rail at the foot of the ramp, the UAV firing off it and climbing, then through the horizon.

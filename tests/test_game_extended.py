@@ -178,21 +178,23 @@ def test_a_lost_uplink(monkeypatch, drone, inhabitants, drone_after, wreck, capt
 
 # ---------------------------------------------------------------- a team gets there first
 
-def test_a_team_arriving_first_brings_the_drone_and_its_data_home(monkeypatch):
+def test_a_team_sent_there_sends_the_drone_and_its_data_home_right_away(monkeypatch):
+    """Once the gate takes the departure, the drone and its still-collecting data come home right after the
+    team arrives (drone_home) — well before the mission itself ends."""
     r, w = collecting(monkeypatch, features=("naquadah",))
     w.status = "probed"
     stock = r.c.stock["malp"]
     r.e.assign(w.id, "SG-2", "survey")
     m = r.c.mission(1)
     m.end = r.c.now + 2 * clock.HOUR                    # home before the uplink
-    r.e.advance(1)
-    r.c.events.cancel(lambda e: e.kind == "checkin")
-    r.e.advance(3 * clock.HOUR)
-    assert m.state == "complete" and w.drone is None and r.c.stock["malp"] == stock + 1
+    r.e.advance(eng.DRONE_HOME_MINUTES + 1)
+    assert w.drone is None and r.c.stock["malp"] == stock + 1
     assert not r.c.events.find(lambda e: e.kind in ("uplink", "uplink_report") or e.data.get("op") == "uplink")
     assert w.seen["subsurface"] == "naquadah deposit"
-    assert "SG-2 BROUGHT THE MALP AND ITS DATA HOME" in m.findings
     assert f"MALP EXTENDED REPORT FROM {w.name.upper()}" in m.findings
+    assert any(line.startswith("SG-2 SENT THE MALP HOME FROM") for line in m.findings)
+    r.e.advance(3 * clock.HOUR)
+    assert m.state == "complete"                        # the mission still ends normally; nothing left to bring home
 
 
 def test_a_team_landing_the_same_minute_never_overrules_an_uplink_already_lost(monkeypatch):
@@ -264,22 +266,17 @@ def test_the_uplink_scene_fills_the_panel_or_finds_no_carrier():
 
 
 def test_an_uplink_waits_while_a_team_is_on_the_world(monkeypatch):
+    """A team already on the world — not one sent to fetch the drone, which would send it home right away
+    (drone_home) — still defers the uplink until it leaves."""
     r, w = collecting(monkeypatch, features=("naquadah",))
     monkeypatch.setitem(eng.UPLINK_ODDS, "malp", {"calm": (0, 0, 100), "jaffa": (0, 0, 100), "goauld": (0, 0, 100)})
-    w.status = "probed"
-    r.e.assign(w.id, "SG-2", "survey")
-    m = r.c.mission(1)
+    tm = r.c.teams["SG-2"]
+    tm.status, tm.where = "offworld", w.id
     wait = eng.UPLINK_HOURS["malp"][1] * clock.HOUR + clock.HOUR       # past the uplink's window
-    m.end = r.c.now + wait + 2 * clock.HOUR                             # the team is still there then
-    r.e.advance(1)
-    r.c.events.cancel(lambda e: e.kind == "checkin")
     r.e.advance(wait)
-    assert r.c.teams["SG-2"].status == "offworld" and w.drone == "malp"   # a certain loss never rolled
+    assert tm.status == "offworld" and w.drone == "malp"   # a certain loss never rolled; it keeps waiting
     assert not r.c.events.find(lambda e: e.kind == "uplink_report" or e.data.get("op") == "uplink")
     assert r.c.events.find(lambda e: e.kind == "uplink" and e.data["world"] == w.id)
-    r.e.advance(3 * clock.HOUR)
-    assert m.state == "complete" and w.drone is None
-    assert "SG-2 BROUGHT THE MALP AND ITS DATA HOME" in m.findings
 
 
 def test_an_uplink_dial_still_in_the_queue_waits_for_a_team_that_got_there(monkeypatch):

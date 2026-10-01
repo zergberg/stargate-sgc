@@ -15,7 +15,8 @@ WINDOW_REAL = 60.0                                        # ...and never less th
 CHECKIN_HOURS = 8                                         # how often a parked drone checks in
 GATE_MINUTES = {"probe": 15, "uav": 25, "depart": 15, "recall": 30, "search": 10, "checkin": 10,
                 "team_return": 15, "incoming": 30, "malp_return": 20,
-                "trade_delivery": 20, "faction_action": 30, "uplink": 10, "drone_checkin": 10}
+                "trade_delivery": 20, "faction_action": 30, "uplink": 10, "drone_checkin": 10,
+                "drone_home": 10}
 
 
 def seconds_per_hour(pace: str, override: int | None = None) -> int:

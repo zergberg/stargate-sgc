@@ -23,11 +23,29 @@ def mission_home(r, w, team="SG-2"):
 
 
 def test_a_team_brings_a_parked_drone_home():
+    """A drone that parks only after the team is already on the world (so drone_home never had the chance to
+    send it home at departure) still comes home with the team at mission end, as before."""
+    r = Rig()
+    w = probed(r)
+    stock = r.c.stock["uav"]
+    r.e.assign(w.id, "SG-2", "survey")
+    m = r.c.mission(1)
+    r.e.advance(1)                      # the team departs to an empty world: nothing to send home
+    w.drone = "uav"                     # a drone parks there while SG-2 is already out
+    r.e.advance(m.end - r.c.now + clock.HOUR)
+    assert r.c.teams["SG-2"].status == "base"
+    assert w.drone is None and r.c.stock["uav"] == stock + 1 and "SG-2 BROUGHT THE UAV HOME" in m.findings
+
+
+def test_a_team_sent_to_a_world_with_a_collecting_drone_sends_it_home_early():
+    """The revised rule: a parked drone doesn't wait for the team to come all the way home. It goes home right
+    after the team arrives, long before the mission itself ends."""
     r = Rig()
     w = probed(r, drone="uav")
     stock = r.c.stock["uav"]
     m = mission_home(r, w)
-    assert w.drone is None and r.c.stock["uav"] == stock + 1 and "SG-2 BROUGHT THE UAV HOME" in m.findings
+    assert w.drone is None and r.c.stock["uav"] == stock + 1
+    assert any(line.startswith("SG-2 SENT THE UAV HOME FROM") for line in m.findings)
 
 
 @pytest.mark.parametrize("wreck,odds", [("crashed", 60), ("shot_down", 30)])

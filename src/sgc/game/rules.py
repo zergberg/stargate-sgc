@@ -456,7 +456,7 @@ def new_address(c: Campaign, found: str) -> wd.World:
     return w
 
 
-_MISSION_TIMED_KINDS = ("checkin", "team_return", "dial_out", "overdue")
+_MISSION_TIMED_KINDS = ("checkin", "team_return", "dial_out", "overdue", "drone_home")
 
 
 def withdraw_search(c: Campaign, d: dict) -> list[str]:
