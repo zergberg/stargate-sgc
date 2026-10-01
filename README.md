@@ -136,17 +136,33 @@ A missed check-in plays out as follows:
 - **Drones:**
   - You start with 4 MALPs and no UAVs. A MALP costs 20; UAVs need the UAV program (see Funding) and cost 60 each. Stores hold at most 8 MALPs and 4 UAVs; a drone coming home always fits.
   - At midnight the SGC tops stores up to your reserve (2 MALPs and 0 UAVs unless you change it in Requisitions), never spending the last 100 of its funding.
-  - A MALP's telemetry comes back in 1–2 game hours, and a UAV's in 45–90 minutes. A UAV sees more (settlements and head counts), and sometimes catches a name over comms. It's also more likely to be shot down over Jaffa or Goa'uld worlds.
+  - **Live telemetry:** a probe is one connection. The drone goes through, its readings stream back while the gate stays open, and the gate shuts. A MALP holds the gate for 15 game minutes and a UAV for 25.
+    - A MALP reads the environment, life signs and features. Its rows fill the side screen one at a time over about 20 seconds.
+    - A UAV sees more: settlements and head counts, sometimes a name over comms, and `SUBSURFACE` from its ground-penetrating radar (a naquadah deposit, buried structures, a shielded power source, or no anomalies). Its aerial feed plays for about 90 seconds. It's also more likely to be shot down over Jaffa or Goa'uld worlds.
+    - The clock waits while the feed plays, so a long feed costs no game time.
   - The UAV is its own aircraft, a small straight-wing drone with a pusher propeller:
     - **Launch:** it fires off a launch rail at the foot of the ramp and climbs into the wormhole.
-    - **Home:** a recalled UAV flies back out of the gate nose first, lands on the ramp and rolls to a stop.
-    - **Aerial feed:** its report plays on a monitor in the corner of the gate image. It shows the ground scrolling past, a crosshair, `REC ●` and its altitude and heading, and it boxes a contact when the UAV spots a settlement or a structure. The side screen reads out ALT, HDG, SPEED and FUEL, then what the UAV learned.
+    - **Aerial feed:** its report plays on a monitor in the corner of the gate image. It shows the ground scrolling past, a crosshair, `REC ●` and its altitude and heading, and it boxes a contact when the UAV spots a settlement or a structure. The side screen reads out ALT, HDG, SPEED and FUEL, then what the UAV learned, a row at a time.
     - **Colours:** a world's ground always looks the same. It only takes on the world's colours once telemetry has told you its environment.
-    - **Lost:** if the UAV is shot down or captured, the feed breaks up into static and `SIGNAL LOST`.
+    - **Lost:** if the UAV is shot down or captured, the feed stops partway and breaks up into static and `SIGNAL LOST`.
     - **Small panes:** when the gate image is under 160 pixels, the monitor is left out and the side screen still reads out.
-  - Drones can be destroyed by a harsh world or captured by its garrison. Capture marks the world HOSTILE.
-  - One that survives stays parked on the world, one drone per world. Recall it through the gate, or the next team there brings it home.
-  - A recall costs a quarter of the drone's price, for wear.
+  - Drones can be destroyed by a harsh world or captured by its garrison. Capture marks the world HOSTILE. A destroyed MALP is gone; a destroyed UAV leaves a wreck on the world.
+  - **One way only:** matter only travels from the gate that dials to the one that answers, so a drone can't come home on its own. One that survives stays parked on the world, one drone per world, until a team brings it home.
+  - **Extended reports:** a MALP extended report or a UAV extensive survey costs the same drone as a plain probe. After the live pass, a MALP sits by the gate collecting for 4–6 game hours, and a UAV flies on for 3–5. Then the SGC dials back for the data (an uplink, 10 game minutes on the gate). The uplink is rolled, as full / partial / lost:
+
+    | World's inhabitants | MALP | UAV |
+    |---|---|---|
+    | none, human, Unas, ally | 85 / 10 / 5 | 75 / 20 / 5 |
+    | Jaffa | 75 / 10 / 15 | 60 / 20 / 20 |
+    | Goa'uld | 65 / 10 / 25 | 45 / 20 / 35 |
+
+    - A world with high radiation or extreme temperatures moves 10 more points from full to lost.
+    - **Full:** every reading at full detail, whatever the difficulty, with `SUBSURFACE` from a MALP's soil samples. A UAV's survey also names an inhabited world over comms, finds any drone of ours held there, and has a chance of turning up a new address.
+    - **Partial:** the data is garbled (`MALP UPLINK GARBLED — <world>`), and only the live pass counts.
+    - **Lost:** on a Jaffa or Goa'uld world the drone is captured. Otherwise a MALP is destroyed, and a UAV comes down (out of fuel, or crashed) and leaves a wreck. The uplink finds `NO CARRIER`.
+    - A team that reaches the world before the uplink brings the drone and its data home, as a full report.
+    - If the drone is lost on the live pass, there's no extended report.
+  - **Bringing drones home:** any team whose mission ends on a world (completed, aborted or recalled) brings back a drone parked there. A UAV wreck is salvaged 60% of the time if it crashed and 30% if it was shot down; a salvaged UAV goes back to stores after a repair costing 30. Without the funding for the repair, it's written off. The assign screen shows this as the mission's tandem task, like `SURVEY · RECOVER MALP` or `CONTACT · SALVAGE UAV WRECK`. A team out reinforcing brings nothing home.
   - A captured drone is held where it was taken. Once a UAV flight over that world, or intel, locates it, a team can go and recover it.
   - A search MALP stays on the world, unless a drone is already parked there. In that case it comes home.
 - **The gate** does one thing at a time. Check-ins go first, then other incoming traffic, then your queued dial-outs.
@@ -167,6 +183,7 @@ A missed check-in plays out as follows:
   | Status | Meaning |
   |---|---|
   | `BASE` | ready |
+  | `STAGING: <world>` | assigned, waiting in the gate room for its dial-out (the Database shows `STAGING`, at the SGC) |
   | `AWAY: <world>` | on a mission (the Database shows `OFFWORLD`, with the world under LOCATION) |
   | `STOOD DOWN 11H` | a new IDC was issued: 12 game hours off duty, after a revoke or a rescue |
   | `INJURED 1D 20H` | 2 days in the infirmary |
@@ -178,7 +195,9 @@ A missed check-in plays out as follows:
 
   A lost SG-5 to SG-12 is disbanded after 3 days; its number can be commissioned again. SG-1 to SG-4 always re-form.
 
-  The gate room's team panel uses the same words in capitals, without the time left: `STOOD DOWN`, `INJURED`, `AWAY: ABYDOS`.
+  The gate room's team panel uses the same words in capitals, without the time left: `STOOD DOWN`, `INJURED`, `STAGING: ABYDOS`, `AWAY: ABYDOS`.
+
+  A staging team is still in the mountain: it isn't available for another mission, but nothing offworld can reach it. Cancelling its dial-out on the Queue tab stands it back down at base.
 
 ### Missions
 
@@ -246,6 +265,15 @@ Recon shortens a mission by a quarter (an eighth for SG-1, or for a team trained
 - An arc can also fail. Most failures only close the story. The worst ends the game.
 - **Retire from command** (briefing room) ends a campaign whenever you like. The hall of records ranks runs by score: 10 per world surveyed, 50 per ally, 20 per team beyond the first four, 2 per mission completed, and in a Campaign 200 or 100 per arc resolved.
 
+### The gate queue
+
+The side column shows a `GATE QUEUE` box, in the gate room just above `SGC STATUS` and in the briefing room under the list:
+
+- dial-outs first, numbered in the order the gate will take them: `1 SG-2 STAGING ABYDOS`, `2 MALP → P3X-888`
+- then everything timed, with its time: `SG-1 CHECK-IN 14:00`, `MALP UPLINK 14:00–16:00`, `SG-4 HOME D2 09:00`, `SG-3 INJURED D4 18:00`
+
+It shows up to 5 rows. With more, the last row reads `+3 MORE · d`; with nothing, `NOTHING QUEUED`. On a shorter pane it shrinks, and it's left out when not even one row fits. An alarm takes its rows first. It's read-only: cancel and reorder on the Database's Queue tab. On a small terminal there's no side column, so no box.
+
 ### The briefing room
 
 Press `b` to walk up and `b` again to walk back down. The walk takes `transition_seconds`, 10 by default.
@@ -256,12 +284,11 @@ Press `b` to walk up and `b` again to walk back down. The walk takes `transition
 What's in the briefing room:
 
 - **Dialing list:** every address with its status and any drone on it. An address offers:
-  - MALP probe (with the number left)
-  - UAV flight
-  - Recall drone
+  - MALP probe and MALP extended report (with the number left)
+  - UAV flight and UAV extensive survey
   - Assign team
   - Add note
-- **Assign a team:** shows every team on the roster. Unavailable ones are greyed out with the reason. Then pick the mission type.
+- **Assign a team:** shows every team on the roster. Unavailable ones are greyed out with the reason (`SG-2 IS STAGING FOR ABYDOS`). Then pick the mission type; a drone or a wreck on the world shows as a tandem task.
 - **Teams:** the roster: every team on it, and "commission a new team" underneath. A team's own screen offers revoking and reissuing its IDC, after a confirmation that says whether the team stands down, and training a second specialty.
   - A team at base stands down for 12 game hours.
   - An injured or re-forming team keeps the longer of its own timer and 12 hours. (The roster can't revoke a lost or re-forming team's code; a scenario can.)
@@ -277,8 +304,8 @@ An action you can't take yet is greyed out and tells you why when you choose it.
 
 Press `d` for the full-screen SGC Database. It has nine tabs:
 
-- **Addresses:** name, glyphs, status, last visit, flags and drone. The flags are `T` for a team there, `N` for notes and `L` for an address from intel.
-- **World file:** names and where they came from, telemetry, mission options, reports and your notes.
+- **Addresses:** name, glyphs, status, last visit, flags and drone (`WRECK` for a UAV wreck with no drone). The flags are `T` for a team there, `N` for notes and `L` for an address from intel.
+- **World file:** names and where they came from, telemetry (with `UAV WRECK ON SITE` under the drone), mission options, reports and your notes.
 - **Missions:** team, world, type, start, outcome, casualties and findings.
 - **Teams:** specialty, rank, status, location and history.
 - **Intel:** names learned, and leads to addresses not yet visited.
@@ -287,7 +314,7 @@ Press `d` for the full-screen SGC Database. It has nine tabs:
 - **Arcs:** the story arcs you've woken, with their stage and any deadline.
 - **Queue:** what's scheduled, soonest first:
   - dial-outs waiting for the gate, in the order the gate will take them
-  - drones through the gate, with the window their report is due in
+  - extended reports still collecting, with the window their uplink is due in
   - missions in the field, with the next check-in and when the team is due home
   - teams stood down, injured, captured or re-forming, with when that ends
 
@@ -304,10 +331,9 @@ On the Queue tab:
 - `x` cancels the selected dial-out. Press it again to confirm.
   - A MALP or UAV goes back to stores.
   - A departing team stands by at base, and its mission reads CANCELLED.
-  - A recall is withdrawn, and the drone stays where it is.
   - A withdrawn search leaves the missing team to the 12-hour wait.
 
-  Anything already through the gate can't be cancelled here, and the tab says why.
+  Anything already through the gate can't be cancelled here, and the tab says why. Nor can an uplink (`THE DRONE IS ALREADY COLLECTING`), though it can be moved.
 - `[` and `]` move the selected dial-out up or down the gate queue. Check-ins and other incoming traffic still go first. The new order is saved.
 - `/` searches the rows' text.
 
@@ -363,7 +389,7 @@ The menus use `↑` `↓` Enter or `1`–`9`, with `q` to go back (at the top, `
 
 Notes and searches take accented letters. A character that doesn't fit in one cell shows as `?`.
 
-The idle scene: after 45 quiet seconds, the gate sometimes dials a science uplink to a world you know. It's only for show and changes nothing. Real traffic, an alarm or your walk cuts it.
+The idle scene: after 45 quiet seconds, the gate sometimes dials a science uplink to one of your drones parked on a world. With no drone parked anywhere, the gate stays quiet. It's only for show and changes nothing. Real traffic, an alarm or your walk cuts it.
 
 ### Writing scenarios
 
@@ -387,7 +413,7 @@ Kinds:
   - `team = "compromised" | "captured" | "base" | "any"` picks a team for it.
     - `territory`: a team out on a world of the Goa'uld whose scenario this is (`faction` scenarios only).
   - `on = "team_return"` plays it as a team comes home from a dangerous world instead.
-- `probe`: plays after a drone's telemetry, chosen by the world's traits in `when`. The text never names the drone ("Telemetry from…").
+- `probe`: plays after a drone's live telemetry, chosen by the world's traits in `when` (an extended report's uplink draws none). The text never names the drone ("Telemetry from…").
 - `checkin` and `debrief`: during and after a mission. `mission_type` narrows them to one mission type (`survey`, `contact`, `trade`, `raid`, `study`, `rescue`, `recover`, `mine` or `aid`). Rescue and recover missions play only scenarios with their own `mission_type`.
 - `faction`: plays from a Goa'uld's attention, at the stage given by `stage = "curious" | "hostile" | "seeking"`.
 - `arc`: plays a stage of a story arc, with `arc = "<id>"` and `arc_stage = N`.
