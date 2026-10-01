@@ -56,6 +56,7 @@ class Room:
         self.team: str | None = None
         self.note = ""
         self.notice = ""
+        self._anchor: str | None = None   # Part 9: the screen back() closes from, for a hosted panel
 
     @property
     def c(self):
@@ -217,8 +218,16 @@ class Room:
     def _go(self, screen: str) -> None:
         self.screen, self.sel = screen, 0
 
+    def open_on_world(self, world_id: str) -> None:
+        """Part 9's entry point for the Database's ORDERS panel: position the room directly on this
+        address's action screen, as the first step a hosted panel opens on. back() then closes instead
+        of returning to the dialing list, which doesn't exist in that context."""
+        self.world_id = world_id
+        self._anchor = "world"
+        self._go("world")
+
     def back(self) -> tuple | None:
-        if self.screen == "main":
+        if self.screen == "main" or self.screen == self._anchor:
             return ("close",)
         self._go(PARENT[self.screen])
         return None

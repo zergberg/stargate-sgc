@@ -260,7 +260,7 @@ class App:
         save_setting("legend", self.legend, self.config_path)
 
     def _open_database(self) -> None:
-        self.db, self._kept_db = self._kept_db or Database(self.engine.c, self.engine.schedule_view), None
+        self.db, self._kept_db = self._kept_db or Database(self.engine.c, self.engine.schedule_view, self.engine), None
         self.db.disarm()                          # a cancel is confirmed in one sitting
         self._db_from, self.view = self.view, "database"
         self.canvas.set_holes([])
@@ -337,6 +337,7 @@ class App:
     def _back_to_the_gate_room(self) -> None:
         if self.view == "database":
             kept = self.db
+            kept.close_orders()               # Part 9: a half-finished order is dropped
             self._close_database()
             self._kept_db = kept              # d reopens it: tab, search and scroll as they were
         if self.view == "briefing":

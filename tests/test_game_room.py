@@ -373,6 +373,20 @@ def test_rescue_and_recovery_name_their_target():
     assert r.screen == "type_pick" and ("RESCUE SG-4", True) in r.items()
 
 
+def test_open_on_world_anchors_the_first_step_so_back_closes_from_there():
+    """Part 9's entry point for the Database's ORDERS panel: positions the room on the address screen,
+    and back() closes instead of returning to a dialing list that doesn't exist in that context."""
+    r, c = room()
+    target = list(c.worlds)[3]
+    c.worlds[target].status = "probed"
+    r.open_on_world(target)
+    assert r.screen == "world" and r.world_id == target
+    r.key("5")                        # ASSIGN TEAM
+    assert r.screen == "team_pick"
+    assert r.back() is None and r.screen == "world"     # one step back, not a close
+    assert r.back() == ("close",)                        # closes from the first step
+
+
 def test_retiring_asks_first_and_ends_the_campaign():
     r, c = room()
     r.key("6")

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from . import arcs, factions, trade
 from .arcs import ARCS
@@ -11,6 +11,10 @@ from .rules import FLAG_NAMES
 from .schedule import QueueItem
 from .state import Campaign, rank, team_names
 from .world import FACTION_IDS, World, faction_name
+
+if TYPE_CHECKING:          # the engine imports this module, so it's only imported here for type hints
+    from .engine import Engine
+    from .room import Room
 
 TABS = ("addresses", "world", "missions", "teams", "intel", "factions", "trade", "arcs", "queue")
 TAB_TITLES = {"addresses": "ADDRESSES", "world": "WORLD FILE", "missions": "MISSIONS", "teams": "TEAMS",
@@ -27,7 +31,8 @@ COLUMNS = {
     "world": (),
 }
 SEARCHABLE = ("addresses", "queue")
-OPENS = ("addresses", "missions", "intel", "trade", "arcs")      # tabs where Enter opens a world's file
+OPENS = ("missions", "intel", "trade", "arcs")                   # tabs where Enter opens a world's file
+ORDERS_TABS = ("addresses", "world")        # Part 9: tabs where Enter opens the ORDERS panel instead
 HINT = "EVERY ADDRESS VISITED · RE-SURVEY, STUDY RUINS OR ASK ALLIES FOR MORE"
 ALLY_FLAGS = {"tokra": "ally.tokra", "asgard": "ally.asgard", "tollan": "ally.tollan", "nox": "ally.nox",
               "jaffa": "ally.jaffa"}
@@ -80,9 +85,11 @@ class Row:
 
 
 class Database:
-    def __init__(self, c: Campaign, schedule: Callable[[], list[QueueItem]] | None = None):
+    def __init__(self, c: Campaign, schedule: Callable[[], list[QueueItem]] | None = None,
+                 engine: "Engine | None" = None):
         self.c = c
         self.schedule = schedule or (lambda: [])   # the engine's schedule_view: the QUEUE tab's only source
+        self.engine = engine            # Part 9: hosts a Room for the ORDERS panel; None in view-only tests
         self.tab = "addresses"
         self.sel = 0
         self.sort = "status"
@@ -93,6 +100,7 @@ class Database:
         self.scroll = 0                 # the world tab's line offset; the draw clamps it to the content
         self.armed: str | None = None   # the QUEUE row x was pressed on once: x again there confirms
         self.message = ""               # the engine's reply to the last x, [ or ]
+        self.orders: "Room | None" = None   # Part 9: the hosted Room, open on an address's action screen
 
     # ------------------------------------------------------------------ rows
     def _team_on(self, w: World) -> bool:
@@ -215,6 +223,46 @@ class Database:
         """Clear the armed cancel and any showing reply. The app calls this before ?, m, + and -."""
         self.armed, self.message = None, ""
 
+    # ------------------------------------------------------------------ the ORDERS panel (Part 9)
+    def _order_target(self) -> str | None:
+        """The address Enter opens ORDERS for: the selected row on Addresses, or the World file's own
+        address."""
+        if self.tab == "world":
+            return self.world_id if self.world_id in self.c.worlds else None
+        row = self.selected()
+        return row.key if row is not None and row.key in self.c.worlds else None
+
+    def _open_orders(self, wid: str) -> None:
+        """Host the briefing room's Room on this address, positioned on its first step -- one source of
+        truth for the actions, their greyed reasons and the engine calls they make."""
+        if self.engine is None:
+            return
+        from .room import Room          # deferred: engine.py imports this module, so Room can't be a
+        self.orders = Room(self.engine)  # top-level import here without a circular import
+        self.orders.open_on_world(wid)
+
+    def _orders_key(self, k: str) -> None:
+        """Keys while the ORDERS panel is open: the briefing room's own choosing keys reach the hosted
+        Room, Esc/Ctrl+C step back a screen and close the panel from its first step, note typing works as
+        in the briefing room, and every other Database key is ignored."""
+        from .room import CANCEL_KEYS
+        room = self.orders
+        if room.text_mode:
+            if k in CANCEL_KEYS or k == "enter" or k.startswith("ch:") or k == "backspace":
+                room.key(k)
+            return
+        if k in CANCEL_KEYS:
+            if room.back() == ("close",):
+                self.orders = None
+            return
+        if k in ("up", "down", "enter") or (len(k) == 1 and k.isdigit()):
+            room.key(k)
+
+    def close_orders(self) -> None:
+        """Drop a half-open ORDERS panel: an alarm closes the Database outright, and reopening it brings
+        back the tab, search and scroll but not the panel."""
+        self.orders = None
+
     # ------------------------------------------------------------------ the world file
     def detail(self) -> list[str]:
         w = self.c.worlds.get(self.world_id)
@@ -249,10 +297,13 @@ class Database:
     # ------------------------------------------------------------------ keys
     @property
     def text_mode(self) -> bool:
-        return self.searching
+        return self.searching or (self.orders is not None and self.orders.text_mode)
 
     def key(self, k: str) -> tuple | None:
         """Handle a key; returns ("close",), ("cancel", id, confirm) or ("move", id, delta)."""
+        if self.orders is not None:
+            self._orders_key(k)
+            return None
         if self.searching:
             if k in ("ctrl-c", "escape"):                 # cancel: clear the search and close it
                 self.searching, self.query, self.sel = False, "", 0
@@ -291,6 +342,10 @@ class Database:
             n = len(self.rows())
             if n:
                 self.sel = (self.sel + (-1 if k == "up" else 1)) % n
+        elif k == "enter" and self.tab in ORDERS_TABS:
+            wid = self._order_target()
+            if wid is not None:
+                self._open_orders(wid)
         elif k == "enter" and self.tab in OPENS:
             row = self.selected()
             if row is not None and self.tab == "missions":

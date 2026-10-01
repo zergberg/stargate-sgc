@@ -277,6 +277,19 @@ def test_the_database_opens_over_everything_and_q_closes_it(tmp_path):
     assert app.view == "gate" and not app.director.exiting
 
 
+def test_an_alarm_drops_the_orders_panel_but_reopening_keeps_the_tab(tmp_path):
+    app = start(tmp_path)
+    app._handle_keys(["d"])
+    target = list(app.engine.c.worlds)[3]
+    app.db.sel = next(i for i, r in enumerate(app.db.rows()) if r.key == target)
+    app.db.key("enter")
+    assert app.db.orders is not None and app.db.orders.world_id == target
+    app._alarm("TEST", "a half-finished order should not survive this")
+    assert app.view == "gate" and app.db is None
+    app._handle_keys(["d"])
+    assert app.view == "database" and app.db.orders is None and app.db.tab == "addresses"
+
+
 def test_the_legend_cycles_and_is_remembered(tmp_path):
     app = start(tmp_path)
     assert app.legend == "bar"

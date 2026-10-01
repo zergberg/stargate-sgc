@@ -10,7 +10,7 @@ from ..panels import AMBER, BASE_PANELS, CYAN, DIM, GREEN, RED, WHITE, _fade, bl
 from ..term.canvas import Canvas
 from . import factions
 from .clock import stamp
-from .database import COLUMNS, OPENS, SEARCHABLE, TAB_TITLES, TABS, Database
+from .database import COLUMNS, OPENS, ORDERS_TABS, SEARCHABLE, TAB_TITLES, TABS, Database
 from .menu import Menu
 from .room import Room
 from .schedule import QueueItem
@@ -64,6 +64,8 @@ def _db_keys(tab: str) -> list[tuple[str, str]]:
     keys = [("←→", "TABS"), ("↑↓", "SCROLL" if tab == "world" else "SELECT")]
     if tab in OPENS:
         keys.append(("⏎", "OPEN"))
+    if tab in ORDERS_TABS:
+        keys.append(("⏎", "ORDERS"))
     if tab == "addresses":
         keys += [("/", "SEARCH"), ("s", "SORT"), ("f", "FILTER")]
     if tab == "queue":
@@ -77,6 +79,10 @@ def _db_help_entries(tab: str) -> list[tuple[str, str]]:
     entries = [("←→", "switch tabs"), ("↑↓", "select, or scroll a world file")]
     if tab in OPENS:
         entries.append(("⏎", "open a world's file"))
+    if tab in ORDERS_TABS:
+        entries.append(("⏎", "open the ORDERS panel for the address"))
+        entries.append(("1-9 ↑↓ ⏎", "choose in the ORDERS panel"))
+        entries.append(("Esc ^C", "back a step in the panel, then close it"))
     if tab == "addresses":
         entries += [("/", "search names, ids and glyphs"), ("s", "sort by status or name"),
                     ("f", "filter by status")]
@@ -471,6 +477,46 @@ def _item_rows(label: str, w: int) -> list[str]:
     return [part for line in label.split("\n") for part in _wrap(line, max(1, w - 4))]
 
 
+ORDERS_ROWS = 9          # the ORDERS panel's items (the world screen tops out at 7, team_pick and type_pick less
+
+
+def _orders_height(n: int, avail: int) -> int:
+    """Rows for the Database's ORDERS panel holding n items, given avail free rows in the table area: one
+    row per item (at least one, at most ORDERS_ROWS) plus its border, shrunk to fit."""
+    want = min(ORDERS_ROWS, max(1, n)) + 2
+    return want if avail >= want else max(0, avail if avail >= 3 else 0)
+
+
+def draw_orders_panel(canvas: Canvas, r: Rect, room: Room) -> None:
+    """Part 9: the Database's ORDERS panel, a box over the lower part of the Database hosting the briefing
+    room's Room on an address. Draws the Room's own items, greyed rows, notice and note-typing state --
+    never its logic, which stays only in room.py."""
+    if r.h < 3 or r.w < 6:
+        return
+    canvas.fill(r, " ")
+    w = room.c.worlds[room.world_id] if room.world_id else None
+    canvas.box(r, f"ORDERS · {w.name.upper()}" if w else "ORDERS", DIM, AMBER)
+    x, y, width = r.x + 2, r.y + 1, r.w - 4
+    bottom = r.y + r.h - 1
+    if room.text_mode:
+        canvas.put(x, y, _clip("NOTE (ENTER TO SAVE):", width), DIM)
+        canvas.put(x, y + 1, _clip("> " + room.note + "_", width), WHITE, bold=True)
+        return
+    items = room.items()
+    space = max(1, bottom - y - (1 if room.notice else 0))
+    for i, (label, ok) in enumerate(items):
+        if y - r.y - 1 >= space:
+            break
+        sel = i == room.sel
+        num = f"{i + 1}" if i < 9 else " "
+        text = f" {num}  {label.split(chr(10))[0]}"
+        canvas.put(x, y, _clip(text, width).ljust(width)[:width], (WHITE if sel else AMBER) if ok else DIM,
+                   HILITE if sel else None, bold=sel)
+        y += 1
+    if room.notice and y < bottom:
+        canvas.put(x, y, _clip(room.notice, width), GREEN, bold=True)
+
+
 def _world_lines(db: Database, width: int) -> list[str]:
     return [ln for text in db.detail() for ln in _wrap(text, width)]
 
@@ -594,6 +640,10 @@ def draw_database(canvas: Canvas, layout: Layout, db: Database, legend: str) -> 
             canvas.put(2, top + 1, _nothing(db), DIM)
         if hint:
             canvas.put(2, bottom - 1, _clip(hint, cols - 4), CYAN, bold=True)
+    if db.orders is not None:
+        panel_h = _orders_height(len(db.orders.items()), bottom - top)
+        if panel_h:
+            draw_orders_panel(canvas, Rect(0, bottom - panel_h, cols, panel_h), db.orders)
     if legend != "off":
         text = " " + "  ".join(f"{k} {label}" for k, label in _db_keys(db.tab)) + " "
         canvas.fill(Rect(0, rows - 1, cols, 1), " ", AMBER, HEADER_BG)
