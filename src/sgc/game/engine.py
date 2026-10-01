@@ -34,6 +34,7 @@ UPLINK_FEED_S = 10.0                 # real seconds an uplink's extended data ta
 EXTENDED = {"malp": "MALP EXTENDED REPORT", "uav": "UAV EXTENSIVE SURVEY"}
 UPLINK_HOURS = {"malp": (4, 6), "uav": (3, 5)}    # game hours an extended report collects before its uplink
 DRONE_HOME_MINUTES = 15              # game minutes after a team departs before it dials home a parked drone
+CHECKIN_LINE_MINUTES = 38            # game minutes a check-in's open prompt keeps its wormhole up, waiting for orders
 UPLINK_ODDS = {                      # an uplink's (full, partial, lost) %, by drone and who lives on the world
     "malp": {"calm": (85, 10, 5), "jaffa": (75, 10, 15), "goauld": (65, 10, 25)},
     "uav": {"calm": (75, 20, 5), "jaffa": (60, 20, 20), "goauld": (45, 20, 35)},
@@ -147,6 +148,7 @@ class Engine:
             "funding_review": self._funding_review, "faction_action": self._faction_action,
             "trade_delivery": self._trade_delivery, "arc_step": self._arc_step,
             "drone_checkin": self._drone_checkin, "drone_home": self._drone_home,
+            "checkin_timeout": self._checkin_timeout,
         }
         if director is not None:
             director.auto = False
@@ -155,6 +157,7 @@ class Engine:
             return
         self._stage2_start()
         self._sweep_alarms()
+        self._drop_lines()
         self._show_alarm()
 
     # ------------------------------------------------------------------ time
@@ -264,6 +267,41 @@ class Engine:
     def _hold(self, what: str) -> None:
         """Keep the gate busy at least this long, never shortening a longer hold already on it."""
         self.c.gate_until = max(self.c.gate_until, self.c.now + clock.GATE_MINUTES[what])
+
+    def _hold_line(self, team: str, mission: str) -> None:
+        """A check-in just raised a prompt: its wormhole stays up and the gate stays held for it, up to
+        CHECKIN_LINE_MINUTES, unless the player answers first (_close_line) or it times out (_checkin_timeout)."""
+        until = self.c.now + CHECKIN_LINE_MINUTES
+        self.c.gate_until = max(self.c.gate_until, until)
+        self.c.events.push(until, "checkin_timeout", {"mission": int(mission), "team": team})
+
+    def _checkin_timeout(self, data: dict) -> None:
+        """A check-in's open line went unanswered for CHECKIN_LINE_MINUTES: the wormhole drops and the gate
+        frees up, but the order still reaches the team eventually, so the prompt itself stays open."""
+        team = data.get("team", "THE TEAM")
+        self._log(f"WORMHOLE LOST — {team} WILL RECEIVE ORDERS AT NEXT CONTACT")
+        self.c.gate_until = min(self.c.gate_until, self.c.now)
+        self._show(self._visual("close", {}))
+
+    def _drop_lines(self) -> None:
+        """A check-in's open line can't be resumed across a save: it's simplest lost on load, as if its
+        CHECKIN_LINE_MINUTES had already run out. The alarm itself is unaffected: it still waits for an order."""
+        for ev in self.c.events.remove(lambda e: e.kind == "checkin_timeout"):
+            self._checkin_timeout(ev.data)
+
+    def _close_line(self, a: dict) -> None:
+        """Answering a check-in's node alarm: if its line is still open, the order goes out live and the gate
+        is free to shut (the scenario's own finished chain appends "close" to actually shut it). Answered after
+        the line already dropped, nothing is cancelled and no order-sent line is logged."""
+        bind = a.get("bind") or {}
+        team = bind.get("team")
+        try:
+            mission = int(bind.get("mission"))
+        except (TypeError, ValueError):
+            return
+        if self.c.events.cancel(lambda e: e.kind == "checkin_timeout" and e.data.get("mission") == mission):
+            self._log(f"ORDERS SENT TO {team}")
+            self.c.gate_until = min(self.c.gate_until, self.c.now)
 
     def _recovery(self, data: dict) -> None:
         for line in rules.hourly(self.c):
@@ -770,6 +808,8 @@ class Engine:
         node = sc.nodes[name]
         text = rules.fill(self._text(node), bind)
         if not node.routine:
+            if sc.kind == "checkin" and not follow_up:     # the prompt just opened: its wormhole stays up for it
+                self._hold_line(bind["team"], bind["mission"])
             self._raise({"type": "node", "scenario": sc.id, "node": name, "bind": bind, "deadline": None,
                          "title": "INCOMING" if sc.kind == "faction" and "incoming" in sc.visual else TITLES[sc.kind],
                          "text": text}, front=follow_up)
@@ -970,6 +1010,8 @@ class Engine:
         self.prompt = None
         if a["type"] == "node":
             sc = self.scenarios[a["scenario"]]
+            if sc.kind == "checkin":
+                self._close_line(a)
             choice = next(ch for ch in sc.nodes[a["node"]].choices if ch.key == key)
             self._resolve(sc, a["bind"], choice.outcome, follow_up=True)
         elif a["type"] == "missed_checkin":
@@ -1094,8 +1136,9 @@ class Engine:
             self._raise({"type": "missed_checkin", "mission": m.id, "deadline": None, "title": "MISSED CHECK-IN",
                          "text": f"{m.team} missed its scheduled check-in from {w.name}. No signal on any channel."})
             return
-        self._show(self._v_checkin(m.team))
         drawn = self._draw("checkin", self._mbind(m), m.type)
+        prompt = drawn is not None and not drawn[0].nodes["start"].routine
+        self._show(self._v_checkin(m.team, keep_open=prompt))
         if drawn:
             self._start(*drawn)                            # its end schedules the next check-in
         else:
@@ -1383,6 +1426,11 @@ class Engine:
         c = self.c
         away_first = sorted(team_names(c), key=lambda n: (n in available_teams(c), int(n.split("-")[1])))
         s.teams = {name: team_label(c, name, timer=False).upper() for name in away_first}
+        line = c.events.find(lambda e: e.kind == "checkin_timeout")
+        if line:
+            ev = line[0]
+            s.panel_title = f"TEAM ON THE LINE · {ev.data.get('team', '?')}"
+            s.panel_rows = [("TIME LEFT", f"{max(0, round(ev.due - c.now))} MIN")]
 
     def _close_idle_gate(self) -> None:
         """A wormhole left up once its scene is over, with no order pending, disengages on its own."""
@@ -1641,14 +1689,20 @@ class Engine:
         return [*self._outgoing(w), Step(1.0, live), Step(1.5, static, "UAV SIGNAL LOST"), sq.hold(1.0),
                 *sq.shutdown(), cleanup()]
 
-    def _v_checkin(self, team: str) -> list[Step]:
+    def _v_checkin(self, team: str, keep_open: bool = False) -> list[Step]:
+        """A routine check-in shuts down as always. One that's about to raise a prompt (keep_open) leaves the
+        wormhole up: the line stays open until the player answers or it times out (_checkin_timeout), and
+        either way it's `_visual("close")`, reused from the scenario's own resolution, that shuts it."""
         if self.d is None:
             return []
 
         def idc(s, p):
             s.alert, s.identified, s.status = "normal", True, f"IDC: {team}"
-        return [*sq.incoming(7), *sq.kawoosh(), Step(0, idc, f"IDC RECEIVED — {team}", ("idc_accept", "stop:klaxon")),
-                sq.hold(3.0, log=f"{team} CHECKING IN"), *sq.shutdown(), cleanup()]
+        steps = [*sq.incoming(7), *sq.kawoosh(), Step(0, idc, f"IDC RECEIVED — {team}", ("idc_accept", "stop:klaxon")),
+                 sq.hold(3.0, log=f"{team} CHECKING IN")]
+        if keep_open:
+            return steps
+        return [*steps, *sq.shutdown(), cleanup()]
 
     def _v_team_return(self, team: str) -> list[Step]:
         if self.d is None:

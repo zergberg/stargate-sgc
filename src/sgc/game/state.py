@@ -490,6 +490,9 @@ def _event(e, world_ids: set[str], mission_ids: set[int], deal_ids: set[int] = f
         mission()
         if "since" in d:
             _int(d["since"], "check-in since")
+    elif kind == "checkin_timeout":
+        mission()
+        _one_of(need("team"), team_ids, "check-in line team")
     elif kind == "faction_action":
         fid = _one_of(need("faction"), FACTION_IDS, "faction")
         if FACTION_KIND[fid] != "goauld":
