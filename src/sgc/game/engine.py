@@ -798,7 +798,9 @@ class Engine:
         if m is not None:
             m.findings += [line for line in lines if not line.startswith(("SECURITY", "PERSONNEL"))]
         self._check_victory()
-        self._show(self._chain(list(o.visual), bind), urgent=sc.kind in URGENT_KINDS)
+        finished = not o.goto and not c.over
+        names = list(o.visual) + ["close"] if finished else list(o.visual)
+        self._show(self._chain(names, bind), urgent=sc.kind in URGENT_KINDS)
         if c.over:
             return
         if o.goto:
@@ -1401,6 +1403,13 @@ class Engine:
             return sq.firefight(5.0, random.Random(self.c.now), True)
         if name == "bomb":
             return sq.bomb(4.0)
+        if name == "close":
+            if self.d is None:
+                return []
+            s = self.d.scene
+            if s.horizon != "off" or s.locked:
+                return [*sq.shutdown(), Step(0, lambda sc, p: sq.reset_scene(sc), cues=("stop:klaxon",))]
+            return [Step(0, lambda sc, p: sq.reset_scene(sc), cues=("stop:klaxon",))]
         if name == "asgard_beam":
             def beam(s, p):
                 s.vaporize = math.sin(math.pi * p)

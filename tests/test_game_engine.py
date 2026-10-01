@@ -281,6 +281,17 @@ def play(r, seconds, dt):
     return out
 
 
+def drain(d, dt=0.1, limit=400):
+    """Run the director's own queue to the end (no engine clock involved); returns the cues it fired."""
+    cues = []
+    for _ in range(limit):
+        if d.idle:
+            break
+        _, new_cues = d.advance(dt)
+        cues += new_cues
+    return cues
+
+
 def test_at_a_busy_pace_a_result_waits_for_the_gate_to_finish_showing_it():
     r = Rig(PROBE, director=True, pace=10)                # 10 real seconds a game hour: a dial outlasts the trip
     w = r.world(env="normal", inhabitants="none")
@@ -381,6 +392,35 @@ label = "Ignore it"
 outcome = { end = true }
 """
 
+CHAIN_INCOMING = """
+id = "t_chain_incoming"
+kind = "incoming"
+visual = "incoming"
+[node.start]
+text.full = "Someone is dialing in."
+situation = "unknown_idc"
+default = "closed"
+[[node.start.choice]]
+key = "closed"
+label = "Keep the iris closed"
+outcome = { goto = "second" }
+[[node.start.choice]]
+key = "open_guarded"
+label = "Open under guard"
+outcome = { end = true }
+[node.second]
+text.full = "They're transmitting a message."
+default = "listen"
+[[node.second.choice]]
+key = "listen"
+label = "Listen"
+outcome = { end = true }
+[[node.second.choice]]
+key = "ignore"
+label = "Ignore it"
+outcome = { end = true }
+"""
+
 QUIET_DOOM = """
 id = "t_quiet_doom"
 kind = "incoming"
@@ -413,6 +453,44 @@ def test_a_follow_up_node_goes_to_the_front_of_the_queue_without_ringing_again()
     assert [(a["scenario"], a["node"]) for a in r.c.alarms] == [("t_chain", "second"), ("t_unknown", "start")]
     assert len(r.alarms) == 2 and r.e.prompt.text == "They're transmitting a message."
     assert r.c.alarms[0]["deadline"] == r.c.now + 180
+
+
+def test_keeping_the_iris_closed_shuts_the_wormhole_and_stops_the_klaxon():
+    r = Rig(UNKNOWN, director=True)
+    r.c.events.push(r.c.now, "incoming")
+    r.e.advance(1)
+    play(r, 10, 0.1)                           # let the incoming wormhole actually open
+    assert r.d.scene.horizon == "open"
+    r.e.key("1")                               # "Keep the iris closed" -> iris_hold, end=true
+    cues = drain(r.d)
+    assert "iris_close" in cues and "stop:klaxon" in cues
+    assert cues.index("iris_close") < cues.index("stop:klaxon")
+    assert r.d.scene.horizon == "off"
+
+
+def test_an_outcome_with_no_visual_still_stops_the_klaxon():
+    r = Rig(UNKNOWN, director=True)
+    r.c.events.push(r.c.now, "incoming")
+    r.e.advance(1)
+    play(r, 10, 0.1)
+    assert r.d.scene.horizon == "open"
+    r.e.key("2")                               # "Open under guard" -> no visual at all, end=true
+    cues = drain(r.d)
+    assert "stop:klaxon" in cues
+    assert r.d.scene.horizon == "off"
+
+
+def test_a_goto_follow_up_keeps_the_wormhole_open():
+    r = Rig(CHAIN_INCOMING, director=True)
+    r.c.events.push(r.c.now, "incoming")
+    r.e.advance(1)
+    play(r, 10, 0.1)
+    assert r.d.scene.horizon == "open"
+    r.e.key("1")                               # "Keep the iris closed" -> goto "second"
+    cues = drain(r.d)
+    assert "stop:klaxon" not in cues
+    assert r.d.scene.horizon == "open"
+    assert r.e.prompt is not None and r.e.prompt.text == "They're transmitting a message."
 
 
 def test_a_game_over_is_never_saved_and_a_fallen_base_loads_straight_to_game_over():
