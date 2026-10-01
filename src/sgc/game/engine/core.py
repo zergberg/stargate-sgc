@@ -16,6 +16,7 @@ from typing import Callable
 from ...director import Director
 from ...model import Prompt, Scene
 from .. import arcs, clock, economy, factions, rules, trade
+from . import visuals
 from ..content import Scenario
 from ..database import team_status
 from ..state import Campaign, available_teams, team_names
@@ -270,7 +271,7 @@ class CoreMixin:
             self._log(line)
         if arrived:
             self._occupy("trade_delivery")
-            self._show(self._v_delivery(c.worlds[d.world]))
+            self._show(visuals.v_delivery(self.d.scene if self.d else None, c.worlds[d.world]))
 
     def _arc_step(self, data: dict) -> None:
         """An arc's stage has come due: play its scenario, unless the arc has moved on since."""

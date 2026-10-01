@@ -3,6 +3,7 @@ malp_return and recall."""
 from __future__ import annotations
 
 from .. import clock, rules
+from . import visuals
 from .core import DETAIL, INTEL_ROLL
 from ..world import World, readings, subsurface
 
@@ -68,7 +69,7 @@ class DronesMixin:
         seen = readings(w, drone, DETAIL[c.difficulty], self.rng)
         c.events.push(c.gate_until, "drone_report", {"world": wid, "drone": drone, "fate": fate, "seen": seen,
                                                      **({"extended": True} if extended else {})})
-        self._show(self._v_probe(w, drone, seen, fate))
+        self._show(visuals.v_probe(self.d.scene if self.d else None, c.now, w, drone, seen, fate))
 
     def _drone_report(self, data: dict) -> None:
         """The probe's gate shuts: what came back is on file, and a surviving drone stays on the world."""
@@ -152,7 +153,7 @@ class DronesMixin:
         seen = self._extended_readings(w, drone) if outcome == "full" else {}
         c.events.push(c.gate_until, "uplink_report", {"world": w.id, "drone": drone, "outcome": outcome,
                                                       "seen": seen})
-        self._show(self._v_uplink(w, outcome, seen))
+        self._show(visuals.v_uplink(self.d.scene if self.d else None, w, outcome, seen))
 
     def _extended_readings(self, w: World, drone: str) -> dict[str, str]:
         """An extended report's readings: everything, at full detail, with what lies under the surface."""
@@ -227,7 +228,7 @@ class DronesMixin:
             for line in rules.set_world_status(c, w, "probed"):
                 self._log(line)
             if drone == "uav":
-                self._show(self._v_signal_lost(w, {"env": seen["env"]}))
+                self._show(visuals.v_signal_lost(self.d.scene if self.d else None, w, {"env": seen["env"]}))
             return
         if roll < destroyed + captured:
             w.reports.append((c.now, f"{drone.upper()} captured. Armed humanoids seen before the feed was cut."))
@@ -236,7 +237,7 @@ class DronesMixin:
             for line in rules.capture_drone(c, w, drone):
                 self._log(line)
             if drone == "uav":
-                self._show(self._v_signal_lost(w, {}))
+                self._show(visuals.v_signal_lost(self.d.scene if self.d else None, w, {}))
             return
         w.seen.update(seen)
         w.telemetry = [f"{k.upper()}: {v}" for k, v in seen.items()]
@@ -252,7 +253,7 @@ class DronesMixin:
         if drone == "uav" and w.inhabitants != "none" and self.rng.random() < 0.4:
             for line in rules.parse_effect("reveal name {world} from comms")(c, self._wbind(w)):
                 self._log(line)
-        self._show(self._v_telemetry(w, seen, drone))
+        self._show(visuals.v_telemetry(self.d.scene if self.d else None, w, seen, drone))
         drawn = self._draw("probe", self._wbind(w))
         if drawn:
             self._start(*drawn)
@@ -272,7 +273,7 @@ class DronesMixin:
         rules.clear_uplink(self.c, wid)
         self._log(f"{drone.upper()} RECALLED FROM {w.name.upper()}")
         self._stow(drone)
-        self._show(self._v_recall(w, drone))
+        self._show(visuals.v_recall(self.d.scene if self.d else None, w, drone))
 
     def _schedule_checkin(self, w: World, drone: str) -> None:
         """Queue this drone's next check-in, 8 game hours out."""
@@ -294,7 +295,7 @@ class DronesMixin:
         w.last_visit = c.now
         self._log(f"{drone.upper()} CHECK-IN FROM {w.name.upper()} — ALL READINGS NOMINAL")
         self._schedule_checkin(w, drone)
-        self._show(self._v_drone_checkin(w, drone))
+        self._show(visuals.v_drone_checkin(self.d.scene if self.d else None, w, drone))
 
     def _drone_home(self, data: dict) -> None:
         """A team dials home the parked drone it found right after it arrived. Nothing happens if the team's
@@ -316,4 +317,4 @@ class DronesMixin:
         for line in lines:
             self._log(line)
         m.findings.extend(lines)
-        self._show(self._v_drone_home(w, team, drone))
+        self._show(visuals.v_drone_home(self.d.scene if self.d else None, w, team, drone))

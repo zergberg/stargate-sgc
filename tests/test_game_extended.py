@@ -5,6 +5,7 @@ import pytest
 
 from sgc.game import clock, rules, schedule
 from sgc.game import engine as eng
+from sgc.game.engine import visuals
 from sgc.game.state import from_dict, to_dict
 from sgc.game.world import World
 from tests.test_game_engine import Rig
@@ -254,13 +255,13 @@ def test_the_uplink_scene_fills_the_panel_or_finds_no_carrier():
     r = Rig(director=True)
     w = r.world(5)
     seen = {"env": "breathable atmosphere", "life": "none detected", "subsurface": "no anomalies"}
-    step = next(st for st in r.e._v_uplink(w, "full", seen) if st.log == "EXTENDED DATA RECEIVED")
+    step = next(st for st in visuals.v_uplink(r.d.scene, w, "full", seen) if st.log == "EXTENDED DATA RECEIVED")
     assert step.duration == eng.UPLINK_FEED_S == 10.0
     s = r.d.scene
     step.update(s, 1.0)
     assert s.panel_rows == [("ENV", "breathable atmosphere"), ("LIFE", "none detected"),
                             ("SUBSURFACE", "no anomalies")]
-    lost = next(st for st in r.e._v_uplink(w, "lost", {}) if st.log == "NO CARRIER")
+    lost = next(st for st in visuals.v_uplink(r.d.scene, w, "lost", {}) if st.log == "NO CARRIER")
     lost.update(s, 0.5)
     assert s.panel_rows == [("SIGNAL", "LOST")]
 

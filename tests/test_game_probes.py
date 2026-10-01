@@ -4,6 +4,7 @@ import pytest
 
 from sgc.game import clock, rules
 from sgc.game import engine as eng
+from sgc.game.engine import visuals
 from sgc.game.state import from_dict, to_dict
 from tests.test_game_engine import PROBE, Rig
 
@@ -99,7 +100,7 @@ def test_the_malp_feed_fills_the_panel_one_row_at_a_time():
     r = Rig(director=True)
     w = world(r)
     seen = {"env": "breathable atmosphere", "life": "none detected", "features": "ruins"}
-    steps = r.e._v_probe(w, "malp", seen, "ok")
+    steps = visuals.v_probe(r.d.scene, r.c.now, w, "malp", seen, "ok")
     feed = step(steps, "TELEMETRY RECEIVED")
     assert feed.duration == eng.MALP_FEED_S == 20.0
     s = r.d.scene
@@ -115,7 +116,7 @@ def test_the_uav_feed_runs_ninety_seconds_with_its_flight_rows_drifting():
     w = world(r)
     seen = {"env": "breathable atmosphere", "life": "none detected", "inhabitants": "no settlements",
             "subsurface": "no anomalies"}
-    feed = step(r.e._v_probe(w, "uav", seen, "ok"), "TELEMETRY RECEIVED")
+    feed = step(visuals.v_probe(r.d.scene, r.c.now, w, "uav", seen, "ok"), "TELEMETRY RECEIVED")
     assert feed.duration == eng.UAV_FEED_S == 90.0
     s = r.d.scene
     feed.update(s, 0.1)
@@ -133,7 +134,8 @@ def test_a_lost_drone_s_feed_stops_partway_with_signal_lost(drone):
     r = Rig(director=True)
     w = world(r)
     seen = {"env": "breathable atmosphere", "life": "none detected"}
-    ok, lost = r.e._v_probe(w, drone, seen, "ok"), r.e._v_probe(w, drone, seen, "destroyed")
+    ok, lost = (visuals.v_probe(r.d.scene, r.c.now, w, drone, seen, "ok"),
+                visuals.v_probe(r.d.scene, r.c.now, w, drone, seen, "destroyed"))
     full, cut = step(ok, "TELEMETRY RECEIVED").duration, step(lost, "TELEMETRY RECEIVED").duration
     assert 0.2 * full <= cut <= 0.7 * full
     s = r.d.scene
@@ -143,9 +145,10 @@ def test_a_lost_drone_s_feed_stops_partway_with_signal_lost(drone):
     else:
         step(lost, "TELEMETRY RECEIVED").update(s, 1.0)
         assert s.panel_rows == [("ENV", "breathable atmosphere"), ("SIGNAL", "LOST")]   # its last reading
-        step(r.e._v_probe(w, drone, seen, "captured"), "TELEMETRY RECEIVED").update(s, 1.0)
+        step(visuals.v_probe(r.d.scene, r.c.now, w, drone, seen, "captured"),
+             "TELEMETRY RECEIVED").update(s, 1.0)
         assert s.panel_rows == [("SIGNAL", "LOST")]                                  # cut before anything
-    assert Rig().e._v_probe(w, drone, seen, "ok") == []                     # headless: nothing to show
+    assert visuals.v_probe(None, r.c.now, w, drone, seen, "ok") == []       # headless: nothing to show
 
 
 # ---------------------------------------------------------------- an older save

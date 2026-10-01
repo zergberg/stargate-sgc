@@ -3,6 +3,7 @@ import json
 
 from sgc.game import clock
 from sgc.game import engine as eng
+from sgc.game.engine import visuals
 from sgc.game.state import from_dict, to_dict
 from sgc.model import Step
 from tests.test_game_engine import Rig, UNKNOWN
@@ -98,8 +99,8 @@ def test_a_save_mid_line_loses_the_line_on_load(monkeypatch):
 
 def test_the_checkin_visual_leaves_the_wormhole_up_when_a_prompt_is_coming():
     r = Rig(director=True)
-    closed = [st.log for st in r.e._v_checkin("SG-3") if st.log]
-    open_line = [st.log for st in r.e._v_checkin("SG-3", keep_open=True) if st.log]
+    closed = [st.log for st in visuals.v_checkin(r.d.scene, "SG-3") if st.log]
+    open_line = [st.log for st in visuals.v_checkin(r.d.scene, "SG-3", keep_open=True) if st.log]
     assert "WORMHOLE DISENGAGED" in closed
     assert "WORMHOLE DISENGAGED" not in open_line
     assert open_line and open_line[:-1] == closed[:len(open_line) - 1]        # same intro, just no shutdown

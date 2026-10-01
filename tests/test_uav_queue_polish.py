@@ -10,6 +10,7 @@ from sgc.events import REGISTRY
 from sgc.game import screens
 from sgc.game.clock import DAY
 from sgc.game.database import Database
+from sgc.game.engine import visuals
 from sgc.game.schedule import QueueItem
 from sgc.game.state import from_dict, to_dict
 from sgc.layout import compute_layout
@@ -174,7 +175,7 @@ def test_figures_stay_cheap_to_draw():
 def test_the_landed_uav_rolls_off_the_bottom_of_the_frame():
     r = Rig(director=True)
     w = r.world(5, env="normal")
-    steps = r.e._v_recall(w, "uav")                      # an older save's recall still draws it
+    steps = visuals.v_recall(r.d.scene, w, "uav")         # an older save's recall still draws it
     s = r.d.scene
     out = step(steps, "UAV RECOVERED")
     out.update(s, 0.5)

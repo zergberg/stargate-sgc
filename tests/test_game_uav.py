@@ -2,6 +2,7 @@ import pytest
 
 from sgc.game import clock
 from sgc.game import engine as eng
+from sgc.game.engine import visuals
 from sgc.game import uav
 from sgc.game.world import World
 from tests.test_game_engine import Rig, play
@@ -54,10 +55,10 @@ def test_a_contact_is_boxed_when_the_readings_name_one(seen, box):
 def test_a_uav_launch_fires_off_the_rail_and_climbs_into_the_gate():
     r = Rig(director=True)
     w = r.world(5, env="normal")
-    steps = r.e._v_drone(w, "uav")
+    steps = visuals.v_drone(r.d.scene, w, "uav")
     logs = [st.log for st in steps if st.log]
     assert logs.index("UAV LAUNCHED") < logs.index("UAV IN TRANSIT")
-    assert abs(total(steps) - total(r.e._v_drone(w, "malp"))) <= 1.0
+    assert abs(total(steps) - total(visuals.v_drone(r.d.scene, w, "malp"))) <= 1.0
     s = r.d.scene
     step(steps, "UAV LAUNCHED").update(s, 0.0)
     assert sorted(f.kind for f in s.figures) == ["rail", "uav"] and uav_of(s).pos == eng.UAV_RAIL
@@ -77,7 +78,7 @@ def test_a_uav_launch_fires_off_the_rail_and_climbs_into_the_gate():
 def test_the_malp_still_rolls():
     r = Rig(director=True)
     s = r.d.scene
-    roll = step(r.e._v_drone(r.world(5), "malp"), "MALP IN TRANSIT")
+    roll = step(visuals.v_drone(r.d.scene, r.world(5), "malp"), "MALP IN TRANSIT")
     roll.update(s, 0.5)
     assert [f.kind for f in s.figures] == ["malp"]
 
@@ -88,7 +89,7 @@ def test_a_uav_report_plays_the_aerial_feed_and_a_malp_report_does_not():
     r = Rig(director=True)
     w = r.world(5, env="toxic", inhabitants="human")
     seen = {"env": "toxic atmosphere", "life": "life signs", "inhabitants": "settlement"}
-    show = step(r.e._v_telemetry(w, seen, "uav"), "TELEMETRY RECEIVED")
+    show = step(visuals.v_telemetry(r.d.scene, w, seen, "uav"), "TELEMETRY RECEIVED")
     assert show.duration == 6.0
     s = r.d.scene
     show.update(s, 0.5)
@@ -98,14 +99,14 @@ def test_a_uav_report_plays_the_aerial_feed_and_a_malp_report_does_not():
     assert [k for k, _ in s.panel_rows] == ["ALT", "HDG", "SPEED", "FUEL", "ENV", "LIFE", "INHABITANTS"]
     show.update(s, 1.0)
     assert s.feed is None
-    step(r.e._v_telemetry(w, seen), "TELEMETRY RECEIVED").update(s, 0.5)
+    step(visuals.v_telemetry(r.d.scene, w, seen), "TELEMETRY RECEIVED").update(s, 0.5)
     assert s.feed is None and s.panel_rows == [(k.upper(), v) for k, v in seen.items()]
 
 
 def test_the_signal_lost_visual_goes_to_static():
     r = Rig(director=True)
     w = r.world(5, env="toxic", seen={})                          # nothing known about it yet
-    steps = r.e._v_signal_lost(w, {})
+    steps = visuals.v_signal_lost(r.d.scene, w, {})
     s = r.d.scene
     static = step(steps, "UAV SIGNAL LOST")
     assert static.duration == pytest.approx(1.5)
@@ -113,7 +114,7 @@ def test_the_signal_lost_visual_goes_to_static():
     assert s.feed.lost == pytest.approx(0.5) and s.feed.tint == "neutral"     # the env is still hidden
     static.update(s, 1.0)
     assert s.feed.lost == 1.0
-    assert Rig().e._v_signal_lost(w, {}) == []                                # headless: nothing to show
+    assert visuals.v_signal_lost(None, w, {}) == []                            # headless: nothing to show
 
 
 def test_a_uav_shot_down_plays_signal_lost_and_a_malp_does_not(monkeypatch):

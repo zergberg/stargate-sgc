@@ -2,6 +2,7 @@ import json
 
 from sgc.game import clock, rules, schedule
 from sgc.game import engine as eng
+from sgc.game.engine import visuals
 from sgc.game.state import from_dict, to_dict
 from tests.test_game_engine import Rig
 from tests.test_game_extended import collecting
@@ -160,7 +161,7 @@ def test_a_wreck_waits_for_mission_end_even_though_the_drone_goes_home_early(mon
 def test_the_scene_plays_idc_and_the_drone_coming_through():
     r = Rig(director=True)
     w = r.world(5)
-    logs = [st.log for st in r.e._v_drone_home(w, "SG-2", "malp") if st.log]
+    logs = [st.log for st in visuals.v_drone_home(r.d.scene, w, "SG-2", "malp") if st.log]
     assert "IDC RECEIVED — SG-2" in logs and any("COMING HOME" in line for line in logs)
-    logs_uav = [st.log for st in r.e._v_drone_home(w, "SG-2", "uav") if st.log]
+    logs_uav = [st.log for st in visuals.v_drone_home(r.d.scene, w, "SG-2", "uav") if st.log]
     assert "IDC RECEIVED — SG-2" in logs_uav and "UAV RETURNING THROUGH THE GATE" in logs_uav

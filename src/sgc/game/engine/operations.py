@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from .. import clock, economy, factions, rules
+from . import visuals
 from .core import INTEL_ROLL
 from ..state import Mission, available_teams, demote, has_specialty, rank_index
 from ..world import World
@@ -56,7 +57,7 @@ class OperationsMixin:
             c.events.push(c.now + DRONE_HOME_MINUTES, "drone_home",
                           {"world": w.id, "mission": m.id, "team": m.team, "drone": w.drone})
         self._log(f"{m.team} DEPARTING FOR {w.name.upper()}")
-        self._show(self._v_departure(w, m.team))
+        self._show(visuals.v_departure(self.d.scene if self.d else None, w, m.team))
 
     def _checkin(self, data: dict) -> None:
         c = self.c
@@ -75,7 +76,7 @@ class OperationsMixin:
         # Assumes a routine "start" node never `goto`s to a node that raises a prompt — true of every scenario
         # bundled today, but a scenario that broke it would keep_open=False and lose its line right away.
         prompt = drawn is not None and not drawn[0].nodes["start"].routine
-        self._show(self._v_checkin(m.team, keep_open=prompt))
+        self._show(visuals.v_checkin(self.d.scene if self.d else None, m.team, keep_open=prompt))
         if drawn:
             self._start(*drawn)                            # its end schedules the next check-in
         else:
@@ -121,7 +122,9 @@ class OperationsMixin:
         delay = clock.HOUR if data["by"] == "malp" else 6 * clock.HOUR
         c.events.push(c.now + delay, "search_report", {"mission": data["mission"], "by": data["by"]})
         w = c.worlds[c.mission(data["mission"]).world]
-        self._show(self._v_drone(w, "malp") if data["by"] == "malp" else self._v_departure(w, data["by"]))
+        scene = self.d.scene if self.d else None
+        self._show(visuals.v_drone(scene, w, "malp") if data["by"] == "malp"
+                   else visuals.v_departure(scene, w, data["by"]))
 
     def _search_report(self, data: dict) -> None:
         c = self.c
@@ -205,7 +208,7 @@ class OperationsMixin:
         if shown:
             self._hold("team_return")                      # after the hostiles: the team's own arrival
         else:
-            self._show(self._v_team_return(m.team))
+            self._show(visuals.v_team_return(self.d.scene if self.d else None, m.team))
         for line in self._bring_home(m, w):
             self._log(line)
             m.findings.append(line)
