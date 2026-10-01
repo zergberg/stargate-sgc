@@ -64,8 +64,10 @@ def _db_keys(tab: str) -> list[tuple[str, str]]:
     keys = [("←→", "TABS"), ("↑↓", "SCROLL" if tab == "world" else "SELECT")]
     if tab in OPENS:
         keys.append(("⏎", "OPEN"))
-    if tab in ORDERS_TABS:
+    if tab == "world":                 # the world tab has no file of its own left to open with Enter
         keys.append(("⏎", "ORDERS"))
+    elif tab in ORDERS_TABS:
+        keys.append(("o", "ORDERS"))
     if tab == "addresses":
         keys += [("/", "SEARCH"), ("s", "SORT"), ("f", "FILTER")]
     if tab == "queue":
@@ -79,8 +81,11 @@ def _db_help_entries(tab: str) -> list[tuple[str, str]]:
     entries = [("←→", "switch tabs"), ("↑↓", "select, or scroll a world file")]
     if tab in OPENS:
         entries.append(("⏎", "open a world's file"))
+    if tab == "world":
+        entries.append(("⏎", "open the ORDERS panel for this world"))
+    elif tab in ORDERS_TABS:
+        entries.append(("o", "open the ORDERS panel for the address"))
     if tab in ORDERS_TABS:
-        entries.append(("⏎", "open the ORDERS panel for the address"))
         entries.append(("1-9 ↑↓ ⏎", "choose in the ORDERS panel"))
         entries.append(("Esc ^C", "back a step in the panel, then close it"))
     if tab == "addresses":

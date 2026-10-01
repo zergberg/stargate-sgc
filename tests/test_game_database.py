@@ -74,8 +74,6 @@ def test_navigation_and_the_world_file():
     db = Database(c)
     db.key("down")
     assert db.selected().key == ws[2].id
-    db.tab, db.sel = "missions", 0                  # the missions tab still opens a world's file with Enter
-    assert db.selected().key == "1"                 # SG-2's completed mission, to Ha'shek
     db.key("enter")
     assert db.tab == "world" and db.world_id == ws[2].id
     text = "\n".join(db.detail())
@@ -201,7 +199,8 @@ def test_opening_a_world_file_resets_the_scroll():
     c, ws = camp()
     db = Database(c)
     db.scroll = 9
-    db.key("right")                                # addresses -> world
+    db.key("down")
+    db.key("enter")
     assert db.tab == "world" and db.scroll == 0
     db.scroll = 4
     db.key("left")                                 # back to addresses

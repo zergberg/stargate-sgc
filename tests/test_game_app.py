@@ -282,7 +282,7 @@ def test_an_alarm_drops_the_orders_panel_but_reopening_keeps_the_tab(tmp_path):
     app._handle_keys(["d"])
     target = list(app.engine.c.worlds)[3]
     app.db.sel = next(i for i, r in enumerate(app.db.rows()) if r.key == target)
-    app.db.key("enter")
+    app.db.key("o")
     assert app.db.orders is not None and app.db.orders.world_id == target
     app._alarm("TEST", "a half-finished order should not survive this")
     assert app.view == "gate" and app.db is None

@@ -376,7 +376,8 @@ def test_the_database_legend_is_tab_aware():
     db = Database(db_campaign()[0])
     screens.draw_database(cv, layout, db, "bar")
     bottom = cv.text().split("\n")[-1]
-    assert "/ SEARCH" in bottom and "s SORT" in bottom and "f FILTER" in bottom and "⏎ ORDERS" in bottom
+    assert "/ SEARCH" in bottom and "s SORT" in bottom and "f FILTER" in bottom
+    assert "⏎ OPEN" in bottom and "o ORDERS" in bottom
     db.tab = "world"
     screens.draw_database(cv, layout, db, "bar")
     bottom = cv.text().split("\n")[-1]
@@ -529,11 +530,13 @@ def test_the_engines_reply_is_clipped_never_silently_cut():
 def test_open_is_in_the_legend_wherever_enter_opens_a_world():
     from sgc.game.database import OPENS, ORDERS_TABS
     for tab in TABS:
-        opens, orders = tab in OPENS, tab in ORDERS_TABS
+        opens, orders, enters_orders = tab in OPENS, tab in ORDERS_TABS, tab == "world"
         assert (("⏎", "OPEN") in screens._db_keys(tab)) == opens, tab
-        assert (("⏎", "ORDERS") in screens._db_keys(tab)) == orders, tab
+        assert (("⏎", "ORDERS") in screens._db_keys(tab)) == enters_orders, tab
+        assert (("o", "ORDERS") in screens._db_keys(tab)) == (orders and not enters_orders), tab
         assert ("⏎ OPEN" in screens._db_hint(tab)) == opens, tab
-        assert any(k == "⏎" for k, _ in screens._db_help_entries(tab)) == (opens or orders), tab
+        assert any(k == "⏎" for k, _ in screens._db_help_entries(tab)) == (opens or enters_orders), tab
+        assert any(k == "o" for k, _ in screens._db_help_entries(tab)) == (orders and not enters_orders), tab
 
 
 @pytest.mark.parametrize("tab", ["factions", "trade", "arcs"])

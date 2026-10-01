@@ -31,8 +31,8 @@ COLUMNS = {
     "world": (),
 }
 SEARCHABLE = ("addresses", "queue")
-OPENS = ("missions", "intel", "trade", "arcs")                   # tabs where Enter opens a world's file
-ORDERS_TABS = ("addresses", "world")        # Part 9: tabs where Enter opens the ORDERS panel instead
+OPENS = ("addresses", "missions", "intel", "trade", "arcs")      # tabs where Enter opens a world's file
+ORDERS_TABS = ("addresses", "world")        # Part 9: tabs where o opens the ORDERS panel (world: Enter too)
 HINT = "EVERY ADDRESS VISITED · RE-SURVEY, STUDY RUINS OR ASK ALLIES FOR MORE"
 ALLY_FLAGS = {"tokra": "ally.tokra", "asgard": "ally.asgard", "tollan": "ally.tollan", "nox": "ally.nox",
               "jaffa": "ally.jaffa"}
@@ -225,7 +225,7 @@ class Database:
 
     # ------------------------------------------------------------------ the ORDERS panel (Part 9)
     def _order_target(self) -> str | None:
-        """The address Enter opens ORDERS for: the selected row on Addresses, or the World file's own
+        """The address ORDERS opens for: the selected row on Addresses, or the World file's own
         address."""
         if self.tab == "world":
             return self.world_id if self.world_id in self.c.worlds else None
@@ -342,7 +342,11 @@ class Database:
             n = len(self.rows())
             if n:
                 self.sel = (self.sel + (-1 if k == "up" else 1)) % n
-        elif k == "enter" and self.tab in ORDERS_TABS:
+        elif k == "enter" and self.tab == "world":        # the world tab's only Enter: it has no world
+            wid = self._order_target()                    # file of its own to open
+            if wid is not None:
+                self._open_orders(wid)
+        elif k == "o" and self.tab in ORDERS_TABS:
             wid = self._order_target()
             if wid is not None:
                 self._open_orders(wid)
