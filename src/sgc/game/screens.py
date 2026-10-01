@@ -485,17 +485,20 @@ def _item_rows(label: str, w: int) -> list[str]:
 ORDERS_ROWS = 9          # the ORDERS panel's items (the world screen tops out at 7, team_pick and type_pick less
 
 
-def _orders_height(n: int, avail: int) -> int:
-    """Rows for the Database's ORDERS panel holding n items, given avail free rows in the table area: one
-    row per item (at least one, at most ORDERS_ROWS) plus its border, shrunk to fit."""
-    want = min(ORDERS_ROWS, max(1, n)) + 2
+def _orders_height(items: list[tuple[str, bool]], width: int, avail: int) -> int:
+    """Rows for the Database's ORDERS panel holding these items (each wrapped to width, as
+    draw_orders_panel will draw them), given avail free rows in the table area: one row per label line (at
+    least one, at most ORDERS_ROWS) plus its border, shrunk to fit."""
+    lines = sum(len(_item_rows(label, width)) for label, _ in items)
+    want = min(ORDERS_ROWS, max(1, lines)) + 2
     return want if avail >= want else max(0, avail if avail >= 3 else 0)
 
 
 def draw_orders_panel(canvas: Canvas, r: Rect, room: Room) -> None:
     """Part 9: the Database's ORDERS panel, a box over the lower part of the Database hosting the briefing
-    room's Room on an address. Draws the Room's own items, greyed rows, notice and note-typing state --
-    never its logic, which stays only in room.py."""
+    room's Room on an address. Draws the Room's own items -- every line of a label, not just the first --
+    greyed rows, notice and note-typing state -- never its logic, which stays only in room.py. Scrolls to
+    keep the selection on screen, mirroring _draw_room_list."""
     if r.h < 3 or r.w < 6:
         return
     canvas.fill(r, " ")
@@ -509,15 +512,23 @@ def draw_orders_panel(canvas: Canvas, r: Rect, room: Room) -> None:
         return
     items = room.items()
     space = max(1, bottom - y - (1 if room.notice else 0))
-    for i, (label, ok) in enumerate(items):
-        if y - r.y - 1 >= space:
-            break
+    blocks = [_item_rows(label, width) for label, _ in items]
+    # scroll so the selection is on screen: show from the top if it fits, else end the view on it
+    first = 0
+    while first < room.sel and sum(len(b) for b in blocks[first:room.sel + 1]) > space:
+        first += 1
+    top_y = y
+    for i in range(first, len(items)):
+        _, ok = items[i]
         sel = i == room.sel
         num = f"{i + 1}" if i < 9 else " "
-        text = f" {num}  {label.split(chr(10))[0]}"
-        canvas.put(x, y, _clip(text, width).ljust(width)[:width], (WHITE if sel else AMBER) if ok else DIM,
-                   HILITE if sel else None, bold=sel)
-        y += 1
+        for j, row in enumerate(blocks[i]):
+            if y - top_y >= space:
+                break
+            text = f" {num}  {row}" if j == 0 else f"    {row}"
+            canvas.put(x, y, _clip(text, width).ljust(width)[:width], (WHITE if sel else AMBER) if ok else DIM,
+                       HILITE if sel else None, bold=sel and j == 0)
+            y += 1
     if room.notice and y < bottom:
         canvas.put(x, y, _clip(room.notice, width), GREEN, bold=True)
 
@@ -581,7 +592,7 @@ def _draw_database_compact(canvas: Canvas, layout: Layout, db: Database) -> None
                        bold=sel)
         if not table:
             canvas.put(0, y, _nothing(db)[:cols], DIM)
-    hint = f" {db.message} " if db.tab == "queue" and db.message else _db_hint(db.tab)
+    hint = f" {db.message} " if db.message else _db_hint(db.tab)
     canvas.put(0, bottom, _clip(hint, cols), AMBER, HEADER_BG, bold=True)
 
 
@@ -646,7 +657,8 @@ def draw_database(canvas: Canvas, layout: Layout, db: Database, legend: str) -> 
         if hint:
             canvas.put(2, bottom - 1, _clip(hint, cols - 4), CYAN, bold=True)
     if db.orders is not None:
-        panel_h = _orders_height(len(db.orders.items()), bottom - top)
+        items = db.orders.items()
+        panel_h = _orders_height(items, cols - 4, bottom - top)
         if panel_h:
             draw_orders_panel(canvas, Rect(0, bottom - panel_h, cols, panel_h), db.orders)
     if legend != "off":

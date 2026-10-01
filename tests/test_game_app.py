@@ -22,6 +22,7 @@ from sgc.game.save import Saves
 from sgc.layout import compute_layout
 from sgc.model import _teams
 from sgc.term.canvas import Canvas
+from sgc.term.detect import Caps
 from tests.test_app import PY, drain, wait
 
 
@@ -288,6 +289,20 @@ def test_an_alarm_drops_the_orders_panel_but_reopening_keeps_the_tab(tmp_path):
     assert app.view == "gate" and app.db is None
     app._handle_keys(["d"])
     assert app.view == "database" and app.db.orders is None and app.db.tab == "addresses"
+
+
+def test_resizing_to_compact_closes_the_orders_panel(tmp_path):
+    app = start(tmp_path)
+    app._handle_keys(["d"])
+    target = list(app.engine.c.worlds)[3]
+    app.db.sel = next(i for i, r in enumerate(app.db.rows()) if r.key == target)
+    app.db.key("o")
+    assert app.db.orders is not None
+    app.caps = Caps("blocks", False, 9, 18, False, False)
+    app.term.size = lambda: (60, 16, 9, 18)            # a resize down into compact
+    app._relayout()
+    assert app.db.compact is True and app.db.orders is None
+    assert app.db.message == ""                        # no key was pressed -- just no panel left to show
 
 
 def test_the_legend_cycles_and_is_remembered(tmp_path):

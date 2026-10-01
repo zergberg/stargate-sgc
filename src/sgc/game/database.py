@@ -101,6 +101,7 @@ class Database:
         self.armed: str | None = None   # the QUEUE row x was pressed on once: x again there confirms
         self.message = ""               # the engine's reply to the last x, [ or ]
         self.orders: "Room | None" = None   # Part 9: the hosted Room, open on an address's action screen
+        self.compact = False            # the app's layout.mode == "compact": the ORDERS panel needs full size
 
     # ------------------------------------------------------------------ rows
     def _team_on(self, w: World) -> bool:
@@ -263,6 +264,24 @@ class Database:
         back the tab, search and scroll but not the panel."""
         self.orders = None
 
+    def set_compact(self, compact: bool) -> None:
+        """The app calls this whenever it relays out or opens the Database, reporting whether it's drawn
+        compact. The ORDERS panel needs a full-size pane, so a resize into compact while it's open closes
+        it, same as an alarm would."""
+        self.compact = compact
+        if compact:
+            self.orders = None
+
+    def _try_open_orders(self, wid: str | None) -> None:
+        """Open ORDERS on this address, unless the Database is compact: there's no room for the panel, so
+        it stays closed and the tab gets a reply saying why instead."""
+        if wid is None:
+            return
+        if self.compact:
+            self.message = "ORDERS NEED A LARGER PANE"
+            return
+        self._open_orders(wid)
+
     # ------------------------------------------------------------------ the world file
     def detail(self) -> list[str]:
         w = self.c.worlds.get(self.world_id)
@@ -343,13 +362,9 @@ class Database:
             if n:
                 self.sel = (self.sel + (-1 if k == "up" else 1)) % n
         elif k == "enter" and self.tab == "world":        # the world tab's only Enter: it has no world
-            wid = self._order_target()                    # file of its own to open
-            if wid is not None:
-                self._open_orders(wid)
+            self._try_open_orders(self._order_target())    # file of its own to open
         elif k == "o" and self.tab in ORDERS_TABS:
-            wid = self._order_target()
-            if wid is not None:
-                self._open_orders(wid)
+            self._try_open_orders(self._order_target())
         elif k == "enter" and self.tab in OPENS:
             row = self.selected()
             if row is not None and self.tab == "missions":

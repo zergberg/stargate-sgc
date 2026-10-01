@@ -6,7 +6,7 @@ from sgc.game.database import ORDERS_TABS, Database
 from sgc.game.engine import Engine
 from sgc.game.room import Room
 from sgc.game.state import new_campaign
-from sgc.layout import compute_layout
+from sgc.layout import Rect, compute_layout
 from sgc.term.canvas import Canvas
 
 
@@ -249,3 +249,131 @@ def test_a_greyed_row_and_the_notice_draw_in_the_panel():
     db.key("5")
     text = render(db)
     assert "PROBE IT FIRST" in text
+
+
+# ------------------------------------------------------------------ review: the panel is invisible compact
+
+def test_o_in_a_compact_database_gives_a_notice_instead_of_the_panel():
+    db, c, engine = db_engine()
+    target = list(c.worlds)[3]
+    select_address(db, target)
+    db.set_compact(True)
+    assert db.key("o") is None
+    assert db.orders is None
+    assert db.message == "ORDERS NEED A LARGER PANE"
+    assert db.tab == "addresses"
+
+
+def test_enter_on_the_world_file_in_a_compact_database_gives_the_same_notice():
+    db, c, engine = db_engine()
+    target = list(c.worlds)[3]
+    db.world_id, db.tab = target, "world"
+    db.set_compact(True)
+    db.key("enter")
+    assert db.orders is None and db.message == "ORDERS NEED A LARGER PANE"
+
+
+def test_other_keys_still_work_in_a_compact_database():
+    db, c, engine = db_engine()
+    db.set_compact(True)
+    before = db.sel
+    db.key("down")
+    assert db.sel != before
+    db.key("right")
+    assert db.tab == "world"
+
+
+def test_becoming_compact_closes_an_open_panel():
+    db, c, engine = db_engine()
+    target = list(c.worlds)[3]
+    select_address(db, target)
+    db.key("o")
+    assert db.orders is not None
+    db.set_compact(True)
+    assert db.orders is None
+
+
+def test_compact_database_never_draws_the_panel_even_if_one_is_forced_open():
+    db, c, engine = db_engine()
+    target = list(c.worlds)[3]
+    select_address(db, target)
+    db.key("o")
+    db.orders.open_on_world(target)                 # a panel somehow still open underneath
+    layout = compute_layout(60, 16, 9, 18)
+    cv = Canvas(layout.cols, layout.rows)
+    screens.draw_database(cv, layout, db, "bar")     # must not hang or crash drawing an invisible panel
+    assert "ORDERS ·" not in cv.text()
+
+
+def test_the_compact_hint_line_shows_the_notice_on_the_addresses_tab():
+    db, c, engine = db_engine()
+    target = list(c.worlds)[3]
+    select_address(db, target)
+    db.set_compact(True)
+    db.key("o")
+    layout = compute_layout(60, 16, 9, 18)
+    cv = Canvas(layout.cols, layout.rows)
+    screens.draw_database(cv, layout, db, "bar")
+    assert "ORDERS NEED A LARGER PANE" in cv.text().split("\n")[-1]
+
+
+# ------------------------------------------------------------------ review: two-line labels in the panel
+
+def injured_team_target(c, engine):
+    """A probed world with one team injured (a two-line, greyed TEAM_PICK row), so ASSIGN TEAM shows a
+    reason."""
+    target = list(c.worlds)[3]
+    c.worlds[target].status = "probed"
+    from sgc.game.clock import DAY, HOUR
+    c.teams["SG-2"].status, c.teams["SG-2"].until = "injured", c.now + 1 * DAY + 20 * HOUR
+    return target
+
+
+def test_the_team_picker_shows_an_injured_teams_reason():
+    db, c, engine = db_engine()
+    target = injured_team_target(c, engine)
+    select_address(db, target)
+    db.key("o")
+    db.key("5")                                      # ASSIGN TEAM -> team_pick
+    assert db.orders.screen == "team_pick"
+    text = render(db)
+    assert "INJURED 1D 20H" in text
+
+
+class _FakeRoom:
+    """Just enough of Room's interface for draw_orders_panel: a fixed item list and selection."""
+    world_id = None
+    text_mode = False
+    notice = ""
+
+    def __init__(self, items, sel):
+        self._items, self.sel = items, sel
+        self.c = type("C", (), {"worlds": {}})()
+
+    def items(self):
+        return self._items
+
+
+def test_two_line_labels_render_every_line_not_just_the_first():
+    items = [("MALP PROBE", True), ("ASSIGN TEAM\nSTAGING: ABYDOS", False)]
+    room = _FakeRoom(items, sel=0)
+    cv = Canvas(40, 10)
+    screens.draw_orders_panel(cv, Rect(0, 0, 40, 10), room)
+    text = cv.text()
+    assert "ASSIGN TEAM" in text and "STAGING: ABYDOS" in text
+
+
+def test_orders_height_counts_every_label_line_not_just_the_item_count():
+    one_liners = [("A", True), ("B", True)]
+    two_liners = [("A\nreason", False), ("B\nreason", False)]
+    assert screens._orders_height(two_liners, 30, 20) > screens._orders_height(one_liners, 30, 20)
+
+
+def test_the_panel_scrolls_to_keep_a_later_selection_on_screen():
+    items = [(f"ITEM {i}\nREASON {i}", True) for i in range(6)]
+    room = _FakeRoom(items, sel=5)                    # the last, two-line item selected
+    cv = Canvas(40, 10)                               # too short to show all 12 label lines
+    screens.draw_orders_panel(cv, Rect(0, 0, 40, 10), room)
+    text = cv.text()
+    assert "ITEM 5" in text and "REASON 5" in text
+    assert "ITEM 0" not in text                       # scrolled the earliest items off screen

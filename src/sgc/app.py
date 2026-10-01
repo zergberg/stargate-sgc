@@ -121,6 +121,8 @@ class App:
         self.caps = replace(self.caps, cell_w=cw, cell_h=ch)
         self.backend.caps = self.caps
         self.layout = compute_layout(cols, rows, cw, ch)
+        if self.db is not None:               # a resize into compact closes a half-open ORDERS panel: it
+            self.db.set_compact(self.layout.mode == "compact")   # needs a full-size pane
         self.canvas = Canvas(cols, rows)
         if not (self.mode == "game" and self.view == "database"):     # the Database has the whole screen
             self.canvas.set_holes([self.layout.gate, self.layout.bar])
@@ -261,6 +263,7 @@ class App:
 
     def _open_database(self) -> None:
         self.db, self._kept_db = self._kept_db or Database(self.engine.c, self.engine.schedule_view, self.engine), None
+        self.db.set_compact(self.layout.mode == "compact")  # the layout may have changed while kept
         self.db.disarm()                          # a cancel is confirmed in one sitting
         self._db_from, self.view = self.view, "database"
         self.canvas.set_holes([])
