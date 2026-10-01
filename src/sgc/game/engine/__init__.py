@@ -11,9 +11,10 @@ from .core import (CAPTURED, CHECKIN_LINE_MINUTES, CoreMixin, DESTROYED, DETAIL,
                     SEEN, SHARE_ODDS, UAV_CRUISE, UAV_FEED_S, UAV_RAIL, UPLINK_FEED_S, UPLINK_HOURS,
                     UPLINK_ODDS, team_label, uplink_odds, uplink_outcome)
 from .ending import EndingMixin
+from .scene import SceneMixin
 
 
-class Engine(CoreMixin, EndingMixin):
+class Engine(CoreMixin, EndingMixin, SceneMixin):
     pass
 
 
