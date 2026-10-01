@@ -13,18 +13,18 @@ import random
 import re
 from typing import Callable
 
-from .. import sequences as sq
-from ..director import Director
-from ..events import REGISTRY, EventContext
-from ..events.common import cleanup, start_outgoing
-from ..model import Figure, Prompt, Scene, Step
-from . import arcs, clock, economy, factions, orders, roster, rules, scoring, trade, uav
-from .content import TEXT_LEVELS, Node, Outcome, Scenario
-from .database import team_status
-from .orders import SITUATIONS
-from .state import Campaign, Mission, available_teams, demote, has_specialty, rank_index, team_names
-from .world import GOAULD, World, faction_name, readings, subsurface
-from . import schedule
+from ... import sequences as sq
+from ...director import Director
+from ...events import REGISTRY, EventContext
+from ...events.common import cleanup, start_outgoing
+from ...model import Figure, Prompt, Scene, Step
+from .. import arcs, clock, economy, factions, orders, roster, rules, scoring, trade, uav
+from ..content import TEXT_LEVELS, Node, Outcome, Scenario
+from ..database import team_status
+from ..orders import SITUATIONS
+from ..state import Campaign, Mission, available_teams, demote, has_specialty, rank_index, team_names
+from ..world import GOAULD, World, faction_name, readings, subsurface
+from .. import schedule
 
 DETAIL = {"recruit": "full", "officer": "partial", "commander": "minimal"}
 INCOMING_EVERY = (36, 96)            # game hours between random incoming wormholes
@@ -117,7 +117,7 @@ def _shown(n: int, p: float) -> int:
 EXACT_TYPES = ("rescue", "recover")
 
 
-class Engine:
+class CoreMixin:
     def __init__(self, campaign: Campaign, scenarios: dict[str, Scenario], director: Director | None = None,
                  pace_override: int | None = None,
                  save: Callable[[Campaign], None] | None = None,
