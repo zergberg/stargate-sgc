@@ -6,18 +6,19 @@ from __future__ import annotations
 import sys as _sys
 
 from . import core
-from .core import (CAPTURED, CoreMixin, DESTROYED, DETAIL, DRONE_HOME_MINUTES,
+from .core import (CoreMixin, DETAIL, DRONE_HOME_MINUTES,
                     FOLLOWED, INTEL_ROLL, MALP_FEED_S, MISS, REPAIR, SALVAGE, SEARCH,
-                    SEEN, SHARE_ODDS, UAV_CRUISE, UAV_FEED_S, UAV_RAIL, UPLINK_FEED_S, UPLINK_HOURS,
-                    UPLINK_ODDS, team_label, uplink_odds, uplink_outcome)
+                    SEEN, SHARE_ODDS, UAV_CRUISE, UAV_FEED_S, UAV_RAIL, UPLINK_FEED_S,
+                    team_label)
 from .actions import ActionsMixin, EXTENDED, PLANNABLE
 from .alarms import AlarmsMixin, CHECKIN_LINE_MINUTES
+from .drones import CAPTURED, DESTROYED, DronesMixin, UPLINK_HOURS, UPLINK_ODDS, uplink_odds, uplink_outcome
 from .ending import EndingMixin
 from .scene import SceneMixin
 from .scenarios import ScenariosMixin
 
 
-class Engine(CoreMixin, ActionsMixin, EndingMixin, SceneMixin, ScenariosMixin, AlarmsMixin):
+class Engine(CoreMixin, ActionsMixin, DronesMixin, EndingMixin, SceneMixin, ScenariosMixin, AlarmsMixin):
     pass
 
 
