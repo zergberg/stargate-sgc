@@ -16,7 +16,6 @@ FOLLOWED = 0.15                      # chance hostiles follow a team home from a
 SALVAGE = {"crashed": 60, "shot_down": 30}     # % chance a team can bring a UAV wreck home for repair
 REPAIR = economy.PRICES["uav"] // 2  # funding to repair a salvaged UAV
 DRONE_HOME_MINUTES = 15              # game minutes after a team departs before it dials home a parked drone
-CONTACT_TYPES = ("contact", "trade", "aid")   # these end in CONTACT; the rest in SURVEYED
 
 
 class OperationsMixin:

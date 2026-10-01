@@ -11,9 +11,6 @@ from ..world import GOAULD, World
 TITLES = {"incoming": "INCOMING", "probe": "TELEMETRY", "checkin": "CHECK-IN", "debrief": "DEBRIEF",
           "faction": "SECURITY", "arc": "PRIORITY ONE"}
 URGENT_KINDS = ("incoming", "faction", "arc")       # their visuals always play, even over other traffic
-# Rescue and recover missions draw only scenarios written for them: a generic one would never free the
-# captive or bring the drone home.
-EXACT_TYPES = ("rescue", "recover")
 
 
 class ScenariosMixin:

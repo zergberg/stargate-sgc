@@ -7,10 +7,6 @@ from ..orders import SITUATIONS
 from ..state import Mission, available_teams, has_specialty
 
 EXTENDED = {"malp": "MALP EXTENDED REPORT", "uav": "UAV EXTENSIVE SURVEY"}
-MISSION_HOURS = {"survey": 24, "contact": 36, "trade": 30, "raid": 18, "study": 36, "rescue": 20,
-                 "recover": 12, "mine": 48, "aid": 30}
-MISSION_NEEDS = {"contact": "diplomatic", "trade": "diplomatic", "raid": "combat", "study": "science",
-                 "aid": "medical"}
 PLANNABLE = ("probed", "surveyed", "contact", "hostile")
 
 
