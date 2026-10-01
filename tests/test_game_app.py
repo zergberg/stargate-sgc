@@ -429,21 +429,20 @@ def test_walking_on_an_idle_gate_starts_at_once(tmp_path):
     assert not app._walking and app.director.scene.view_p < 0.01
 
 
-def test_walking_cuts_the_ambient_gate_scene(tmp_path):
+def test_walking_never_shuts_a_drone_checkins_wormhole(tmp_path):
     app = start(tmp_path)
     run_until(app, 15, lambda a: a.director.idle)
-    list(app.engine.c.worlds.values())[0].drone = "malp"    # a parked drone to uplink from
-    app.engine._quiet = eng.IDLE_SCENE                  # the quiet gate plays its ambient scene now
+    w = list(app.engine.c.worlds.values())[0]
+    w.drone = "malp"
+    app.engine.c.events.push(app.engine.c.now, "drone_checkin", {"world": w.id, "drone": "malp"})
     tick(app)
-    assert app.engine.ambient and not app.director.idle
-    assert run_until(app, 30, lambda a: a.director.scene.horizon == "open")    # the uplink's wormhole is up
-    assert app.engine.ambient and not app.director.idle
+    assert not app.director.idle
+    assert run_until(app, 30, lambda a: a.director.scene.horizon == "open")    # the check-in's wormhole is up
     app._handle_keys(["b"])
-    assert app.view == "briefing" and app._walking and not app._walk_behind
-    assert not app.engine.ambient                       # the walk is no ambient scene: real traffic may cut it
-    assert run_until(app, app.cfg.transition_seconds + 4, lambda a: not a._walking)
+    assert app.view == "briefing" and app._walking and app._walk_behind       # real traffic: the walk waits
+    assert app.director.scene.horizon == "open"                               # never cut
+    assert run_until(app, app.cfg.transition_seconds + 20, lambda a: not a._walking)
     assert app.director.scene.view_p < 0.01 and app.director.scene.horizon == "off"
-    assert not app.engine.ambient
 
 
 def test_q_does_not_quit_while_walking_down(tmp_path):
@@ -609,16 +608,17 @@ def test_q_mid_walk_says_why_once(tmp_path):
 
 
 # ---------------------------------------------------------------- walks, searches, saves
-def ambient_on(app):
-    """A quiet gate plays its ambient science scene; returns once its wormhole is up."""
-    list(app.engine.c.worlds.values())[0].drone = "malp"    # a parked drone to uplink from
-    app.engine._quiet = eng.IDLE_SCENE
+def checkin_on(app):
+    """A drone's scheduled check-in is dialling; returns once its wormhole is up."""
+    w = list(app.engine.c.worlds.values())[0]
+    w.drone = "malp"
+    app.engine.c.events.push(app.engine.c.now, "drone_checkin", {"world": w.id, "drone": "malp"})
     tick(app)
-    assert app.engine.ambient and not app.director.idle
+    assert not app.director.idle
     assert run_until(app, 30, lambda a: a.director.scene.horizon == "open")
 
 
-def test_a_walk_queued_behind_the_ambient_scene_survives_the_traffic_that_cuts_it(tmp_path, monkeypatch):
+def test_a_walk_queued_behind_real_traffic_survives_the_traffic_that_cuts_it(tmp_path, monkeypatch):
     monkeypatch.setattr(eng, "MISS", (101, 101, 101, 101))          # the next check-in is missed
     app = start(tmp_path)
     e, c = app.engine, app.engine.c
@@ -628,9 +628,9 @@ def test_a_walk_queued_behind_the_ambient_scene_survives_the_traffic_that_cuts_i
     assert run_until(app, 60, lambda a: a.director.idle and c.gate_until <= c.now)
     app._handle_keys(["b"])
     assert run_until(app, 10, lambda a: not a._walking) and app.view == "briefing"
-    ambient_on(app)
+    checkin_on(app)
     c.events.push(c.now, "checkin", {"mission": c.missions[0].id})
-    tick(app)                                          # a missed check-in: an alarm with nothing to show
+    assert run_until(app, 60, lambda a: a.engine.prompt is not None)   # the check-in's own gate frees up first
     assert e.prompt is not None and e.prompt.title == "MISSED CHECK-IN"
     assert app.view == "gate" and app._walking
     assert e.probe(worlds[2].id).startswith("MALP QUEUED")      # the next real traffic
@@ -648,15 +648,6 @@ def test_a_lost_walk_heals_itself(tmp_path):
     app.director.skip(log=None)                        # something threw the walk away
     assert run_until(app, 10, lambda a: not a._walking)
     assert app.view == "briefing" and app.director.scene.view_p < 0.001 and not app._walk_behind
-
-
-def test_an_alarm_cuts_the_ambient_scene(tmp_path):
-    app = start(tmp_path)
-    assert run_until(app, 15, lambda a: a.director.idle)
-    ambient_on(app)
-    app.engine._raise({"type": "missed_checkin", "mission": 99, "deadline": None, "title": "MISSED CHECK-IN",
-                       "text": "Nobody."})
-    assert not app.engine.ambient
 
 
 def test_walking_does_not_stop_the_game_clock(tmp_path):

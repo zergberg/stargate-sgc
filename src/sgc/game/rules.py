@@ -542,11 +542,12 @@ def _schedule(kind: str, hours: int):
 
 
 def clear_uplink(c: Campaign, wid: str) -> None:
-    """Cancel a world's pending uplink: its timer, its gate dial-out, or a rolled report waiting for the gate
-    to shut. Call this wherever a world's drone leaves outside the uplink's own path, so no stale uplink can
-    later fire on a different drone sent to the same world."""
+    """Cancel a world's pending uplink and drone check-in: timers, gate dial-outs, or a rolled uplink report
+    waiting for the gate to shut. Call this wherever a world's drone leaves outside its own path (the uplink's
+    or a check-in's), so neither can later fire on a different drone sent to the same world."""
     c.events.cancel(lambda e: e.data.get("world") == wid and (
-        e.kind in ("uplink", "uplink_report") or (e.kind == "dial_out" and e.data.get("op") == "uplink")))
+        e.kind in ("uplink", "uplink_report", "drone_checkin")
+        or (e.kind == "dial_out" and e.data.get("op") == "uplink")))
 
 
 def _drone(tok: str, fate: str):

@@ -7,7 +7,7 @@ import random
 from dataclasses import asdict, dataclass, field
 
 from . import orders
-from .clock import DAY, HOUR, START, Scheduler
+from .clock import CHECKIN_HOURS, DAY, HOUR, START, Scheduler
 from .world import (DRONES, ENVIRONMENTS, FACTION_IDS, FACTION_KIND, FEATURES, INHABITANTS,
                     STATUSES as WORLD_STATUSES, WRECKS, World, cartouche, place)
 
@@ -468,6 +468,9 @@ def _event(e, world_ids: set[str], mission_ids: set[int], deal_ids: set[int] = f
         _one_of(need("drone"), DRONES, "drone")
         _one_of(need("outcome"), UPLINK_OUTCOMES, "uplink outcome")
         readings(need("seen"))
+    elif kind == "drone_checkin":
+        world()
+        _one_of(need("drone"), DRONES, "drone")
     elif kind == "malp_return":                      # legacy: a report from before probes went live
         world()
         _one_of(need("drone"), DRONES, "drone")
@@ -510,6 +513,14 @@ def _stage_departures(teams: dict[str, Team], events: Scheduler) -> None:
     for tm in teams.values():
         if tm.status == "offworld" and tm.mission in departing:
             tm.status = "staging"
+
+
+def _stage_checkins(worlds: list[World], events: Scheduler, minutes: float) -> None:
+    """A save from before drone check-ins had a parked drone with nothing scheduled: it checks in for the
+    first time 8 hours from here."""
+    for w in worlds:
+        if w.drone and not events.find(lambda e: e.kind == "drone_checkin" and e.data.get("world") == w.id):
+            events.push(minutes + CHECKIN_HOURS * HOUR, "drone_checkin", {"world": w.id, "drone": w.drone})
 
 
 def from_dict(d: dict) -> Campaign:
@@ -562,6 +573,7 @@ def from_dict(d: dict) -> Campaign:
         for e in events:
             _event(e, world_ids, mission_id_set, deal_ids, set(arcs), set(teams))
         _stage_departures(teams, events)
+        _stage_checkins(worlds, events, minutes)
         for name, tm in teams.items():
             if tm.status == "offworld" and tm.mission is None and not _way_home(events, name):
                 raise ValueError(f"{name} is offworld with no mission and nothing bringing it home")

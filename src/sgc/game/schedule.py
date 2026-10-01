@@ -34,6 +34,7 @@ THROUGH = "ALREADY THROUGH THE GATE"
 GONE = "NO LONGER SCHEDULED"
 NOT_MOVABLE = "ONLY DIAL-OUTS WAITING FOR THE GATE CAN BE MOVED"
 COLLECTING = "THE DRONE IS ALREADY COLLECTING"
+CHECKIN_REASON = "A SCHEDULED CHECK-IN"      # why a drone's own check-in can't be cancelled
 WAIT_HOURS = 12                              # a withdrawn search leaves the team to the 12-hour wait
 TEAM_WORDS = {"base": ("STOOD DOWN", "BACK"), "injured": ("INJURED", "BACK"),
               "captured": ("CAPTURED", "PRESUMED LOST"), "lost": ("RE-FORMING", "READY"),
@@ -141,6 +142,13 @@ def view(c: Campaign) -> list[QueueItem]:
         items.append(QueueItem(f"uplink:{d['world']}", "uplink", at(start, c.now),
                                f"{d['drone'].upper()} UPLINK · {_name(c, d['world'])}", f"EXPECTED {window}",
                                (1, start, end), reason=COLLECTING, brief=f"{d['drone'].upper()} UPLINK {window}"))
+    for ev in c.events.find(lambda e: e.kind == "drone_checkin"):    # its exact time: it isn't a hidden roll
+        d = ev.data
+        name = _name(c, d["world"])
+        items.append(QueueItem(f"checkin:{d['world']}", "drone_checkin", at(ev.due, c.now),
+                               f"{d['drone'].upper()} CHECK-IN · {name}", f"DUE {at(ev.due, c.now)}",
+                               (1, ev.due), reason=CHECKIN_REASON,
+                               brief=f"{d['drone'].upper()} CHECK-IN {name} {at(ev.due, c.now)}"))
     for m in c.missions:
         if m.state not in ("active", "aborted"):
             continue                                 # history, perhaps of a team since disbanded

@@ -59,6 +59,7 @@ def busy_campaign():
     c.teams["SG-3"].status, c.teams["SG-3"].where, c.teams["SG-3"].mission = "offworld", w.id, 1
     c.missions.append(Mission(1, "SG-3", w.id, "survey", 900, 900 + 24 * 60, findings=["ruins"]))
     c.events.push(1380, "checkin", {"mission": 1})
+    c.events.push(2000, "drone_checkin", {"world": w.id, "drone": "malp"})
     c.inventory |= {"ally.tokra", "tech.zat"}
     c.used.add("ally.nox")
     c.alarms.append({"type": "missed_checkin", "title": "Missed check-in", "text": "SG-3 missed a check-in.",
@@ -405,8 +406,12 @@ def test_a_stage_1_save_is_upgraded_with_nothing_in_flight_lost():
         old = json.load(f)
     c = from_dict(upgrade_v2(old))
     assert c.minutes == old["minutes"] and len(c.missions) == len(old["missions"])
-    assert [(e.due, e.kind) for e in c.events if e.kind != "funding_review"] == \
+    assert [(e.due, e.kind) for e in c.events if e.kind not in ("funding_review", "drone_checkin")] == \
         [(e["due"], e["kind"]) for e in sorted(old["events"], key=lambda e: (e["due"], e["seq"]))]
+    checkins = [e for e in c.events if e.kind == "drone_checkin"]              # every parked drone gets one
+    parked = {w["id"] for w in old["worlds"] if w.get("drone")}
+    assert {e.data["world"] for e in checkins} == parked
+    assert all(e.due == c.minutes + 8 * clock.HOUR for e in checkins)
     review = next(e for e in c.events if e.kind == "funding_review")
     assert review.due > c.minutes and (review.due - clock.START) % (7 * clock.DAY) == 0
     assert c.funding == 500 and c.upgrades == {"uav_program"} and c.stock == old["stock"]

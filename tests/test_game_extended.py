@@ -42,17 +42,17 @@ def test_an_uplink_falls_due_in_its_window_and_joins_the_gate_queue(monkeypatch,
     lo, hi = eng.UPLINK_HOURS[drone]
     [ev] = r.c.events.find(lambda e: e.kind == "uplink")
     assert r.c.now + lo * clock.HOUR <= ev.due <= r.c.now + hi * clock.HOUR
-    [row] = r.e.schedule_view()
+    row = next(i for i in r.e.schedule_view() if i.kind == "uplink")      # the drone's own check-in is also due
     window = f"{schedule.at(r.c.now + lo * clock.HOUR, r.c.now)}–{schedule.at(r.c.now + hi * clock.HOUR, r.c.now)}"
     assert row.what == f"{drone.upper()} UPLINK · {w.name.upper()}" and row.status == f"EXPECTED {window}"
     assert row.brief == f"{drone.upper()} UPLINK {window}" and not row.cancellable and not row.movable
     assert r.e.cancel(row.id, confirm=True) == "THE DRONE IS ALREADY COLLECTING"
     ev.due += 7                                            # the rolled time never shows
-    assert r.e.schedule_view()[0].status == row.status
+    assert next(i for i in r.e.schedule_view() if i.kind == "uplink").status == row.status
     r.c.gate_until = ev.due + 60                           # the gate is busy when it falls due
     r.e.advance(ev.due - r.c.now)
-    [row] = r.e.schedule_view()
-    assert row.kind == "dial_out" and row.what == f"{drone.upper()} UPLINK · {w.name.upper()}"
+    row = next(i for i in r.e.schedule_view() if i.kind == "dial_out")
+    assert row.what == f"{drone.upper()} UPLINK · {w.name.upper()}"
     assert row.movable and not row.cancellable and row.brief == f"1 {drone.upper()} UPLINK · {w.name.upper()}"
     assert r.e.cancel(row.id, confirm=True) == "THE DRONE IS ALREADY COLLECTING"
 
@@ -65,7 +65,8 @@ def test_an_uplink_can_be_moved_in_the_gate_queue(monkeypatch):
     v = r.world(4, env="normal", inhabitants="none")
     r.e.probe(v.id)
     assert r.e.move(f"dial:malp:{v.id}", -1) == f"MALP TO {v.name.upper()}: NOW 1 IN THE GATE QUEUE"
-    assert [i.id for i in r.e.schedule_view()] == [f"dial:malp:{v.id}", f"dial:uplink:{w.id}"]
+    assert [i.id for i in r.e.schedule_view()] == \
+        [f"dial:malp:{v.id}", f"dial:uplink:{w.id}", f"checkin:{w.id}"]      # the drone's own check-in, too
 
 
 def test_a_drone_lost_on_the_live_pass_has_no_extended_report(monkeypatch):
@@ -289,3 +290,102 @@ def test_an_uplink_dial_still_in_the_queue_waits_for_a_team_that_got_there(monke
     r.e._uplink_out({"world": w.id, "drone": "malp"})
     assert w.drone == "malp" and not r.c.events.find(lambda e: e.kind == "uplink_report")
     assert r.c.events.find(lambda e: e.kind == "uplink" and e.data["world"] == w.id)
+
+
+# ---------------------------------------------------------------- drone check-ins
+
+def parked(monkeypatch, drone="malp", **traits):
+    """A drone probe landed safely and is parked, its first check-in scheduled 8 hours out."""
+    monkeypatch.setitem(eng.DESTROYED, "normal", 0)
+    monkeypatch.setitem(eng.CAPTURED, "jaffa", 0)
+    monkeypatch.setitem(eng.CAPTURED, "goauld", 0)
+    r = Rig()
+    w = r.world(5, **{"env": "normal", "inhabitants": "none", **traits})
+    (r.e.probe if drone == "malp" else r.e.send_uav)(w.id)
+    r.e.advance(clock.GATE_MINUTES["probe" if drone == "malp" else "uav"])
+    assert w.drone == drone
+    return r, w
+
+
+@pytest.mark.parametrize("drone", ["malp", "uav"])
+def test_a_parked_drone_checks_in_every_8_hours(monkeypatch, drone):
+    r, w = parked(monkeypatch, drone)
+    [ev] = r.c.events.find(lambda e: e.kind == "drone_checkin")
+    assert ev.due == r.c.now + 8 * clock.HOUR and ev.data == {"world": w.id, "drone": drone}
+    r.e.advance(8 * clock.HOUR)
+    assert w.last_visit == r.c.now and r.c.gate_until == r.c.now + clock.GATE_MINUTES["drone_checkin"]
+    assert f"{drone.upper()} CHECK-IN FROM {w.name.upper()} — ALL READINGS NOMINAL" in r.logs
+    [ev2] = r.c.events.find(lambda e: e.kind == "drone_checkin")
+    assert ev2.due == r.c.now + 8 * clock.HOUR and ev2.data == {"world": w.id, "drone": drone}
+
+
+def test_a_pending_checkin_is_in_the_queue_and_cannot_be_cancelled_or_moved(monkeypatch):
+    r, w = parked(monkeypatch)
+    [ev] = r.c.events.find(lambda e: e.kind == "drone_checkin")
+    when = schedule.at(ev.due, r.c.now)
+    [row] = r.e.schedule_view()
+    assert row.id == f"checkin:{w.id}" and row.kind == "drone_checkin"
+    assert row.what == f"MALP CHECK-IN · {w.name.upper()}" and not row.cancellable and not row.movable
+    assert row.brief == f"MALP CHECK-IN {w.name.upper()} {when}"
+    assert r.e.cancel(row.id, confirm=True) == "A SCHEDULED CHECK-IN"
+    assert r.e.move(row.id, 1) == schedule.NOT_MOVABLE
+
+
+def test_a_checkin_is_cleared_when_a_scenario_effect_takes_the_drone(monkeypatch):
+    r, w = parked(monkeypatch)
+    rules.parse_effect("drone {world} lost")(r.c, r.e._wbind(w))
+    assert w.drone is None
+    assert not r.c.events.find(lambda e: e.kind == "drone_checkin")
+
+
+def test_a_team_bringing_a_drone_home_clears_its_pending_checkin(monkeypatch):
+    r, w = parked(monkeypatch)
+    w.status = "probed"
+    r.e.assign(w.id, "SG-2", "survey")
+    m = r.c.mission(1)
+    lines = r.e._bring_home(m, w)
+    assert w.drone is None and "SG-2 BROUGHT THE MALP HOME" in lines
+    assert not r.c.events.find(lambda e: e.kind == "drone_checkin")
+
+
+def test_a_recall_clears_a_parked_drones_checkin(monkeypatch):
+    r, w = parked(monkeypatch)
+    r.c.events.push(r.c.now, "dial_out", {"op": "recall", "world": w.id, "wear": 0})
+    r.e.advance(1)
+    assert w.drone is None
+    assert not r.c.events.find(lambda e: e.kind == "drone_checkin")
+
+
+def test_a_checkin_due_while_a_team_is_on_the_world_does_not_dial(monkeypatch):
+    r, w = parked(monkeypatch)
+    tm = r.c.teams["SG-2"]
+    tm.status, tm.where = "offworld", w.id
+    before_gate, before_logs = r.c.gate_until, len(r.logs)
+    [ev] = r.c.events.find(lambda e: e.kind == "drone_checkin")
+    r.e.advance(ev.due - r.c.now)
+    assert r.c.gate_until == before_gate and r.logs[before_logs:] == []    # no dial, nothing shown or logged
+    [ev2] = r.c.events.find(lambda e: e.kind == "drone_checkin")
+    assert ev2.due == r.c.now + 8 * clock.HOUR and ev2.data == {"world": w.id, "drone": "malp"}
+
+
+def test_an_old_saves_parked_drones_get_their_first_checkin_on_load():
+    r = Rig()
+    w = r.world(5, drone="malp")                        # as an old save would have it: nothing scheduled
+    b = Rig(campaign=from_dict(json.loads(json.dumps(to_dict(r.c)))))
+    [ev] = b.c.events.find(lambda e: e.kind == "drone_checkin")
+    assert ev.due == b.c.now + 8 * clock.HOUR and ev.data == {"world": w.id, "drone": "malp"}
+    again = from_dict(json.loads(json.dumps(to_dict(b.c))))     # already has one: never doubles up
+    assert len(again.events.find(lambda e: e.kind == "drone_checkin")) == 1
+
+
+def test_a_quiet_gate_plays_nothing_before_its_checkin_is_due(monkeypatch):
+    monkeypatch.setitem(eng.DESTROYED, "normal", 0)
+    r = Rig(director=True)
+    w = r.world(5, env="normal", inhabitants="none")
+    r.e.probe(w.id)
+    r.e.advance(clock.GATE_MINUTES["probe"])
+    assert w.drone == "malp"
+    for _ in range(60):
+        r.d.advance(1.0)
+        r.e.update(1.0)
+    assert r.d.idle and not r.e.showing          # the gate stays quiet; nothing fills the silence

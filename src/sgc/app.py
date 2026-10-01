@@ -293,9 +293,8 @@ class App:
             self.view = "gate"
             steps = sq.to_gateroom(t)
         self._resume_room = False
-        ambient, s = self.engine.ambient, self.director.scene
-        self.engine.cut_ambient()                 # never queue behind the ambient scene: traffic would cut the walk
-        up = not ambient and (s.horizon != "off" or bool(s.locked))      # a live wormhole is never shut by a walk
+        s = self.director.scene
+        up = s.horizon != "off" or bool(s.locked)      # a live wormhole is never shut by a walk
         self._set_off(steps, self._gate_busy() or up)
 
     def _set_off(self, steps: list[Step], behind: bool) -> None:

@@ -174,7 +174,8 @@ def test_an_older_save_s_paid_recall_still_brings_the_drone_home():
     v = r.world(6, drone="uav")
     r.c.events.push(r.c.now, "dial_out", {"op": "recall", "world": v.id, "wear": 15})
     b = Rig(campaign=from_dict(json.loads(json.dumps(to_dict(r.c)))))
-    assert b.e.schedule_view() == []                    # never listed, never cancellable
+    rows = b.e.schedule_view()
+    assert len(rows) == 1 and rows[0].kind == "drone_checkin"    # the recall itself: never listed, never cancellable
     stock = b.c.stock["uav"]
     b.e.advance(1)
     assert b.c.worlds[v.id].drone is None and b.c.stock["uav"] == stock + 1

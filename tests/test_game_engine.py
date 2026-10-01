@@ -293,8 +293,8 @@ def test_at_a_busy_pace_a_result_waits_for_the_gate_to_finish_showing_it():
     assert w.status == "probed"
 
 
-def test_the_clock_is_not_held_by_the_ambient_scene_or_without_a_director():
-    r = ambient_rig()
+def test_the_clock_runs_freely_without_a_director():
+    r = Rig()
     before = r.c.minutes
     r.c.events.push(r.c.now + 1, "recovery_tick")
     r.e.update(10)
@@ -480,82 +480,11 @@ def test_redialing_a_world_with_no_lock_counts_one_probe():
     assert w.status == "lost" and r.c.stock["malp"] == 4 and r.c.record["probes"] == 1
 
 
-def test_a_quiet_gate_plays_an_ambient_scene_to_a_parked_drone_without_touching_the_campaign():
-    r = Rig(director=True)
-    r.world(3, status="probed", drone="malp")
-    r.world(4, status="surveyed", drone="uav")
-    before, state = to_dict(r.c), r.e.rng.getstate()
-    assert r.d.idle
-    r.e._idle_scene(eng.IDLE_SCENE - 1)
-    assert r.d.idle
-    r.e._idle_scene(1)
-    assert not r.d.idle
-    for _ in range(40):
-        r.d.advance(1.0)
-    parked = {r.world(3).name.upper(), r.world(4).name.upper()}
-    assert r.d.scene.panel_title.startswith("SCIENCE · ") and r.d.scene.panel_title[10:] in parked
-    assert to_dict(r.c) == before and r.e.rng.getstate() == state
-
-
-def ambient_rig(*texts):
-    r = Rig(*texts, director=True)
-    r.world(3, status="probed", drone="malp")             # something on a world to uplink from
-    r.e._idle_scene(eng.IDLE_SCENE)
-    assert r.e.ambient and not r.d.idle
-    for _ in range(10):
-        r.d.advance(1.0)                                  # the uplink is dialling
-    return r
-
-
 def director_logs(r, seconds):
     logs = []
     for _ in range(int(seconds * 10)):
         logs += r.d.advance(0.1)[0]
     return logs
-
-
-def test_an_alarm_cuts_the_ambient_scene_at_once():
-    r = ambient_rig(UNKNOWN)
-    r.c.events.push(r.c.now, "incoming")
-    r.e.advance(1)
-    assert not r.e.ambient
-    assert "UNSCHEDULED OFFWORLD ACTIVATION" in director_logs(r, 5)
-
-
-def test_routine_traffic_cuts_the_ambient_scene_instead_of_being_dropped():
-    r = ambient_rig()
-    r.e._show(r.e._v_checkin("SG-2"))
-    assert not r.e.ambient
-    assert "IDC RECEIVED — SG-2" in director_logs(r, 10)
-
-
-def test_the_ambient_flag_clears_when_the_scene_ends():
-    r = ambient_rig()
-    for _ in range(80):
-        r.d.advance(1.0)
-    assert r.d.idle and r.e.ambient
-    r.e.update(0)
-    assert not r.e.ambient
-
-
-@pytest.mark.parametrize("why", ["alarm", "gate", "no_drones"])
-def test_no_ambient_scene_while_an_alarm_is_open_the_gate_is_busy_or_no_drone_is_parked(why):
-    r = Rig(UNKNOWN, director=True)
-    if why != "no_drones":
-        r.world(3, status="probed", drone="malp")
-    if why == "alarm":
-        r.c.events.push(r.c.now, "incoming")
-        r.e.advance(1)
-        r.d.skip(log=None)
-        for _ in range(20):
-            r.d.advance(1.0)
-        assert r.c.alarms and r.d.idle
-    elif why == "gate":
-        r.c.gate_until = r.c.now + 30
-    else:
-        assert not any(w.drone for w in r.c.worlds.values())     # known worlds, but nothing on them
-    r.e._idle_scene(eng.IDLE_SCENE + 1)
-    assert r.d.idle and not r.e.ambient and r.e._quiet == 0.0     # the quiet timer starts again
 
 
 def test_an_order_for_an_unknown_situation_is_rejected():
@@ -591,20 +520,6 @@ def test_real_traffic_still_holds_the_clock_until_it_has_played():
     director_logs(r, 60)
     r.e.update(0.1)
     assert not r.e.showing and r.c.minutes > due
-
-
-def test_the_ambient_scene_and_its_cut_are_not_traffic():
-    r = ambient_rig()
-    assert not r.e.showing
-    r.e.cut_ambient()
-    assert not r.d.idle and not r.e.showing
-
-
-def test_an_alarm_with_nothing_to_show_still_cuts_the_ambient_scene():
-    r = ambient_rig()
-    r.e._raise({"type": "missed_checkin", "mission": 99, "deadline": None, "title": "MISSED CHECK-IN",
-                "text": "Nobody."})
-    assert not r.e.ambient
 
 
 def test_a_failed_save_is_logged_once_per_streak_and_play_goes_on():

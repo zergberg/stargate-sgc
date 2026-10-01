@@ -44,12 +44,13 @@ UAV_RAIL = 0.12                      # the UAV's launch rail stands here, at the
 UAV_CRUISE = 0.8                     # the UAV's altitude as it reaches the horizon (0..1)
 DESTROYED = {"normal": 3, "toxic": 8, "radiation": 12, "extreme": 25, "no_lock": 0}
 CAPTURED = {"jaffa": 25, "goauld": 40}
-IDLE_SCENE = 45.0                    # real seconds of a quiet gate before an ambient scene plays
 LANES = (-0.45, -0.15, 0.15, 0.45)
+CHECKIN_FEED_S = 10.0                # real seconds a routine drone check-in's panel takes to read NOMINAL
 TITLES = {"incoming": "INCOMING", "probe": "TELEMETRY", "checkin": "CHECK-IN", "debrief": "DEBRIEF",
           "faction": "SECURITY", "arc": "PRIORITY ONE"}
-GATE_KINDS = ("dial_out", "malp_return", "checkin", "team_return", "incoming", "trade_delivery", "faction_action")
-INBOUND = ("incoming", "checkin", "team_return", "malp_return", "trade_delivery", "faction_action")
+GATE_KINDS = ("dial_out", "malp_return", "checkin", "team_return", "incoming", "trade_delivery", "faction_action",
+              "drone_checkin")
+INBOUND = ("incoming", "checkin", "team_return", "malp_return", "trade_delivery", "faction_action", "drone_checkin")
 URGENT_KINDS = ("incoming", "faction", "arc")       # their visuals always play, even over other traffic
 SHARE_TRUST = 50                     # an ally this friendly may share an address at a funding review...
 SHARE_ODDS = 0.5                     # ...this often
@@ -134,8 +135,6 @@ class Engine:
         self.finished = False            # the player has left the game; the app returns to the menu
         self.ended = False               # the campaign is over; nothing more is saved
         self._saved_at = campaign.minutes
-        self._quiet = 0.0
-        self._ambient = False            # the gate is playing the ambient scene, which real traffic cuts
         self._traffic = 0                # real gate scenes queued or playing on the director (never a walk)
         self._save_failed = False        # the last save failed; logged once until one succeeds
         self._handlers: dict[str, Callable[[dict], None]] = {
@@ -145,6 +144,7 @@ class Engine:
             "search_report": self._search_report, "overdue": self._overdue,
             "funding_review": self._funding_review, "faction_action": self._faction_action,
             "trade_delivery": self._trade_delivery, "arc_step": self._arc_step,
+            "drone_checkin": self._drone_checkin,
         }
         if director is not None:
             director.auto = False
@@ -157,23 +157,16 @@ class Engine:
 
     # ------------------------------------------------------------------ time
     @property
-    def ambient(self) -> bool:
-        """The gate is playing the ambient scene (nothing real); the app may cut it."""
-        return self._ambient
-
-    @property
     def sph(self) -> int:
         return clock.seconds_per_hour(self.c.pace, self.pace_override)
 
     def update(self, dt: float) -> None:
         """Real seconds have passed: move the SGC clock on and keep the scene in step."""
         if self.d is not None and self.d.idle:
-            self._ambient = False                          # the ambient scene, if any, has finished
-            self._traffic = 0                              # ... and so has any traffic cut short
+            self._traffic = 0                              # any traffic cut short is done
         if not self.ended:
             self.advance(clock.to_minutes(dt, self.sph), hold=True)
         self._close_idle_gate()
-        self._idle_scene(dt)
         self._sync()
 
     def advance(self, minutes: float, hold: bool = False) -> None:
@@ -208,8 +201,8 @@ class Engine:
 
     @property
     def showing(self) -> bool:
-        """The gate has real traffic queued or playing. The ambient scene, its cut, and the app's walks
-        between the rooms aren't traffic: they never hold the clock, and traffic queues behind them."""
+        """The gate has real traffic queued or playing. A walk between the rooms isn't traffic: it never holds
+        the clock, and traffic queues behind it."""
         return self.d is not None and self._traffic > 0 and not self.d.idle
 
     def set_pace(self, pace: str) -> None:
@@ -515,6 +508,7 @@ class Engine:
         w.seen.update(seen)
         w.telemetry = [f"{k.upper()}: {v}" for k, v in seen.items()]
         w.drone = drone
+        self._schedule_checkin(w, drone)
         w.reports.append((c.now, f"{drone.upper()} telemetry: " + "; ".join(f"{k} {v}" for k, v in seen.items())))
         self._log(f"{drone.upper()} TELEMETRY FROM {w.name.upper()}")
         for line in rules.set_world_status(c, w, "probed"):
@@ -596,6 +590,7 @@ class Engine:
             self._log(f"{drone.upper()} UPLINK GARBLED — {name}")
             return
         w.drone = None
+        rules.clear_uplink(c, w.id)
         if w.inhabitants in CAPTURED:
             w.reports.append((c.now, f"{drone.upper()} captured before its uplink."))
             self._log(f"{drone.upper()} CAPTURED ON {name}")
@@ -660,6 +655,7 @@ class Engine:
         w.seen.update(seen)
         w.telemetry = [f"{k.upper()}: {v}" for k, v in seen.items()]
         w.drone = drone
+        self._schedule_checkin(w, drone)
         w.reports.append((c.now, f"{drone.upper()} telemetry: " + "; ".join(f"{k} {v}" for k, v in seen.items())))
         self._log(f"{drone.upper()} TELEMETRY FROM {w.name.upper()}")
         for line in rules.set_world_status(c, w, "probed"):
@@ -691,6 +687,28 @@ class Engine:
         self._log(f"{drone.upper()} RECALLED FROM {w.name.upper()}")
         self._stow(drone)
         self._show(self._v_recall(w, drone))
+
+    def _schedule_checkin(self, w: World, drone: str) -> None:
+        """Queue this drone's next check-in, 8 game hours out."""
+        self.c.events.push(self.c.now + clock.CHECKIN_HOURS * clock.HOUR, "drone_checkin",
+                           {"world": w.id, "drone": drone})
+
+    def _drone_checkin(self, data: dict) -> None:
+        """A parked drone's scheduled check-in: no roll, no outcome, just confirmation it's still there. It
+        always reschedules itself, 8 hours on. A team already out on the world covers it instead: this one
+        neither dials nor shows."""
+        c = self.c
+        w, drone = c.worlds[data["world"]], data["drone"]
+        if w.drone != drone:
+            return                               # already gone: its check-in was cleared, this one is stale
+        if self._team_on(w):
+            self._schedule_checkin(w, drone)
+            return
+        self._occupy("drone_checkin")
+        w.last_visit = c.now
+        self._log(f"{drone.upper()} CHECK-IN FROM {w.name.upper()} — ALL READINGS NOMINAL")
+        self._schedule_checkin(w, drone)
+        self._show(self._v_drone_checkin(w, drone))
 
     # ------------------------------------------------------------------ scenarios
     def _wbind(self, w: World) -> dict:
@@ -806,7 +824,6 @@ class Engine:
 
     def _raise(self, alarm: dict, front: bool = False) -> None:
         """Queue an alarm and ring; a follow-up to the answered alarm goes first, and doesn't ring again."""
-        self.cut_ambient()                                 # an alarm is real, even with nothing to show
         self._log(f"ALARM: {alarm['title']} — {alarm['text'][:60]}")
         if front:
             self.c.alarms.insert(0, alarm)
@@ -1128,6 +1145,7 @@ class Engine:
                 self._stow("malp")                        # a drone is already parked there: this one comes home
             else:
                 w.drone = "malp"
+                self._schedule_checkin(w, "malp")
         else:
             ht = c.teams[by]
             if ht.status == "offworld":
@@ -1239,8 +1257,10 @@ class Engine:
         if rolled:
             self._uplink_report(rolled[0].data)
             if not w.drone:                     # captured or destroyed at the uplink: nothing left to fetch
+                rules.clear_uplink(c, w.id)
                 return []
             w.drone = None
+            rules.clear_uplink(c, w.id)
             return [f"{m.team} BROUGHT THE {drone.upper()} HOME"] + rules.stow(c, drone)
         lines = []
         waiting = c.events.remove(lambda e: e.data.get("world") == w.id and (
@@ -1251,6 +1271,7 @@ class Engine:
         else:
             lines.append(f"{m.team} BROUGHT THE {drone.upper()} HOME")
         w.drone = None
+        rules.clear_uplink(c, w.id)
         return lines + rules.stow(c, drone)
 
     def _debrief(self, m: Mission, w: World) -> None:
@@ -1328,24 +1349,6 @@ class Engine:
         away_first = sorted(team_names(c), key=lambda n: (n in available_teams(c), int(n.split("-")[1])))
         s.teams = {name: team_label(c, name, timer=False).upper() for name in away_first}
 
-    def _idle_scene(self, dt: float) -> None:
-        """A quiet gate now and then plays a science uplink to a drone of ours parked on a world; with none
-        parked, the gate stays quiet. It never touches the campaign.
-
-        The world is picked with a visual RNG seeded from the game minute, never self.rng.
-        """
-        c = self.c
-        if self.d is None or not self.d.idle or self.ended or c.alarms or c.gate_until > c.now:
-            self._quiet = 0.0
-            return
-        self._quiet += dt
-        if self._quiet >= IDLE_SCENE:
-            self._quiet = 0.0
-            parked = [w for w in c.worlds.values() if w.drone]
-            if parked:
-                self.d.run_steps(self._registry("science", random.Random(c.now).choice(parked)))
-                self._ambient = True
-
     def _close_idle_gate(self) -> None:
         """A wormhole left up once its scene is over, with no order pending, disengages on its own."""
         if self.d is None or not self.d.idle or self.c.alarms or self.prompt is not None:
@@ -1354,22 +1357,12 @@ class Engine:
         if s.horizon != "off" or s.locked:
             self._queue([*sq.shutdown(), Step(0, lambda sc, p: sq.reset_scene(sc))])
 
-    def cut_ambient(self) -> None:
-        """The app takes the gate from the ambient scene: shut it quickly; it is no longer ambient."""
-        if not self._ambient:
-            return
-        self._ambient = False
-        if self.d is not None and not self.d.idle:
-            self.d.skip(log=None)
-
     def _show(self, steps: list[Step], urgent: bool = False) -> None:
-        """Queue a visual. Real traffic cuts the ambient scene; routine traffic is skipped while other traffic
-        is on screen, and waits behind a walk between the rooms."""
+        """Queue a visual. Routine traffic is skipped while other traffic is on screen, and waits behind a walk
+        between the rooms."""
         if self.d is None or not steps:
             return
-        if self._ambient:
-            self.cut_ambient()
-        elif not urgent and self.showing:
+        if not urgent and self.showing:
             return
         self._queue(steps)
 
@@ -1532,6 +1525,18 @@ class Engine:
         if not rows:
             return [*self._outgoing(w), Step(3.0, show, "NO CARRIER"), *sq.shutdown(), cleanup()]
         return [*self._outgoing(w), Step(UPLINK_FEED_S, show, "EXTENDED DATA RECEIVED"), *sq.shutdown(), cleanup()]
+
+    def _v_drone_checkin(self, w: World, drone: str) -> list[Step]:
+        """A parked drone's routine check-in: its known readings play back, then ALL READINGS NOMINAL."""
+        if self.d is None:
+            return []
+        rows = [(k.upper(), v) for k, v in w.seen.items()]
+        title = f"{drone.upper()} CHECK-IN · {w.name.upper()}"
+
+        def show(s, p):
+            s.panel_title = title
+            s.panel_rows = rows[:_shown(len(rows), p)] if p < 1 else [*rows, ("ALL READINGS", "NOMINAL")]
+        return [*self._outgoing(w), Step(CHECKIN_FEED_S, show, "ALL READINGS NOMINAL"), *sq.shutdown(), cleanup()]
 
     def _uav_launch(self) -> list[Step]:
         """The rail at the foot of the ramp, the UAV firing off it and climbing, then through the horizon.
