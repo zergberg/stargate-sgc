@@ -12,9 +12,10 @@ from .core import (CAPTURED, CHECKIN_LINE_MINUTES, CoreMixin, DESTROYED, DETAIL,
                     UPLINK_ODDS, team_label, uplink_odds, uplink_outcome)
 from .ending import EndingMixin
 from .scene import SceneMixin
+from .scenarios import ScenariosMixin
 
 
-class Engine(CoreMixin, EndingMixin, SceneMixin):
+class Engine(CoreMixin, EndingMixin, SceneMixin, ScenariosMixin):
     pass
 
 
