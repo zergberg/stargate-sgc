@@ -24,7 +24,7 @@ DIFFICULTIES = ("recruit", "officer", "commander")
 PACES = ("relaxed", "standard", "busy")
 RANKS = (("green", 0), ("seasoned", 3), ("veteran", 8), ("elite", 15))
 RANK_NAMES = tuple(name for name, _ in RANKS)
-MISSION_TYPES = ("survey", "contact", "trade", "raid", "study", "rescue", "recover", "mine", "aid")
+from .missions import MISSION_TYPES
 MISSION_STATES = ("active", "complete", "aborted", "captured", "lost", "cancelled")
 STOCK = {"malp": (4, 8), "uav": (0, 4)}             # drone: (starting stock, stores cap for purchases)
 FIRST_INCOMING = (36, 96)                             # game hours until the first random incoming wormhole
