@@ -58,8 +58,6 @@ INBOUND = ("incoming", "checkin", "team_return", "malp_return", "trade_delivery"
 URGENT_KINDS = ("incoming", "faction", "arc")       # their visuals always play, even over other traffic
 SHARE_TRUST = 50                     # an ally this friendly may share an address at a funding review...
 SHARE_ODDS = 0.5                     # ...this often
-VICTORY_TEXT = ("Every threat the SGC uncovered has been dealt with. The President sends his thanks, and "
-                "General Hammond asks whether you'll stay on.")
 # Who gets a free gate first: check-ins, then the rest of the inbound traffic, then queued dial-outs; within
 # a rank, whatever came due first. So a check-in waits for one gate operation (30 minutes at most), plus any
 # other check-ins already due.
@@ -1386,50 +1384,6 @@ class CoreMixin:
             self._log(line)
         m.findings += lines
         self._log(f"{m.team} DEBRIEFED: {m.type.upper()} OF {w.name.upper()} COMPLETE")
-
-    # ------------------------------------------------------------------ the end
-    def _check_victory(self) -> None:
-        c = self.c
-        if c.won is not None or c.over or not scoring.victory(c):
-            return
-        c.won = c.now
-        self._log("VICTORY — EVERY THREAT WE UNCOVERED HAS BEEN DEALT WITH")
-        self._on_victory(c)
-        self._raise({"type": "victory", "deadline": None, "title": "VICTORY", "text": VICTORY_TEXT})
-
-    def retire(self) -> str:
-        """Hand over command: the campaign ends and goes into the records."""
-        if self.ended:
-            return "THE CAMPAIGN IS OVER"
-        self.c.ending, self.c.over = "retired", "You handed over command of the SGC."
-        self._game_over()
-        return "COMMAND HANDED OVER"
-
-    def _game_over(self) -> None:
-        if self.ended:
-            return
-        c = self.c
-        self.ended = True
-        c.alarms.clear()
-        self._log(c.over.upper())
-        ending = c.ending or "overrun"
-        if ending == "retired":
-            title = "VICTORY" if c.won is not None else "COMMAND HANDED OVER"
-
-            def calm(s, p):
-                s.status = "STANDING DOWN"
-            self._show([Step(0, calm, "COMMAND HANDED OVER"), sq.hold(2.0)], urgent=True)
-        else:
-            title = "BASE OVERRUN" if ending == "overrun" else "EARTH HAS FALLEN"
-
-            def red(s, p):
-                s.alert, s.status = "red", "SGC OVERRUN" if ending == "overrun" else "EARTH HAS FALLEN"
-            self._show([Step(0, red, "THE SGC HAS FALLEN", ("loop:klaxon",)), sq.hold(4.0)], urgent=True)
-        self.prompt = Prompt(title, f"{c.over}\nDay {clock.day(c.minutes)}. "
-                             f"Worlds surveyed: {c.record['surveyed']}. Teams lost: {c.record['teams_lost']}. "
-                             f"Score: {scoring.score(c)}.",
-                             [("Return to the briefing room", True)])
-        self._on_end(c)
 
     # ------------------------------------------------------------------ the scene
     def _sync(self) -> None:
