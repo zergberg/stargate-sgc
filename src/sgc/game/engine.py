@@ -17,7 +17,7 @@ from .. import sequences as sq
 from ..director import Director
 from ..events import REGISTRY, EventContext
 from ..events.common import cleanup, start_outgoing
-from ..model import Figure, Prompt, Step
+from ..model import Figure, Prompt, Scene, Step
 from . import arcs, clock, economy, factions, orders, roster, rules, scoring, trade, uav
 from .content import TEXT_LEVELS, Node, Outcome, Scenario
 from .database import team_status
@@ -52,6 +52,7 @@ TITLES = {"incoming": "INCOMING", "probe": "TELEMETRY", "checkin": "CHECK-IN", "
           "faction": "SECURITY", "arc": "PRIORITY ONE"}
 GATE_KINDS = ("dial_out", "malp_return", "checkin", "team_return", "incoming", "trade_delivery", "faction_action",
               "drone_checkin", "drone_home")
+IDLE_PANEL_TITLES = (Scene().panel_title, "SENSORS")   # Scene's own default, and the one reset_scene restores
 INBOUND = ("incoming", "checkin", "team_return", "malp_return", "trade_delivery", "faction_action", "drone_checkin",
            "drone_home")
 URGENT_KINDS = ("incoming", "faction", "arc")       # their visuals always play, even over other traffic
@@ -275,13 +276,22 @@ class Engine:
         self.c.gate_until = max(self.c.gate_until, until)
         self.c.events.push(until, "checkin_timeout", {"mission": int(mission), "team": team})
 
+    def _free_gate(self) -> None:
+        """Lower the gate's hold to now, and wake any gate traffic that was deferred while it was busy, in the
+        order each was first due — so an early free doesn't let later-queued traffic cut in front of it."""
+        c = self.c
+        old = c.gate_until
+        c.gate_until = min(old, c.now)
+        for ev in c.events.remove(lambda e: e.kind in GATE_KINDS and c.now < e.due <= old):
+            c.events.push(c.now, ev.kind, ev.data)
+
     def _checkin_timeout(self, data: dict) -> None:
         """A check-in's open line went unanswered for CHECKIN_LINE_MINUTES: the wormhole drops and the gate
         frees up, but the order still reaches the team eventually, so the prompt itself stays open."""
         team = data.get("team", "THE TEAM")
         self._log(f"WORMHOLE LOST — {team} WILL RECEIVE ORDERS AT NEXT CONTACT")
-        self.c.gate_until = min(self.c.gate_until, self.c.now)
-        self._show(self._visual("close", {}))
+        self._free_gate()
+        self._show(self._visual("close", {}), urgent=True)   # a lost line always shuts, even over other traffic
 
     def _drop_lines(self) -> None:
         """A check-in's open line can't be resumed across a save: it's simplest lost on load, as if its
@@ -301,7 +311,7 @@ class Engine:
             return
         if self.c.events.cancel(lambda e: e.kind == "checkin_timeout" and e.data.get("mission") == mission):
             self._log(f"ORDERS SENT TO {team}")
-            self.c.gate_until = min(self.c.gate_until, self.c.now)
+            self._free_gate()
 
     def _recovery(self, data: dict) -> None:
         for line in rules.hourly(self.c):
@@ -1137,6 +1147,8 @@ class Engine:
                          "text": f"{m.team} missed its scheduled check-in from {w.name}. No signal on any channel."})
             return
         drawn = self._draw("checkin", self._mbind(m), m.type)
+        # Assumes a routine "start" node never `goto`s to a node that raises a prompt — true of every scenario
+        # bundled today, but a scenario that broke it would keep_open=False and lose its line right away.
         prompt = drawn is not None and not drawn[0].nodes["start"].routine
         self._show(self._v_checkin(m.team, keep_open=prompt))
         if drawn:
@@ -1429,8 +1441,10 @@ class Engine:
         line = c.events.find(lambda e: e.kind == "checkin_timeout")
         if line:
             ev = line[0]
-            s.panel_title = f"TEAM ON THE LINE · {ev.data.get('team', '?')}"
-            s.panel_rows = [("TIME LEFT", f"{max(0, round(ev.due - c.now))} MIN")]
+            title = f"TEAM ON THE LINE · {ev.data.get('team', '?')}"
+            if s.panel_title in IDLE_PANEL_TITLES or s.panel_title == title:
+                s.panel_title = title
+                s.panel_rows = [("TIME LEFT", f"{max(0, round(ev.due - c.now))} MIN")]
 
     def _close_idle_gate(self) -> None:
         """A wormhole left up once its scene is over, with no order pending, disengages on its own."""

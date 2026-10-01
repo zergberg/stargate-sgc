@@ -4,6 +4,7 @@ import json
 from sgc.game import clock
 from sgc.game import engine as eng
 from sgc.game.state import from_dict, to_dict
+from sgc.model import Step
 from tests.test_game_engine import Rig, UNKNOWN
 from tests.test_game_missions import CHECKIN, UNDER_FIRE, probed
 
@@ -110,3 +111,81 @@ def test_the_open_line_panel_shows_the_team_and_time_left():
     r.e.update(0.0)
     assert r.d.scene.panel_title == "TEAM ON THE LINE · SG-3"
     assert r.d.scene.panel_rows == [("TIME LEFT", "20 MIN")]
+
+
+def test_the_open_line_panel_leaves_another_scenes_panel_alone():
+    """An uplink feed (or any other scene) owns the panel while it plays; the open line must not clobber it."""
+    r = Rig(director=True)
+    r.d.scene.panel_title = "UPLINK · ABYDOS"
+    r.d.scene.panel_rows = [("PROGRESS", "40%")]
+    r.c.events.push(r.c.now + 20, "checkin_timeout", {"mission": 1, "team": "SG-3"})
+    r.e.update(0.0)
+    assert r.d.scene.panel_title == "UPLINK · ABYDOS"
+    assert r.d.scene.panel_rows == [("PROGRESS", "40%")]
+
+
+def test_a_checkin_timeout_closes_the_wormhole_even_with_other_traffic_showing(monkeypatch):
+    r = Rig(UNDER_FIRE, director=True)
+    _raise_the_line(r, monkeypatch)
+    for _ in range(400):                                    # drain SG-3's departure: it shuts down on its own
+        if r.d.idle:
+            break
+        r.d.advance(0.1)
+    r.e.update(0.0)                                         # the line's panel is up, as usual
+    assert r.d.scene.panel_title == "TEAM ON THE LINE · SG-3"
+    r.e._queue([Step(1000.0, None)])                        # some other traffic is showing, unrelated to the line
+    assert r.e.showing
+    r.e.advance(eng.CHECKIN_LINE_MINUTES + 1)
+    assert "WORMHOLE LOST — SG-3 WILL RECEIVE ORDERS AT NEXT CONTACT" in r.logs
+    r.d.advance(1001.0)                                     # let the other traffic finish
+    for _ in range(400):
+        if r.d.idle:
+            break
+        r.d.advance(0.1)
+    assert r.d.idle
+    assert r.d.scene.horizon == "off"
+    assert r.d.scene.panel_title != "TEAM ON THE LINE · SG-3"
+
+
+def test_answering_a_checkin_early_frees_a_deferred_dial_out_in_order(monkeypatch):
+    r = Rig(UNDER_FIRE)
+    _raise_the_line(r, monkeypatch)
+    wa, wb = r.world(6), r.world(8)
+    assert r.e.probe(wa.id).startswith("MALP QUEUED")
+    r.e.advance(1)                                          # the line is open: A waits for the busy gate
+    [dial_a] = r.c.events.find(lambda e: e.kind == "dial_out" and e.data.get("world") == wa.id)
+    assert dial_a.due == r.c.gate_until
+
+    r.e.key("2")                                            # hold position: answered well inside the window
+    assert r.c.gate_until <= r.c.now
+    [dial_a] = r.c.events.find(lambda e: e.kind == "dial_out" and e.data.get("world") == wa.id)
+    assert dial_a.due == r.c.now                            # A is freed now, not left at the old deadline
+
+    assert r.e.probe(wb.id).startswith("MALP QUEUED")       # B is queued only after A was freed
+    r.e.advance(1)
+    assert f"MALP SENT TO {wa.name.upper()}" in r.logs
+    assert f"MALP SENT TO {wb.name.upper()}" not in r.logs  # B still waits behind A
+
+    r.e.advance(clock.GATE_MINUTES["probe"] + 1)
+    assert f"MALP SENT TO {wb.name.upper()}" in r.logs
+    assert r.logs.index(f"MALP SENT TO {wa.name.upper()}") < r.logs.index(f"MALP SENT TO {wb.name.upper()}")
+
+
+def test_a_reload_frees_a_deferred_dial_out_in_order(monkeypatch):
+    r = Rig(UNDER_FIRE)
+    _raise_the_line(r, monkeypatch)
+    wa, wb = r.world(6), r.world(8)
+    wa_name, wa_id, wb_id, wb_name = wa.name, wa.id, wb.id, wb.name
+    assert r.e.probe(wa_id).startswith("MALP QUEUED")
+    r.e.advance(1)
+    [dial_a] = r.c.events.find(lambda e: e.kind == "dial_out" and e.data.get("world") == wa_id)
+    assert dial_a.due == r.c.gate_until
+
+    b = Rig(UNDER_FIRE, campaign=from_dict(json.loads(json.dumps(to_dict(r.c)))))
+    [dial_a2] = b.c.events.find(lambda e: e.kind == "dial_out" and e.data.get("world") == wa_id)
+    assert dial_a2.due == b.c.now                           # reload frees it now, not at the old deadline
+
+    assert b.e.probe(wb_id).startswith("MALP QUEUED")       # B is queued only after the reload freed A
+    b.e.advance(1)
+    assert f"MALP SENT TO {wa_name.upper()}" in b.logs
+    assert f"MALP SENT TO {wb_name.upper()}" not in b.logs  # B still waits behind A
